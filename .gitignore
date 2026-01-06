@@ -1,0 +1,12 @@
+target/
+.idea/
+.DS_Store
+
+dist/
+
+*.blend1
+*.blend2
+*.blend@
+
+dump.dot
+dump.svg
