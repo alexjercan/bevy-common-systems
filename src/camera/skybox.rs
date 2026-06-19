@@ -113,7 +113,7 @@ fn setup_skybox_camera(
     // Only reinterpret if it is not already an array texture.
     if image.texture_descriptor.array_layer_count() == 1 {
         // Convert stacked image into a 6 layer array.
-        image.reinterpret_stacked_2d_as_array(image.height() / image.width());
+        let _ = image.reinterpret_stacked_2d_as_array(image.height() / image.width());
 
         // Mark the texture view as a cubemap so Bevy can use it as a skybox.
         image.texture_view_descriptor = Some(TextureViewDescriptor {
