@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    rust-flake.url = "github:juspay/rust-flake";
+    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs = inputs @ {flake-parts, ...}:
@@ -12,18 +12,19 @@
       imports = [
         # Optional: use external flake logic, e.g.
         # inputs.foo.flakeModules.default
-        inputs.rust-flake.flakeModules.default
-        inputs.rust-flake.flakeModules.nixpkgs
       ];
       flake = {
         # Put your original flake attributes here.
       };
       systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin"];
       perSystem = {
-        # self',
-        pkgs,
+        system,
         ...
       }: let
+        overlays = [ (import inputs.rust-overlay) ];
+        pkgs = import inputs.nixpkgs {
+          inherit system overlays;
+        };
         rustNightly = pkgs.rust-bin.nightly.latest.default.override {
           extensions = ["rust-src" "clippy" "rustfmt"];
           targets = ["wasm32-unknown-unknown"];
@@ -45,10 +46,10 @@
             udev
             alsa-lib-with-plugins
             vulkan-loader
-            xorg.libX11
-            xorg.libXcursor
-            xorg.libXi
-            xorg.libXrandr # To use the x11 feature
+            libx11
+            libxcursor
+            libxi
+            libxrandr # To use the x11 feature
             libxkbcommon
             wayland # To use the wayland feature
           ];
