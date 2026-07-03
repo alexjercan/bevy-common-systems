@@ -259,7 +259,7 @@ Examples:
   The planet's avian trimesh collider is built inline from
   `TriangleMeshBuilder::vertices_and_indices()`. Follows the `06_fruitninja`
   shape (states, sounds, wasm). See `docs/2026-07-03-dropzone-example.md`;
-  the flight constants are tuned by reasoning and may need play-testing.
+  the flight constants were play-tested and tuned in `tasks/20260703-213510`.
 
 ## Workflow
 
