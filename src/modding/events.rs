@@ -6,7 +6,7 @@
 
 use std::{collections::VecDeque, sync::Arc};
 
-use bevy::prelude::*;
+use bevy::{ecs::component::Mutable, prelude::*};
 
 pub mod prelude {
     pub use super::{
@@ -18,7 +18,7 @@ pub mod prelude {
 /// A trait representing a game world that can synchronize its state to and from systems.
 ///
 /// Implement this trait for your game state resource to integrate with `GameEventsPlugin`.
-pub trait EventWorld: Resource + Send + Sync {
+pub trait EventWorld: Resource<Mutability = Mutable> + Send + Sync {
     /// System to update the world from a saved or external state.
     fn world_to_state_system(world: &mut World);
 
@@ -196,7 +196,7 @@ where
                 W::state_to_world_system,
             )
                 .chain()
-                .run_if(not(is_queue_empty::<W>).or(resource_changed::<W>)),
+                .run_if(not(is_queue_empty::<W>).or_else(resource_changed::<W>)),
         );
     }
 }
@@ -238,12 +238,12 @@ fn queue_system<W: EventWorld>(
         );
 
         for handler in &q_handler {
-            if handler.name == event.name && handler.filter(&world, &event.info) {
+            if handler.name == event.name && handler.filter(&*world, &event.info) {
                 trace!("queue_system: handler {:?} passed filters", handler.name);
 
                 for action in &handler.actions {
                     trace!("queue_system: executing action {:?}", action.name());
-                    action.action(&mut world, &event.info);
+                    action.action(&mut *world, &event.info);
                 }
             }
         }

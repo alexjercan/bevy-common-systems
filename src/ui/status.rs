@@ -228,7 +228,7 @@ fn insert_status_bar_item(
                     Name::new("StatusBarItemPrefix"),
                     Text::new((**prefix).clone()),
                     TextFont {
-                        font_size: 14.0,
+                        font_size: FontSize::Px(14.0),
                         ..default()
                     },
                 ),
@@ -238,7 +238,7 @@ fn insert_status_bar_item(
                     value_fn.clone(),
                     Text::new("N/A".to_string()),
                     TextFont {
-                        font_size: 14.0,
+                        font_size: FontSize::Px(14.0),
                         ..default()
                     },
                     color_fn.clone(),
@@ -248,7 +248,7 @@ fn insert_status_bar_item(
                     Name::new("StatusBarItemSuffix"),
                     Text::new((**suffix).clone()),
                     TextFont {
-                        font_size: 14.0,
+                        font_size: FontSize::Px(14.0),
                         ..default()
                     },
                 )

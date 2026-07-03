@@ -114,12 +114,13 @@ fn setup_skybox_camera(
         return;
     };
 
-    let image = images.get_mut(&config.cubemap).unwrap();
+    let mut image = images.get_mut(&config.cubemap).unwrap();
 
     // Only reinterpret if it is not already an array texture.
     if image.texture_descriptor.array_layer_count() == 1 {
         // Convert stacked image into a 6 layer array.
-        let _ = image.reinterpret_stacked_2d_as_array(image.height() / image.width());
+        let layers = image.height() / image.width();
+        let _ = image.reinterpret_stacked_2d_as_array(layers);
 
         // Mark the texture view as a cubemap so Bevy can use it as a skybox.
         image.texture_view_descriptor = Some(TextureViewDescriptor {
@@ -129,7 +130,7 @@ fn setup_skybox_camera(
     }
 
     commands.entity(entity).insert((Skybox {
-        image: config.cubemap.clone(),
+        image: Some(config.cubemap.clone()),
         brightness: config.brightness,
         ..default()
     },));
