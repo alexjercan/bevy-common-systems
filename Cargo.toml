@@ -18,6 +18,10 @@ bevy_common_systems_macros = { path = "./bevy_common_systems_macros" }
 [dev-dependencies]
 clap = { version = "4.5.48", features = ["derive"] }
 bevy_asset_loader = { version = "0.27.0" }
+# Enable the WAV decoder for examples/tests only (the 06_fruitninja sound
+# effects ship as WAV placeholders). The library keeps bevy's default features,
+# and vorbis stays default-on so .ogg assets also work.
+bevy = { version = "0.19.0", features = ["wav"] }
 
 # On wasm, getrandom 0.3 needs its JS backend enabled so `rand` works in the
 # browser. This only enables a feature on an existing transitive dependency;
