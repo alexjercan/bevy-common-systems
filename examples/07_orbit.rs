@@ -394,11 +394,16 @@ fn setup(
             focus_offset: Vec3::new(0.0, 1.5, 16.0),
             smoothing: CAMERA_SMOOTHING,
         },
+        // A little ambient so the dark side of the planet is not pure black.
+        // In Bevy 0.19 `AmbientLight` is a per-camera component, not a resource.
+        AmbientLight {
+            brightness: 250.0,
+            ..default()
+        },
         Transform::from_xyz(0.0, 6.0, PLANET_RADIUS + 12.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    // A key light plus a little ambient so the dark side of the planet is not
-    // pure black.
+    // A key light so the planet and the movers catch highlights.
     commands.spawn((
         Name::new("Sun"),
         DirectionalLight {
@@ -407,10 +412,6 @@ fn setup(
         },
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.9, 0.6, 0.0)),
     ));
-    commands.insert_resource(AmbientLight {
-        brightness: 250.0,
-        ..default()
-    });
 
     // Status bar: FPS only. The score / health live in the in-game HUD.
     commands.spawn((status_bar(StatusBarRootConfig::default()),));
@@ -539,7 +540,12 @@ fn read_steer(
         .iter()
         .next()
         .map(|touch| touch.position())
-        .or_else(|| mouse.pressed(MouseButton::Left).then(|| window.cursor_position()).flatten());
+        .or_else(|| {
+            mouse
+                .pressed(MouseButton::Left)
+                .then(|| window.cursor_position())
+                .flatten()
+        });
     if let Some(pos) = pointer {
         let half = (window.width() * 0.35).max(1.0);
         steer += ((pos.x - window.width() * 0.5) / half).clamp(-1.0, 1.0);
@@ -842,7 +848,11 @@ fn resolve_collisions(
     // Orbs: collect any overlapping one. `maintain_objects` replaces it next
     // frame, so the field stays full.
     for (orb, transform) in q_orbs.iter() {
-        if spheres_overlap(runner_pos, transform.translation, RUNNER_RADIUS + ORB_RADIUS) {
+        if spheres_overlap(
+            runner_pos,
+            transform.translation,
+            RUNNER_RADIUS + ORB_RADIUS,
+        ) {
             commands.entity(orb).despawn();
             score.0 += 1;
             commands.play_sfx_volume(sfx.pickup.clone(), 0.8);
@@ -855,7 +865,11 @@ fn resolve_collisions(
         return;
     }
     for (_hazard, transform) in q_hazards.iter() {
-        if spheres_overlap(runner_pos, transform.translation, RUNNER_RADIUS + HAZARD_RADIUS) {
+        if spheres_overlap(
+            runner_pos,
+            transform.translation,
+            RUNNER_RADIUS + HAZARD_RADIUS,
+        ) {
             cooldown.0 = HIT_COOLDOWN;
             commands.play_sfx(sfx.hurt.clone());
             commands.trigger(HealthApplyDamage {
@@ -898,10 +912,7 @@ fn tick_hit_cooldown(time: Res<Time>, mut cooldown: ResMut<HitCooldown>) {
 }
 
 /// Blink the marker while it is invulnerable so the hit reads clearly.
-fn blink_runner(
-    cooldown: Res<HitCooldown>,
-    mut q_runner: Query<&mut Visibility, With<Runner>>,
-) {
+fn blink_runner(cooldown: Res<HitCooldown>, mut q_runner: Query<&mut Visibility, With<Runner>>) {
     let Ok(mut visibility) = q_runner.single_mut() else {
         return;
     };
@@ -1014,7 +1025,11 @@ fn update_hud(
         for (mut node, mut color) in q_fill.iter_mut() {
             node.width = Val::Percent(fraction * 100.0);
             // Green when healthy, sliding to red as it drains.
-            color.0 = Color::srgb(0.3 + (1.0 - fraction) * 0.6, 0.85 * fraction, 0.4 * fraction);
+            color.0 = Color::srgb(
+                0.3 + (1.0 - fraction) * 0.6,
+                0.85 * fraction,
+                0.4 * fraction,
+            );
         }
     }
 }
@@ -1133,8 +1148,7 @@ mod tests {
     fn advancing_moves_position_toward_heading() {
         let up = Vec3::Z;
         let forward = Vec3::Y;
-        let (new_up, _) =
-            step_runner_frame(up, forward, 0.0, TURN_RATE, RUNNER_SPEED, RADIUS, DT);
+        let (new_up, _) = step_runner_frame(up, forward, 0.0, TURN_RATE, RUNNER_SPEED, RADIUS, DT);
         // The new position should have tilted toward +Y (the heading).
         assert!(new_up.dot(forward) > up.dot(forward));
         assert!(new_up.dot(Vec3::Z) < 1.0);

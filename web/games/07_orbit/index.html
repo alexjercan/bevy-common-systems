@@ -8,6 +8,76 @@
     />
     <title>Orbit Runner - bevy_common_systems</title>
     <!--
+      Web Audio autoplay unlock for WebKit (iOS + macOS Safari).
+
+      Bevy/cpal creates its AudioContext eagerly at startup, before any user
+      gesture, so it comes up "suspended". Chrome and Firefox auto-resume it
+      once the user interacts and a source node start()s, so no shim is needed
+      there. WebKit does NOT auto-resume on start(): it needs an explicit
+      resume() called inside a real user-gesture handler. Bevy does not expose
+      its AudioContext from Rust, so we capture every context at construction
+      (by wrapping the constructor) and resume them all on the first gesture.
+      Without this, every SFX is silent on mobile Safari.
+
+      This runs before trunk's injected wasm loader (it is earlier in <head>),
+      so the wrapper is installed before Bevy constructs its context.
+    -->
+    <script>
+      (function () {
+        var Native = window.AudioContext || window.webkitAudioContext;
+        if (!Native) return;
+
+        // Every AudioContext Bevy/cpal builds gets recorded here.
+        var contexts = [];
+        function Wrapped() {
+          var ctx = new (Function.prototype.bind.apply(
+            Native,
+            [null].concat([].slice.call(arguments))
+          ))();
+          contexts.push(ctx);
+          return ctx;
+        }
+        Wrapped.prototype = Native.prototype;
+        window.AudioContext = Wrapped;
+        if (window.webkitAudioContext) window.webkitAudioContext = Wrapped;
+
+        var events = ['pointerdown', 'touchend', 'mousedown', 'keydown'];
+        function detachIfRunning() {
+          var running =
+            contexts.length > 0 &&
+            contexts.every(function (c) {
+              return c.state === 'running';
+            });
+          if (!running) return;
+          events.forEach(function (type) {
+            document.removeEventListener(type, unlock, true);
+          });
+        }
+        function unlock() {
+          contexts.forEach(function (ctx) {
+            if (ctx.state === 'suspended' && ctx.resume) {
+              ctx.resume().then(detachIfRunning, function () {});
+            }
+            // WebKit's stricter unlock wants an actual node start inside the
+            // gesture; a 1-sample silent buffer is inaudible and does it.
+            try {
+              var src = ctx.createBufferSource();
+              src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+              src.connect(ctx.destination);
+              src.start(0);
+            } catch (e) {}
+          });
+          detachIfRunning();
+        }
+        events.forEach(function (type) {
+          document.addEventListener(type, unlock, {
+            capture: true,
+            passive: true,
+          });
+        });
+      })();
+    </script>
+    <!--
       Trunk builds the crate's `07_orbit` example to wasm. The example is
       selected on the CLI with `--example 07_orbit` (see build-games.sh);
       this link just points trunk at the crate root.
