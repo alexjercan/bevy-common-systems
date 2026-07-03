@@ -40,6 +40,7 @@
             rust-analyzer
             pkg-config
             llvmPackages.bintools
+            nodejs # for the web/ showcase (webpack + TypeScript)
           ];
 
           buildInputs = with pkgs; [

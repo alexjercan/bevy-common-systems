@@ -28,6 +28,9 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
   the code. Check here for planned and in-progress work.
 - `docs/` - project documentation: decision notes at the top level, retros
   in `docs/retros/`.
+- `web/` - a static TypeScript + webpack showcase site that serves the example
+  games as WebAssembly builds (trunk). See `web/README.md` and
+  `docs/wasm-web-builds.md`.
 - `flake.nix`, `rust-toolchain.toml`, `rustfmt.toml`, `.cargo/config.toml` -
   toolchain setup, see Environment below.
 

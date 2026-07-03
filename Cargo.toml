@@ -23,6 +23,12 @@ bevy_asset_loader = { version = "0.27.0" }
 # and vorbis stays default-on so .ogg assets also work.
 bevy = { version = "0.19.0", features = ["wav"] }
 
+# On wasm, getrandom 0.3 needs its JS backend enabled so `rand` works in the
+# browser. This only enables a feature on an existing transitive dependency;
+# native builds are unaffected. Pair with the rustflag in .cargo/config.toml.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
 [features]
 debug = ["avian3d/diagnostic_ui", "bevy/track_location", "bevy-inspector-egui"]
 dev = ["debug"]

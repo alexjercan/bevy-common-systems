@@ -132,7 +132,21 @@ fn main() {
     let _ = Cli::parse();
     let mut app = App::new();
 
-    app.add_plugins(DefaultPlugins);
+    // On the web the game runs inside a canvas: fit it to its parent element so
+    // it fills the (portrait, mobile-ish) frame the showcase site embeds it in,
+    // and render at that aspect rather than a stretched fixed resolution. These
+    // fields are ignored on native, so the desktop example is unchanged.
+    let primary_window = Window {
+        #[cfg(target_arch = "wasm32")]
+        canvas: Some("#game-canvas".into()),
+        #[cfg(target_arch = "wasm32")]
+        fit_canvas_to_parent: true,
+        ..default()
+    };
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(primary_window),
+        ..default()
+    }));
 
     // The debug inspector pulls in avian's debug-render systems, which need the
     // resources PhysicsPlugins installs; add it so `--features debug` boots even
