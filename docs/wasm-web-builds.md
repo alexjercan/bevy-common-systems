@@ -47,9 +47,52 @@ This writes each game to `web/dist/games/<name>/`. `PUBLIC_PATH` must match the
 gallery's base path (use the repo's Pages subpath in CI). The default is `/`
 for local serving.
 
-Adding a game later is a two-line change: a `web/games/<name>/index.html` (copy
+Adding a game later is a small change: a `web/games/<name>/index.html` (copy
 06_fruitninja's) and one entry in the `games` array in
-`web/scripts/build-games.sh`.
+`web/scripts/build-games.sh`. If the game loads any assets (sounds, textures,
+fonts), also add a `copy-dir` directive to its `index.html` so the files ship
+into the build -- see "Assets (sounds, textures, ...)" below.
+
+### Assets (sounds, textures, ...)
+
+Trunk copies **nothing** into the build by default: a plain build emits only
+`index.html`, the JS glue and the `.wasm`. Any asset the example loads at
+runtime -- for example `06_fruitninja` calling
+`asset_server.load("sounds/menu_select.wav")` -- must be staged into the dist
+explicitly, or the browser fetch 404s and (for audio) every sound is silent.
+
+Stage assets with a `data-trunk rel="copy-dir"` link in the game's
+`index.html` (alongside the `rel="rust"` link). `06_fruitninja` copies the
+crate's sound directory:
+
+```html
+<link
+  data-trunk
+  rel="copy-dir"
+  href="../../../assets/sounds"
+  data-target-path="assets/sounds"
+/>
+```
+
+- `href` is relative to the `index.html`; `../../../` reaches the repo root
+  from `web/games/<name>/`.
+- `data-target-path` is the destination **inside the dist dir**; trunk copies
+  the *contents* of `href` into it, so this lands the files at
+  `web/build/games/<name>/assets/sounds/*.wav`.
+- The path must match what Bevy's wasm `AssetServer` fetches at runtime. Bevy
+  uses `file_path = "assets"` by default and fetches relative to the page, so
+  with the game served at `<public>/games/<name>/` it requests
+  `<public>/games/<name>/assets/sounds/<file>`. Keep the build-time
+  `data-target-path` (`assets/sounds`) and this runtime URL in agreement.
+
+Copying the whole `assets/` dir (`href="../../../assets"`,
+`data-target-path="assets"`) also works and generalizes to games that load more
+than sounds; `06_fruitninja` copies only `assets/sounds` because that is the
+sole thing it loads (it is otherwise fully procedural).
+
+Web audio additionally needs a user gesture before it will play; the showcase
+satisfies this via the in-canvas click that starts a run. See the autoplay note
+in `assets/sounds/README.md`.
 
 ### trunk must run from the repo root
 

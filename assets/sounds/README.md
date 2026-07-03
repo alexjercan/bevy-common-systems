@@ -34,6 +34,16 @@ audio module (`SfxPlugin`) plays whatever handle it is given.
 | `game_over.wav` | The run ends (game-over screen) | short somber sting, ~0.8-1.5 s |
 | `launch.wav` | A fruit or bomb is launched from below | soft airy whoosh, ~0.2 s (played quietly) |
 
+## Web (wasm) builds
+
+These files are shipped into the web build by a `data-trunk rel="copy-dir"`
+directive in `web/games/06_fruitninja/index.html`; without it trunk copies no
+assets and the browser fetch of `sounds/*.wav` 404s (silent game). See
+`docs/wasm-web-builds.md` ("Assets") for the copy directive and the exact
+fetched URL. Browser audio also needs a user gesture before it will play; the
+game satisfies this with the in-canvas click that starts a run, so the first
+sound (`menu_select`) fires on that click.
+
 ## Per-event volume
 
 The example plays most sounds below full volume (see the `play_sfx_volume`
