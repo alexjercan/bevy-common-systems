@@ -5,7 +5,9 @@
 //! cursor across one to slice it into flying fragments (via `ExplodeMeshPlugin`)
 //! and score a point. A bright blade trail follows the swipe, and each slice
 //! pops a rising "+N". Slicing several fruit in one continuous swipe builds a
-//! combo: the Nth fruit is worth N points and a "COMBO xN" banner flashes. Dark
+//! combo: the Nth fruit is worth N points and a "COMBO xN" banner flashes. The
+//! combo runs on a short time window, so it survives slow swipes and separate
+//! strokes as long as you keep landing hits. Dark
 //! "bombs" are mixed in: slicing a bomb deals lethal damage to the player
 //! through the crate's health system and ends the run at the game-over screen.
 //! Fruit you miss just falls off the bottom.
@@ -94,6 +96,10 @@ const DYING_BEAT: f32 = 0.35;
 const SLICE_POP_TIME: f32 = 0.08;
 const SLICE_POP_SCALE: f32 = 1.45;
 
+/// Seconds after a slice you have to land the next hit and keep the combo. The
+/// combo survives slow swipes / separate strokes as long as hits stay inside it.
+const COMBO_WINDOW: f32 = 1.2;
+
 /// How long a floating "+N" popup lives before it despawns, in seconds.
 const POPUP_LIFETIME: f32 = 0.8;
 
@@ -167,6 +173,7 @@ fn main() {
         Update,
         (
             tick_elapsed,
+            tick_combo,
             spawn_projectile,
             move_projectiles,
             slice_objects,
@@ -238,18 +245,33 @@ struct BladeTrail {
     points: VecDeque<Vec3>,
 }
 
-/// Number of fruits sliced so far in the current continuous swipe. Each fruit
-/// scores its combo index (1, 2, 3, ...); releasing the button resets it.
+/// The current combo: how many fruit are in the chain and how long is left on
+/// the window to keep it alive. Each slice scores its combo index (1, 2, 3, ...)
+/// and refreshes the window; when the window runs out the combo resets. Slicing
+/// still needs an active swipe, so the combo cannot be farmed by holding.
 #[derive(Resource, Default)]
 struct Combo {
     count: usize,
+    timer: f32,
 }
 
-/// Advance the combo for one more sliced fruit and return the points it earns:
-/// the new combo count, so the k-th fruit in a swipe is worth k points.
+/// Advance the combo for one more sliced fruit: bump the count, refresh the
+/// window, and return the points earned (the new count).
 fn advance_combo(combo: &mut Combo) -> usize {
     combo.count += 1;
+    combo.timer = COMBO_WINDOW;
     combo.count
+}
+
+/// Count the combo window down; when it runs out, the combo ends (resets).
+fn tick_combo(time: Res<Time>, mut combo: ResMut<Combo>) {
+    if combo.count == 0 {
+        return;
+    }
+    combo.timer -= time.delta_secs();
+    if combo.timer <= 0.0 {
+        combo.count = 0;
+    }
 }
 
 /// Seconds elapsed in the current run, driving the difficulty ramp.
@@ -714,6 +736,7 @@ fn start_game(
     // new run does not flash a stale blade.
     blade.points.clear();
     combo.count = 0;
+    combo.timer = 0.0;
     shake.trauma = 0.0;
     dying.remaining = None;
     elapsed.0 = 0.0;
@@ -903,12 +926,12 @@ fn slice_objects(
     q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>)>,
 ) {
     // Releasing the button ends the swipe, so the next press starts a fresh
-    // segment instead of jumping across the screen from a stale point, the
-    // blade trail is cleared so it does not linger, and the combo resets.
+    // segment instead of jumping across the screen from a stale point, and the
+    // blade trail is cleared so it does not linger. The combo is NOT reset here:
+    // it lives on its own window (see `tick_combo`) so it can span strokes.
     if !mouse.pressed(MouseButton::Left) {
         trail.previous = None;
         blade.points.clear();
-        combo.count = 0;
         return;
     }
 
@@ -934,10 +957,10 @@ fn slice_objects(
     };
 
     // A slice only counts while the cursor is genuinely swiping. Holding still
-    // or crawling stalls the swipe: it slices nothing and resets the combo, so
-    // the button cannot be held down to farm points or an endless combo.
+    // or crawling stalls the swipe: it slices nothing, so the button cannot be
+    // held down to farm points. The combo is left alone here -- its window keeps
+    // it alive across a brief stall so you can re-swipe and continue the chain.
     if !swipe_is_active(previous, current, time.delta_secs()) {
-        combo.count = 0;
         return;
     }
 
@@ -1231,13 +1254,22 @@ mod tests {
     }
 
     #[test]
-    fn combo_resets_between_swipes() {
-        // Releasing the button (count = 0) starts the next swipe fresh at +1.
+    fn combo_resets_after_window_expires() {
+        // When the window runs out (count reset to 0), the chain starts fresh.
         let mut combo = Combo::default();
         advance_combo(&mut combo);
         advance_combo(&mut combo);
-        combo.count = 0; // release
+        combo.count = 0; // window expired (see tick_combo)
         assert_eq!(advance_combo(&mut combo), 1);
+    }
+
+    #[test]
+    fn advancing_combo_refreshes_the_window() {
+        // Each slice refreshes the full window so the chain can continue.
+        let mut combo = Combo::default();
+        combo.timer = 0.1;
+        advance_combo(&mut combo);
+        assert!((combo.timer - COMBO_WINDOW).abs() < 1e-6);
     }
 
     #[test]

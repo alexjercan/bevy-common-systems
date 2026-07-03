@@ -1,6 +1,6 @@
 # Fruit ninja: time-window combos
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 78
 - TAGS: feature,example
 
@@ -13,23 +13,23 @@ cannot farm, because slicing itself remains gated on swipe speed.
 
 ## Steps
 
-- [ ] Extend `Combo` with a timer: `Combo { count: usize, timer: f32 }` (seconds
+- [x] Extend `Combo` with a timer: `Combo { count: usize, timer: f32 }` (seconds
       remaining in the window). Add a `COMBO_WINDOW` const (e.g. 1.2s).
-- [ ] On slicing a fruit, `advance_combo` still increments `count`; also refresh
+- [x] On slicing a fruit, `advance_combo` still increments `count`; also refresh
       `timer = COMBO_WINDOW`.
-- [ ] Add a `tick_combo` system (Update, `Playing`) that counts `timer` down by
+- [x] Add a `tick_combo` system (Update, `Playing`) that counts `timer` down by
       `dt`; when it reaches 0 with `count > 0`, reset the combo to 0 (this is
       the combo-end event the summary task will hook).
-- [ ] Remove the combo reset that currently happens on swipe stall
+- [x] Remove the combo reset that currently happens on swipe stall
       (`slice_objects` :663) and on button release (:634) -- the timer now owns
       combo lifetime. KEEP the swipe-speed gate on *slicing* itself
       (`swipe_is_active`) so holding still still slices nothing; only the combo
       reset moves to the timer. Keep the `start_game` combo reset.
-- [ ] Update the module `//!` doc and the combo comment to describe the
+- [x] Update the module `//!` doc and the combo comment to describe the
       time-window behavior.
-- [ ] Add/adjust unit tests: the escalation test still holds; add a small pure
+- [x] Add/adjust unit tests: the escalation test still holds; add a small pure
       helper if useful (e.g. a `combo_expired(timer)` predicate) and test it.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, real boot no panic.
 
 ## Notes
@@ -43,3 +43,11 @@ cannot farm, because slicing itself remains gated on swipe speed.
 - This task is a prerequisite for the golden-fruit combo-time bonus
   (20260703-140244) and the combo end summary (20260703-140246); do it first.
 - No new dependencies.
+
+## Close-out
+
+Combo now runs on a window: `Combo { count, timer }`, advance_combo refreshes
+timer=COMBO_WINDOW, `tick_combo` counts it down and resets the combo when it
+expires. Removed the combo resets on swipe-stall and button-release; kept the
+swipe-speed gate on slicing (anti-farm) and the start_game reset (now also
+timer). 3 combo unit tests. The combo survives slow swipes / separate strokes.
