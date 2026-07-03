@@ -1,6 +1,6 @@
 # play-test and tune 08_dropzone flight feel
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: example,polish
 
