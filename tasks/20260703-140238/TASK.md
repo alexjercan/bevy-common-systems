@@ -1,6 +1,6 @@
 # Fruit ninja: difficulty ramp over time
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 95
 - TAGS: feature,example
 
@@ -12,21 +12,21 @@ flat game into one with a difficulty curve.
 
 ## Steps
 
-- [ ] Add an `Elapsed(f32)` resource (or reuse a run timer) reset in
+- [x] Add an `Elapsed(f32)` resource (or reuse a run timer) reset in
       `start_game`, ticked each frame in `Playing`.
-- [ ] Replace the fixed `SPAWN_INTERVAL` timer usage in `spawn_projectile` with
+- [x] Replace the fixed `SPAWN_INTERVAL` timer usage in `spawn_projectile` with
       an interval that shrinks with elapsed time (e.g. lerp from 0.9s down to a
       floor like 0.35s over ~60s); set the repeating timer's duration each time
       it fires, or drive spawning from a computed interval.
-- [ ] Scale bomb probability from `BOMB_CHANCE` up to a cap (e.g. 0.20 -> 0.35)
+- [x] Scale bomb probability from `BOMB_CHANCE` up to a cap (e.g. 0.20 -> 0.35)
       as elapsed time grows, used in `spawn_projectile` instead of the constant.
-- [ ] Add named consts for the start/floor spawn interval and start/cap bomb
+- [x] Add named consts for the start/floor spawn interval and start/cap bomb
       chance and the ramp duration, so the curve is easy to tune.
-- [ ] Optional: extract the ramp math into a pure helper (e.g.
+- [x] Optional: extract the ramp math into a pure helper (e.g.
       `spawn_interval_for(elapsed)` / `bomb_chance_for(elapsed)`) and unit-test
       the endpoints (t=0 -> start, t>=ramp -> floor/cap), matching the example's
       pure-helper + `cargo test --example` pattern.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, real boot with no panic.
 
 ## Notes
@@ -37,3 +37,10 @@ flat game into one with a difficulty curve.
   reset there.
 - Keep the curve gentle at first so early game stays approachable.
 - No new dependencies.
+
+## Close-out
+
+Added `Elapsed` run clock (ticked in Playing, reset in start_game) and pure
+`spawn_interval_for`/`bomb_chance_for` helpers (ease start->floor/cap over
+DIFFICULTY_RAMP_SECS). spawn_projectile ramps the next SpawnTimer duration and
+bomb chance from elapsed. 3 unit tests cover endpoints + midway. Verified boot.
