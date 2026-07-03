@@ -1,6 +1,6 @@
 # Spike: turn examples 01-05 into small games
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 60
 - TAGS: spike,docs,example
 
