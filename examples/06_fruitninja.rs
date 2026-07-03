@@ -88,13 +88,7 @@ fn main() {
     app.add_systems(Startup, setup);
     app.add_systems(
         Update,
-        (
-            spawn_fruit,
-            move_fruit,
-            track_cursor,
-            slice_fruit,
-            move_fragments,
-        ),
+        (spawn_fruit, move_fruit, slice_fruit, move_fragments),
     );
     app.add_observer(on_fragments_spawned);
 
@@ -269,44 +263,38 @@ fn move_fruit(
     }
 }
 
-/// Project the cursor onto the play plane and remember it for the slice test.
-fn track_cursor(
-    windows: Query<&Window>,
-    cameras: Query<(&Camera, &GlobalTransform)>,
+/// Slice any fruit the swipe segment passes through this frame.
+///
+/// Cursor tracking and slicing live in one system on purpose: the swipe is the
+/// segment from last frame's cursor to this frame's, so the read (previous),
+/// the test, and the store (current) must happen in a fixed order. Splitting
+/// them into two `Update` systems that share `CursorTrail` would let the store
+/// race ahead of the read and collapse the segment to a point.
+fn slice_fruit(
+    mut commands: Commands,
+    window: Single<&Window>,
+    camera: Single<(&Camera, &GlobalTransform)>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut trail: ResMut<CursorTrail>,
+    mut score: ResMut<Score>,
+    q_fruit: Query<(Entity, &Transform, &Fruit)>,
 ) {
-    // Only track while the button is held; releasing it breaks the swipe so the
-    // next press starts a fresh segment rather than a jump across the screen.
+    // Releasing the button ends the swipe, so the next press starts a fresh
+    // segment instead of jumping across the screen from a stale point.
     if !mouse.pressed(MouseButton::Left) {
         trail.previous = None;
         return;
     }
 
-    trail.previous = cursor_on_play_plane(&windows, &cameras);
-}
-
-/// Slice any fruit the swipe segment passes through this frame.
-fn slice_fruit(
-    mut commands: Commands,
-    windows: Query<&Window>,
-    cameras: Query<(&Camera, &GlobalTransform)>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    trail: Res<CursorTrail>,
-    mut score: ResMut<Score>,
-    q_fruit: Query<(Entity, &Transform, &Fruit)>,
-) {
-    if !mouse.pressed(MouseButton::Left) {
-        return;
-    }
-
-    let Some(current) = cursor_on_play_plane(&windows, &cameras) else {
+    let (camera, camera_transform) = *camera;
+    let Some(current) = cursor_on_play_plane(&window, camera, camera_transform) else {
         return;
     };
 
     // On the first frame of a press there is no previous point yet; treat the
     // segment as degenerate (a point) so a stationary click can still slice.
     let previous = trail.previous.unwrap_or(current);
+    trail.previous = Some(current);
 
     for (entity, transform, fruit) in q_fruit.iter() {
         if segment_hits_circle(
@@ -333,17 +321,22 @@ fn slice_fruit(
 fn on_fragments_spawned(
     insert: On<Insert, ExplodeFragments>,
     mut commands: Commands,
-    q_fragments: Query<(&ExplodeFragments, &Transform)>,
-    assets: Res<FruitAssets>,
+    q_fragments: Query<(
+        &ExplodeFragments,
+        &Transform,
+        &MeshMaterial3d<StandardMaterial>,
+    )>,
 ) {
     let entity = insert.entity;
 
-    let Ok((fragments, transform)) = q_fragments.get(entity) else {
+    let Ok((fragments, transform, material)) = q_fragments.get(entity) else {
         return;
     };
 
     let origin = transform.translation;
-    let material = assets.materials[0].clone();
+    // The sliced shell still carries its material, so fragments burst in the
+    // same color as the fruit they came from.
+    let material = material.0.clone();
 
     for fragment in fragments.iter() {
         commands.spawn((
@@ -378,12 +371,11 @@ fn move_fragments(time: Res<Time>, mut q_fragments: Query<(&mut Transform, &mut 
 /// World position where the cursor ray meets the play plane, if the cursor is
 /// on screen and its ray actually crosses the plane.
 fn cursor_on_play_plane(
-    windows: &Query<&Window>,
-    cameras: &Query<(&Camera, &GlobalTransform)>,
+    window: &Window,
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
 ) -> Option<Vec3> {
-    let window = windows.iter().next()?;
     let cursor = window.cursor_position()?;
-    let (camera, camera_transform) = cameras.iter().next()?;
 
     let ray = camera.viewport_to_world(camera_transform, cursor).ok()?;
     let plane = InfinitePlane3d::new(Vec3::Z);
