@@ -1,6 +1,6 @@
 # Enable wasm example builds + trunk build of fruit ninja
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: feature,web
 
@@ -12,7 +12,7 @@ foundation the showcase site embeds.
 
 ## Steps
 
-- [ ] Fix the `getrandom` wasm backend so examples compile for wasm. getrandom
+- [x] Fix the `getrandom` wasm backend so examples compile for wasm. getrandom
       is 0.3.4, which needs BOTH the `wasm_js` feature and the
       `--cfg getrandom_backend="wasm_js"` rustflag:
   - add `getrandom = { version = "0.3", features = ["wasm_js"] }` to
@@ -20,22 +20,22 @@ foundation the showcase site embeds.
     so the feature is enabled;
   - append `--cfg getrandom_backend="wasm_js"` to the existing
     `[target.wasm32-unknown-unknown] rustflags` in `.cargo/config.toml`.
-- [ ] Confirm `cargo build --example 06_fruitninja --target wasm32-unknown-unknown`
+- [x] Confirm `cargo build --example 06_fruitninja --target wasm32-unknown-unknown`
       succeeds (capture the real exit code -- do not pipe through `tail`, which
       hides it).
-- [ ] Add a trunk entry for the game under `web/games/06_fruitninja/`:
+- [x] Add a trunk entry for the game under `web/games/06_fruitninja/`:
       an `index.html` with the trunk rust link building the example
       (`<link data-trunk rel="rust" data-bin="..."/>` or the `--example` form),
       a canvas, and minimal page CSS. Use `trunk build --example 06_fruitninja`
       (trunk bundles wasm-bindgen; no separate CLI needed).
-- [ ] Add a build script (e.g. `web/scripts/build-games.sh`) that runs trunk for
+- [x] Add a build script (e.g. `web/scripts/build-games.sh`) that runs trunk for
       each game into the site's games output dir, parameterized by a public base
       path (for GitHub Pages). Start with just 06_fruitninja; make adding a game
       a one-line change.
-- [ ] Verify the trunk build produces a working `dist` for the game (wasm + JS
+- [x] Verify the trunk build produces a working `dist` for the game (wasm + JS
       glue + index.html). A real browser run needs the user; at minimum confirm
       the artifacts exist and the wasm is non-trivial in size.
-- [ ] Document the wasm build in `docs/` (how to build a game for the web, the
+- [x] Document the wasm build in `docs/` (how to build a game for the web, the
       getrandom gotcha).
 
 ## Notes
@@ -53,3 +53,15 @@ foundation the showcase site embeds.
   excluded.
 - This is Rust/build-side only; the webpack gallery is task 20260703-144936.
 - No changes to the game's gameplay code.
+
+## Close-out
+
+Enabled wasm example builds: added the wasm-only `getrandom` `wasm_js` dep
+(Cargo.toml) + the `getrandom_backend="wasm_js"` rustflag (.cargo/config.toml),
+which fixes the `could not compile getrandom` wasm error. Verified
+`cargo build --example 06_fruitninja --target wasm32-unknown-unknown` (exit 0).
+Added `web/games/06_fruitninja/index.html` (trunk source) and
+`web/scripts/build-games.sh` (trunk `--release --example` per game into the
+`web/build/games` staging dir, PUBLIC_PATH-aware). Verified the full trunk
+pipeline: it emits index.html + JS glue + a wasm-opt'd 42 MB wasm (dev is
+381 MB). Documented in docs/wasm-web-builds.md. Native builds unaffected.

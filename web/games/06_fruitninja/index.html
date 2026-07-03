@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, user-scalable=no"
+    />
+    <title>Fruit Ninja - bevy_common_systems</title>
+    <!--
+      Trunk builds the crate's `06_fruitninja` example to wasm. The example is
+      selected on the CLI with `--example 06_fruitninja` (see build-games.sh);
+      this link just points trunk at the crate root.
+    -->
+    <link data-trunk rel="rust" href="../../../Cargo.toml" data-wasm-opt="z" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #0b0f1a;
+        overflow: hidden;
+      }
+      /* Bevy creates its own canvas on wasm; make it fill the frame. */
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        outline: none;
+      }
+    </style>
+  </head>
+  <body></body>
+</html>
