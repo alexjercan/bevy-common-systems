@@ -238,13 +238,11 @@ impl TriangleMeshBuilder {
 
         let center = boundary.iter().fold(Vec3::ZERO, |acc, v| acc + v) / (boundary.len() as f32);
 
-        let reordered = boundary.to_vec();
-        for i in (0..reordered.len()).step_by(2) {
-            let a = reordered[i];
-            let b = reordered[i + 1];
-
-            let t = Triangle3d::new(a, b, center);
-
+        // Boundary vertices come in pairs (each triangle split pushes two).
+        // `chunks_exact(2)` consumes them pairwise and safely ignores a
+        // trailing unpaired vertex, so a malformed boundary cannot panic.
+        for pair in boundary.chunks_exact(2) {
+            let t = Triangle3d::new(pair[0], pair[1], center);
             self.add_triangle(t);
         }
 
@@ -296,8 +294,16 @@ impl TriangleMeshBuilder {
             let b = t.vertices[1];
             let c = t.vertices[2];
 
-            let u_axis = (b - a).normalize();
-            let v_axis = t.normal().unwrap_or(Dir3::Y).cross(u_axis).normalize();
+            // Degenerate (zero-length-edge or zero-area) triangles - which
+            // slicing readily produces - would make `normalize` return NaN.
+            // `normalize_or_zero` keeps the UVs finite; a collapsed triangle
+            // just gets zeroed axes and therefore (0, 0) UVs.
+            let u_axis = (b - a).normalize_or_zero();
+            let v_axis = t
+                .normal()
+                .map(|n| n.cross(u_axis))
+                .unwrap_or(Vec3::ZERO)
+                .normalize_or_zero();
 
             for v in [a, b, c] {
                 let local = v - a;
@@ -386,38 +392,76 @@ impl MeshBuilder for TriangleMeshBuilder {
     }
 }
 
-impl From<Mesh> for TriangleMeshBuilder {
-    /// Convert a Bevy Mesh into a TriangleMeshBuilder.
-    fn from(mesh: Mesh) -> Self {
-        let positions = match mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap() {
+impl TriangleMeshBuilder {
+    /// Fallibly convert a Bevy `Mesh` into a `TriangleMeshBuilder`.
+    ///
+    /// Returns `None` instead of panicking when the mesh cannot be
+    /// interpreted as a triangle list: no `Float32x3` position attribute, a
+    /// position attribute in another format, or no index buffer. Indices
+    /// that reference a missing vertex, and a trailing partial triangle, are
+    /// skipped rather than panicking.
+    ///
+    /// Use this for meshes of unknown provenance (for example the arbitrary
+    /// mesh handed to the explode plugin). The `From<Mesh>` impl is a
+    /// convenience wrapper for meshes known to be well-formed (such as the
+    /// output of [`TriangleMeshBuilder::build`]).
+    pub fn try_from_mesh(mesh: &Mesh) -> Option<Self> {
+        let positions = match mesh.attribute(Mesh::ATTRIBUTE_POSITION)? {
             VertexAttributeValues::Float32x3(vals) => {
                 vals.iter().map(|v| Vec3::from(*v)).collect::<Vec<_>>()
             }
-            _ => panic!("Unsupported position format"),
+            _ => return None,
         };
 
-        let triangles = match mesh.indices().unwrap() {
+        let indices = match mesh.indices()? {
             Indices::U32(indices) => indices.to_vec(),
             Indices::U16(indices) => indices.iter().map(|&i| i as u32).collect::<Vec<_>>(),
-        }
-        .chunks(3)
-        .map(|c| {
-            Triangle3d::new(
-                positions[c[0] as usize],
-                positions[c[1] as usize],
-                positions[c[2] as usize],
-            )
-        })
-        .collect::<Vec<_>>();
+        };
 
-        Self { triangles }
+        let triangles = indices
+            .chunks_exact(3)
+            .filter_map(|c| {
+                Some(Triangle3d::new(
+                    *positions.get(c[0] as usize)?,
+                    *positions.get(c[1] as usize)?,
+                    *positions.get(c[2] as usize)?,
+                ))
+            })
+            .collect::<Vec<_>>();
+
+        Some(Self { triangles })
+    }
+}
+
+impl From<Mesh> for TriangleMeshBuilder {
+    /// Convert a well-formed Bevy `Mesh` into a `TriangleMeshBuilder`.
+    ///
+    /// Panics if the mesh is not a `Float32x3`-positioned indexed triangle
+    /// list. For untrusted meshes use [`TriangleMeshBuilder::try_from_mesh`],
+    /// which returns `None` instead.
+    fn from(mesh: Mesh) -> Self {
+        Self::try_from_mesh(&mesh).expect(
+            "TriangleMeshBuilder::from: mesh must have Float32x3 positions and indices; \
+             use try_from_mesh for untrusted meshes",
+        )
     }
 }
 
 /// Compute intersection between an edge and a plane.
+///
+/// The result is always finite. If the edge is (nearly) parallel to the
+/// plane the crossing is undefined and a division would yield inf/NaN, so we
+/// fall back to the edge midpoint. The parameter is also clamped to the
+/// segment so numerical overshoot cannot push the vertex off the edge.
 fn edge_plane_intersection(a: Vec3, b: Vec3, plane_point: Vec3, plane_normal: Vec3) -> Vec3 {
     let ab = b - a;
-    let t = (plane_point - a).dot(plane_normal) / ab.dot(plane_normal);
+    let denom = ab.dot(plane_normal);
+
+    if denom.abs() < 1e-6 {
+        return a + ab * 0.5;
+    }
+
+    let t = ((plane_point - a).dot(plane_normal) / denom).clamp(0.0, 1.0);
 
     a + ab * t
 }
@@ -507,5 +551,68 @@ mod test {
             "Expected triangle to be split"
         );
         assert!(is_positive, "Expected lonely vertex to be on positive side");
+    }
+
+    #[test]
+    fn test_edge_plane_intersection_parallel_is_finite() {
+        // Edge along X, plane normal also along X: the edge is parallel to
+        // the plane, so the denominator is zero. The result must stay finite.
+        let a = Vec3::new(0.0, 1.0, 0.0);
+        let b = Vec3::new(1.0, 1.0, 0.0);
+        let plane_point = Vec3::ZERO;
+        let plane_normal = Vec3::new(0.0, 1.0, 0.0); // parallel to edge AB
+
+        let p = edge_plane_intersection(a, b, plane_point, plane_normal);
+
+        assert!(
+            p.is_finite(),
+            "parallel edge intersection must be finite, got {p:?}"
+        );
+    }
+
+    #[test]
+    fn test_uvs_degenerate_triangle_are_finite() {
+        // A fully collapsed triangle (all vertices equal) has zero-length
+        // edges; UVs must not be NaN.
+        let p = Vec3::new(1.0, 2.0, 3.0);
+        let builder = TriangleMeshBuilder {
+            triangles: vec![Triangle3d::new(p, p, p)],
+        };
+
+        for uv in builder.uvs() {
+            assert!(uv.is_finite(), "degenerate UV must be finite, got {uv:?}");
+        }
+    }
+
+    #[test]
+    fn test_try_from_mesh_without_indices_returns_none() {
+        // A position-only mesh with no index buffer must decline, not panic.
+        let mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            vec![[0.0f32, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        );
+
+        assert!(TriangleMeshBuilder::try_from_mesh(&mesh).is_none());
+    }
+
+    #[test]
+    fn test_fill_boundary_odd_length_does_not_panic() {
+        // An odd-length boundary must not index out of bounds.
+        let mut builder = TriangleMeshBuilder::new_empty();
+        let boundary = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(1.0, 1.0, 0.0),
+        ];
+
+        builder.fill_boundary(&boundary);
+
+        // One pair (0,1) forms a triangle; the unpaired third vertex is
+        // ignored rather than panicking.
+        assert_eq!(builder.triangles.len(), 1);
     }
 }

@@ -141,10 +141,14 @@ fn handle_explosion(
         };
 
         for (mesh, normal) in fragments {
+            // A carried (never-sliced) fragment can have a zero direction, and
+            // a bad normal could be non-finite; fall back to a fixed axis so
+            // the Dir3 is always valid.
+            let direction = Dir3::new(normal.normalize_or_zero()).unwrap_or(Dir3::Y);
             fragment_meshes.push(ExplodeFragment {
                 origin: mesh_entity,
                 mesh: meshes.add(mesh.clone()),
-                direction: Dir3::new_unchecked(normal.normalize()),
+                direction,
             });
         }
     }
@@ -155,53 +159,134 @@ fn handle_explosion(
         .insert(ExplodeFragments(fragment_meshes));
 }
 
-/// Slice a mesh into fragments using random planes.
+/// Generate a random unit vector, uniformly distributed on the sphere.
+fn random_unit_vector(rng: &mut impl Rng) -> Vec3 {
+    let u: f32 = rng.random_range(-1.0..1.0);
+    let theta: f32 = rng.random_range(0.0..std::f32::consts::TAU);
+    let r = (1.0 - u * u).sqrt();
+    Vec3::new(r * theta.cos(), r * theta.sin(), u).normalize()
+}
+
+/// Slice a mesh into fragments using random planes through the origin.
 ///
-/// Returns `Some(Vec<(Mesh, Vec3)>)` containing the fragment mesh and its explosion direction.
-/// Returns `None` if slicing fails or no fragments are generated.
+/// Returns `Some(Vec<(Mesh, Vec3)>)` pairing each fragment mesh with its
+/// explosion direction, or `None` if the input mesh cannot be interpreted as
+/// a triangle list or no non-empty fragment survives.
+///
+/// The mesh is converted once up front with the fallible
+/// [`TriangleMeshBuilder::try_from_mesh`] and all slicing happens on builders,
+/// so an untrusted input mesh can never panic the conversion. A fragment that
+/// a given plane fails to split is carried forward intact rather than dropped.
 fn explode_mesh(
     original: &Mesh,
     fragment_count: usize,
     max_iterations: usize,
 ) -> Option<Vec<(Mesh, Vec3)>> {
-    let mut queue = VecDeque::from([(original.clone(), Vec3::ZERO)]);
+    let builder = TriangleMeshBuilder::try_from_mesh(original)?;
     let mut rng = rand::rng();
 
+    // Each entry is a fragment builder plus the direction of its last cut.
+    let mut queue: Vec<(TriangleMeshBuilder, Vec3)> = vec![(builder, Vec3::ZERO)];
+
     for _ in 0..max_iterations {
-        let mut fragments = vec![];
-
-        while let Some((mesh, _)) = queue.pop_front() {
-            let plane_point = Vec3::ZERO;
-            let plane_normal = {
-                // Generate a random unit vector as plane normal
-                let u: f32 = rng.random_range(-1.0..1.0);
-                let theta: f32 = rng.random_range(0.0..std::f32::consts::TAU);
-                let r = (1.0 - u * u).sqrt();
-                Vec3::new(r * theta.cos(), r * theta.sin(), u).normalize()
-            };
-
-            let Some((pos, neg)) = TriangleMeshBuilder::from(mesh).slice(plane_normal, plane_point)
-            else {
-                error!(
-                    "explode_mesh: could not slice mesh with plane normal {:?} at point {:?}.",
-                    plane_normal, plane_point
-                );
-                continue;
-            };
-
-            fragments.push((pos.build(), plane_normal));
-            fragments.push((neg.build(), -plane_normal));
+        if queue.len() >= fragment_count {
+            break;
         }
 
-        if fragments.len() >= fragment_count {
-            return Some(fragments);
-        } else if fragments.is_empty() {
-            error!("explode_mesh: no fragments generated after slicing.");
-            return None;
-        } else {
-            queue = VecDeque::from(fragments);
+        let mut next: Vec<(TriangleMeshBuilder, Vec3)> = Vec::with_capacity(queue.len() * 2);
+        for (mesh_builder, direction) in queue.drain(..) {
+            let plane_normal = random_unit_vector(&mut rng);
+
+            match mesh_builder.slice(plane_normal, Vec3::ZERO) {
+                Some((pos, neg)) => {
+                    next.push((pos, plane_normal));
+                    next.push((neg, -plane_normal));
+                }
+                None => {
+                    // The plane missed this fragment (one side came out
+                    // empty); keep it intact so no geometry is lost.
+                    next.push((mesh_builder, direction));
+                }
+            }
+        }
+
+        queue = next;
+    }
+
+    // Build only the surviving, non-empty fragments.
+    let fragments: Vec<(Mesh, Vec3)> = queue
+        .into_iter()
+        .filter(|(builder, _)| !builder.is_empty())
+        .map(|(builder, direction)| (builder.build(), direction))
+        .collect();
+
+    if fragments.is_empty() {
+        error!("explode_mesh: no fragments generated after slicing.");
+        return None;
+    }
+
+    Some(fragments)
+}
+
+#[cfg(test)]
+mod test {
+    use bevy::mesh::{PrimitiveTopology, VertexAttributeValues};
+
+    use super::*;
+
+    /// Assert every position, normal and UV in the mesh is finite (no NaN /
+    /// inf), which is what keeps Bevy from panicking on the AABB / GPU upload.
+    fn assert_mesh_finite(mesh: &Mesh) {
+        for attr in [Mesh::ATTRIBUTE_POSITION, Mesh::ATTRIBUTE_NORMAL] {
+            if let Some(VertexAttributeValues::Float32x3(vals)) = mesh.attribute(attr) {
+                for v in vals {
+                    assert!(v.iter().all(|c| c.is_finite()), "non-finite vertex {v:?}");
+                }
+            }
+        }
+
+        if let Some(VertexAttributeValues::Float32x2(vals)) = mesh.attribute(Mesh::ATTRIBUTE_UV_0) {
+            for v in vals {
+                assert!(v.iter().all(|c| c.is_finite()), "non-finite uv {v:?}");
+            }
         }
     }
 
-    None
+    #[test]
+    fn test_explode_mesh_produces_finite_geometry() {
+        let mesh = TriangleMeshBuilder::new_octahedron(2).build();
+
+        // Plane normals are random, so run many times to hammer the RNG paths
+        // that produce degenerate slivers and parallel edges.
+        for _ in 0..50 {
+            let fragments = explode_mesh(&mesh, 8, MAX_ITERATIONS)
+                .expect("an octahedron centered at the origin always splits");
+
+            assert!(
+                fragments.len() >= 2,
+                "expected at least the first split, got {}",
+                fragments.len()
+            );
+
+            for (fragment, direction) in &fragments {
+                assert_mesh_finite(fragment);
+                assert!(direction.is_finite(), "direction must be finite");
+            }
+        }
+    }
+
+    #[test]
+    fn test_explode_mesh_without_indices_returns_none() {
+        // An index-less mesh must decline gracefully, not panic.
+        let mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            bevy::asset::RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            vec![[0.0f32, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        );
+
+        assert!(explode_mesh(&mesh, 4, MAX_ITERATIONS).is_none());
+    }
 }
