@@ -64,6 +64,11 @@ const FRAGMENT_LIFETIME: f32 = 3.0;
 /// Maximum number of cursor points kept for the blade trail.
 const BLADE_TRAIL_LEN: usize = 16;
 
+/// Minimum cursor speed on the play plane, in world units per second, for the
+/// swipe to count as active. Below this the swipe is "stalled": it does not
+/// slice and the combo resets, so holding the button still cannot farm points.
+const MIN_SWIPE_SPEED: f32 = 6.0;
+
 /// How long a floating "+N" popup lives before it despawns, in seconds.
 const POPUP_LIFETIME: f32 = 0.8;
 
@@ -609,6 +614,7 @@ fn move_projectiles(
 /// race ahead of the read and collapse the segment to a point.
 fn slice_objects(
     mut commands: Commands,
+    time: Res<Time>,
     window: Single<&Window>,
     camera: Single<(&Camera, &GlobalTransform)>,
     player: Single<Entity, With<Player>>,
@@ -635,16 +641,28 @@ fn slice_objects(
     };
 
     // Record the cursor point for the blade trail, dropping the oldest once the
-    // trail is at its cap.
+    // trail is at its cap. The trail is drawn regardless of swipe speed.
     blade.points.push_back(current);
     while blade.points.len() > BLADE_TRAIL_LEN {
         blade.points.pop_front();
     }
 
-    // On the first frame of a press there is no previous point yet; treat the
-    // segment as degenerate (a point) so a stationary click can still slice.
-    let previous = trail.previous.unwrap_or(current);
+    // The swipe segment runs from last frame's cursor to this frame's. On the
+    // first frame of a press there is no previous point yet, so nothing is
+    // sliced until the cursor has actually moved.
+    let previous = trail.previous;
     trail.previous = Some(current);
+    let Some(previous) = previous else {
+        return;
+    };
+
+    // A slice only counts while the cursor is genuinely swiping. Holding still
+    // or crawling stalls the swipe: it slices nothing and resets the combo, so
+    // the button cannot be held down to farm points or an endless combo.
+    if !swipe_is_active(previous, current, time.delta_secs()) {
+        combo.count = 0;
+        return;
+    }
 
     for (entity, transform, sliceable, is_bomb) in q_sliceable.iter() {
         if !segment_hits_circle(
@@ -821,6 +839,13 @@ fn segment_hits_circle(a: Vec2, b: Vec2, center: Vec2, radius: f32) -> bool {
     closest.distance_squared(center) <= radius * radius
 }
 
+/// True while the cursor is moving fast enough (>= `MIN_SWIPE_SPEED`) to count
+/// as an active swipe. Holding still or crawling is not a swipe, so it neither
+/// slices nor builds a combo -- this is what stops a held button from farming.
+fn swipe_is_active(previous: Vec3, current: Vec3, dt: f32) -> bool {
+    dt > 0.0 && (current - previous).length() / dt >= MIN_SWIPE_SPEED
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -908,5 +933,32 @@ mod tests {
         advance_combo(&mut combo);
         combo.count = 0; // release
         assert_eq!(advance_combo(&mut combo), 1);
+    }
+
+    #[test]
+    fn fast_motion_is_an_active_swipe() {
+        // Moving one world unit in a 60 fps frame is ~60 units/s, well over the
+        // threshold.
+        let dt = 1.0 / 60.0;
+        assert!(swipe_is_active(Vec3::ZERO, Vec3::new(1.0, 0.0, 0.0), dt));
+    }
+
+    #[test]
+    fn holding_still_is_not_a_swipe() {
+        let dt = 1.0 / 60.0;
+        assert!(!swipe_is_active(Vec3::ZERO, Vec3::ZERO, dt));
+    }
+
+    #[test]
+    fn slow_crawl_is_not_a_swipe() {
+        // ~0.05 units in a 60 fps frame is ~3 units/s, below MIN_SWIPE_SPEED.
+        let dt = 1.0 / 60.0;
+        assert!(!swipe_is_active(Vec3::ZERO, Vec3::new(0.05, 0.0, 0.0), dt));
+    }
+
+    #[test]
+    fn zero_dt_is_not_a_swipe() {
+        // Guards the division; a zero-length frame is never an active swipe.
+        assert!(!swipe_is_active(Vec3::ZERO, Vec3::new(1.0, 0.0, 0.0), 0.0));
     }
 }
