@@ -21,15 +21,16 @@ jobs:
 
       # Bevy needs ALSA and udev headers to build and link on Linux. The
       # examples are compiled by `cargo test` but never run, so the runtime
-      # graphics stack (vulkan / x11) is not required in CI. libwayland-dev is
-      # required at BUILD time, though: since the Bevy 0.19 bump the transitive
-      # `wayland-sys` crate's build script calls pkg-config for `wayland-client`
-      # and hard-fails the compile if the dev package is absent.
+      # graphics stack (vulkan / x11) is not required. wayland IS required at
+      # build time though: a transitive dep pulls in `wayland-sys`, whose
+      # build script calls `pkg-config wayland-client` (from libwayland-dev)
+      # and `xkbcommon` (from libxkbcommon-dev) to compile, so those headers
+      # must be present even though nothing opens a window.
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            libasound2-dev libudev-dev libwayland-dev
+            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
 
       # rust-toolchain.toml pins nightly with rustfmt and clippy; install it
       # explicitly so failures are clear and the first cargo call is not slow.

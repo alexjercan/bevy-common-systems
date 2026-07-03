@@ -266,3 +266,8 @@ Examples:
   `web/scripts/build-games.sh` and `.cargo/config.toml`; see
   `docs/wasm-web-builds.md`. Verify web tooling through the real entry point
   (`npm run build`), not a hand-run of the underlying tool.
+- Fresh worktrees have no `node_modules`. A sprout (or any new git worktree)
+  starts without `web/node_modules` (git-ignored, not copied from the main
+  checkout), so the first `npm run build` fails its webpack half with
+  `webpack: command not found` (exit 127) even though the trunk half succeeds.
+  Run `npm ci` in the worktree's `web/` before the first web build.
