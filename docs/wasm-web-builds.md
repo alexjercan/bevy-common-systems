@@ -99,36 +99,56 @@ autoplay policy" below.
 Browsers block Web Audio until the user interacts with the page: an
 `AudioContext` created before any user gesture starts in the `suspended` state.
 Bevy creates its audio context eagerly at startup (before any gesture), so it
-comes up suspended. Chrome and Firefox then auto-resume it once two things are
-true -- the user has interacted with the document, and a source node's
-`start()` has been called (which rodio/cpal do on every sound) -- so no
-explicit `resume()` call is needed.
+comes up suspended.
 
-For the showcase this is satisfied for free: `06_fruitninja` plays its first
-sound (`menu_select`) on the in-canvas click that starts a run, which is a real
-user gesture inside the iframe's own document, so the context resumes on that
-click and every later sound is audible.
+The browsers then split on how the context comes back:
 
-Two things make this work, both already in place:
+- **Chrome and Firefox** auto-resume a suspended context once two things are
+  true -- the user has interacted with the document, and a source node's
+  `start()` has been called (which rodio/cpal do on every sound). No explicit
+  `resume()` is needed there.
+- **WebKit (iOS + macOS Safari)** does NOT auto-resume on `start()`. It only
+  resumes a context when `resume()` is called synchronously inside a real
+  user-gesture handler. Since Bevy never calls `resume()` (and does not expose
+  its `AudioContext` from Rust), on Safari the context stays suspended and
+  every SFX is silent -- even though the in-canvas start click is a real
+  gesture. This bit mobile Safari specifically (task 20260703-200005).
+
+Because Bevy hides its `AudioContext`, the fix lives in the host page, not in
+Rust. `web/games/06_fruitninja/index.html` ships a small inline unlock shim
+(before trunk's injected wasm loader, so it installs first):
+
+- it wraps the `AudioContext` / `webkitAudioContext` constructor to record
+  every context Bevy/cpal builds;
+- on the first `pointerdown` / `touchend` / `mousedown` / `keydown` it calls
+  `resume()` on each and starts a 1-sample silent buffer through it (WebKit's
+  stricter unlock wants an actual node start inside the gesture), then detaches
+  its listeners once the context reaches `running`.
+
+It is a no-op on Chrome/Firefox (resuming a running context is harmless, the
+silent buffer is inaudible), so desktop audio is unchanged. Any future web
+game with sound should copy this shim (or a shared version of it) into its
+`index.html`.
+
+Two more things must also hold, both already in place:
 
 - The gesture must happen inside the iframe's document. Clicking a gallery card
   in the parent page only sets the iframe `src`; it does not unlock the child's
   audio. The in-canvas start click does.
 - The game iframe carries `allow="autoplay; fullscreen; gamepad"`
-  (`web/src/index.html`), which delegates autoplay to the frame -- relevant if
-  a game is ever served cross-origin (same-origin frames allow it by default).
+  (`web/src/index.html`), which delegates autoplay to the frame -- necessary on
+  WebKit and relevant if a game is ever served cross-origin (same-origin frames
+  allow it by default).
 
 A game that needs sound *before* any user gesture (menu music on load, say)
-cannot rely on this -- the context stays suspended until the first interaction.
-Bevy does not expose its `AudioContext`, so the practical options are to gate
-the first sound behind a click/keypress (as fruitninja's menu does) or to
-resume the context from JS in the host HTML on a canvas `pointerdown`.
+cannot be unlocked at all until the first interaction -- the context stays
+suspended regardless. Gate the first sound behind a click/keypress (as
+fruitninja's menu does).
 
 Known quirk: bevyengine/bevy#15273 (0.14 era) reports a Bevy app embedded in an
 iframe occasionally dropping the very first sound -- a loading/timing issue, not
-the autoplay policy. If a sound rarely fails to fire on the first click, that is
-the likely cause, and a JS `resume()` shim on the canvas gesture is the cheap
-insurance.
+the autoplay policy. The shim's silent-buffer kick on the first gesture also
+helps here.
 
 ### trunk must run from the repo root
 
