@@ -1,6 +1,6 @@
 # Fruit ninja: touchscreen support via bevy_enhanced_input
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 95
 - TAGS: feature,example,input,touch
 
