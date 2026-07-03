@@ -351,6 +351,11 @@ struct FloatingText {
     color: Color,
 }
 
+/// Marker for the single "STREAK xN" banner, so a fresh one can replace the
+/// previous banner instead of overprinting it during a fast chain.
+#[derive(Component)]
+struct StreakBanner;
+
 /// Shared render assets so the marker, hazards and orbs are cheap to spawn.
 #[derive(Resource)]
 struct OrbitAssets {
@@ -957,6 +962,7 @@ fn resolve_collisions(
     q_hazards: Query<(Entity, &Transform), With<Hazard>>,
     q_orbs: Query<(Entity, &Transform), With<Orb>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    q_banners: Query<Entity, With<StreakBanner>>,
 ) {
     let Ok((runner_entity, runner_transform)) = q_runner.single() else {
         return;
@@ -1011,6 +1017,11 @@ fn resolve_collisions(
                 }
             }
             if count >= 2 {
+                // Replace any live banner so a fast chain updates the count in
+                // place instead of stacking overlapping popups.
+                for banner in q_banners.iter() {
+                    commands.entity(banner).despawn();
+                }
                 spawn_streak_banner(&mut commands, count);
             }
         }
@@ -1251,6 +1262,7 @@ fn spawn_floating_text(
 fn spawn_streak_banner(commands: &mut Commands, count: usize) {
     commands.spawn((
         Name::new("Streak Banner"),
+        StreakBanner,
         FloatingText {
             age: 0.0,
             lifetime: POPUP_LIFETIME,
