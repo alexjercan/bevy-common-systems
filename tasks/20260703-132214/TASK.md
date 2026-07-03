@@ -1,6 +1,6 @@
 # Fruit ninja: combo scoring and combo text
 
-- STATUS: OPEN
+- STATUS: IN_PROGRESS
 - PRIORITY: 80
 - TAGS: feature,example
 
@@ -13,21 +13,21 @@ shows a flashy "COMBO xN" banner. This turns the flat "+1" into escalating
 
 ## Steps
 
-- [ ] Add a `Combo { count: usize }` resource; `init_resource` it in `main`.
-- [ ] In `slice_objects`, reset `Combo.count` to 0 in the not-pressed branch
+- [x] Add a `Combo { count: usize }` resource; `init_resource` it in `main`.
+- [x] In `slice_objects`, reset `Combo.count` to 0 in the not-pressed branch
       (a released button ends the swipe / combo), alongside the existing
       `CursorTrail` / `BladeTrail` reset.
-- [ ] When a fruit is sliced, increment `Combo.count`, award `points =
+- [x] When a fruit is sliced, increment `Combo.count`, award `points =
       Combo.count` to `Score` (so the k-th fruit in a swipe gives k points), and
       show the "+points" popup (reuse `spawn_floating_text` from
       20260703-132210) with a size/color that scales with the combo for punch.
-- [ ] When `Combo.count >= 2` on a slice, also spawn a "COMBO xN" banner via
+- [x] When `Combo.count >= 2` on a slice, also spawn a "COMBO xN" banner via
       `spawn_floating_text` - larger font, vivid color (e.g. orange/gold),
       placed at the slice screen position or just above it - so a combo reads
       as special.
-- [ ] Update the module `//!` doc and AGENTS.md `06_fruitninja` description to
+- [x] Update the module `//!` doc and AGENTS.md `06_fruitninja` description to
       mention the blade trail, floating score, and combos.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, and a real boot: slicing several
       fruit in one swipe escalates the "+N" and shows the combo banner
       (throwaway auto-multi-slice if needed).

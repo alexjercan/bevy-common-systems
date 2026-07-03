@@ -218,9 +218,11 @@ Examples:
   into `ExplodeFragments` that fly apart and auto-despawn.
 - `06_fruitninja` - a fruit-ninja style game from plain shapes: boot into a
   main menu, then octahedron fruit arc up from below; hold Left Mouse Button
-  and swipe to slice them into exploding fragments for score. Dark bombs are
-  mixed in -- slicing one deals lethal damage via `HealthPlugin` and ends the
-  run at a game-over screen. Uses Bevy states for menu/playing/game-over.
+  and swipe to slice them into exploding fragments for score. A blade trail
+  follows the swipe, each slice pops a rising "+N", and slicing several fruit
+  in one swipe builds an escalating combo with a "COMBO xN" banner. Dark bombs
+  are mixed in -- slicing one deals lethal damage via `HealthPlugin` and ends
+  the run at a game-over screen. Uses Bevy states for menu/playing/game-over.
 
 ## Workflow
 
