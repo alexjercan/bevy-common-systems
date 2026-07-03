@@ -271,7 +271,6 @@ fn main() {
             read_input,
             update_telemetry,
             update_thruster_flame,
-            drive_chase_camera,
             resolve_landing,
         )
             .run_if(in_state(GameState::Playing)),
@@ -291,9 +290,9 @@ fn main() {
     app.add_systems(OnEnter(GameState::Result), spawn_result);
     app.add_systems(Update, result_input.run_if(in_state(GameState::Result)));
 
-    // Fragments animate regardless of state so a crash keeps playing out into
-    // the result screen.
-    app.add_systems(Update, move_fragments);
+    // These run in every state: fragments keep animating into the result
+    // screen, and the camera frames the planet on the menu/result screens too.
+    app.add_systems(Update, (move_fragments, drive_chase_camera));
 
     app.add_observer(on_fragments_spawned);
 
@@ -580,8 +579,7 @@ fn start_run(
 
     // Spawn just above the tallest peak, upright (radial up at the +Y pole is
     // world up, so identity is upright).
-    let start_pos =
-        Vec3::Y * (PLANET_BASE_RADIUS * (1.0 + TERRAIN_AMPLITUDE as f32) + START_ALTITUDE);
+    let start_pos = ship_start_pos();
 
     let hull_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.75, 0.78, 0.82),
@@ -793,20 +791,33 @@ fn update_thruster_flame(
     transform.scale = transform.scale.lerp(target, 0.4);
 }
 
+/// Where the ship spawns each run: straight above the +Y pole, clear of the
+/// tallest peak. Also the camera's fallback anchor when there is no ship (Menu /
+/// Result), so those screens frame the planet from above instead of parking the
+/// camera inside it.
+fn ship_start_pos() -> Vec3 {
+    Vec3::Y * (PLANET_BASE_RADIUS * (1.0 + TERRAIN_AMPLITUDE as f32) + START_ALTITUDE)
+}
+
+/// Drive the chase camera every frame in every state: follow the ship when it
+/// exists, otherwise sit at the spawn vantage. Running in the menu too lets the
+/// smoothed camera state settle on the vantage before a run starts, so Playing
+/// opens on the ship instead of swooping out from the planet centre.
 fn drive_chase_camera(
     q_ship: Query<&Transform, With<Ship>>,
     mut q_cam: Query<&mut ChaseCameraInput>,
 ) {
-    let Ok(ship) = q_ship.single() else {
-        return;
-    };
     let Ok(mut input) = q_cam.single_mut() else {
         return;
     };
-    // Follow the ship's position, but orient the camera frame to the terrain
-    // (radial up) rather than the hull, so the view does not roll when we lean.
-    let radial_up = ship.translation.normalize_or(Vec3::Y);
-    input.anchor_pos = ship.translation;
+    let anchor_pos = q_ship
+        .single()
+        .map(|ship| ship.translation)
+        .unwrap_or_else(|_| ship_start_pos());
+    // Orient the camera frame to the terrain (radial up) rather than the hull,
+    // so the view does not roll when we lean.
+    let radial_up = anchor_pos.normalize_or(Vec3::Y);
+    input.anchor_pos = anchor_pos;
     input.anchor_rot = Quat::from_rotation_arc(Vec3::Y, radial_up);
 }
 
