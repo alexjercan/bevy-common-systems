@@ -1,6 +1,6 @@
 # Fruit ninja: bombs, health and lose condition
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: feature,example
 
