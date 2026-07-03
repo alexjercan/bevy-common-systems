@@ -44,4 +44,25 @@ unit-tested. One real correctness flaw undermines the core swipe mechanic.
   .next()` / `cameras.iter().next()` can be the more idiomatic
   `Single<&Window>` / `Single<(&Camera, &GlobalTransform)>` system params,
   which also documents the single-window/single-camera assumption. Optional.
-  - Response:
+  - Response: Done - `slice_fruit` now takes `Single<&Window>` and
+    `Single<(&Camera, &GlobalTransform)>`.
+
+## Round 2
+
+- VERDICT: APPROVE
+
+Verified against the round-2 diff. All three findings resolved; checks clean
+(`cargo fmt --check`, `clippy --all-targets` both feature configs,
+`check-ascii.sh`, `cargo test --example`), and a real-GPU auto-slice boot ran
+with no panic.
+
+- [x] R1.1 (MAJOR) - `track_cursor` deleted; `slice_fruit` now reads
+  `trail.previous`, stores `Some(current)`, then runs the hit test in one
+  system (06_fruitninja.rs:273-297). The read-test-store order is fixed and
+  no longer races on `CursorTrail`. A module doc comment records why the two
+  concerns are deliberately fused.
+- [x] R1.2 (NIT) - `on_fragments_spawned` queries the shell's
+  `MeshMaterial3d<StandardMaterial>` and reuses it for every fragment
+  (06_fruitninja.rs:333-352), so a burst matches the sliced fruit's color.
+- [x] R1.3 (NIT) - `Single<&Window>` / `Single<(&Camera, &GlobalTransform)>`
+  in `slice_fruit`; `cursor_on_play_plane` now takes plain references.

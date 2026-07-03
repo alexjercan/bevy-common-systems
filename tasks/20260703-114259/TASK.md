@@ -1,6 +1,6 @@
 # Add fruit ninja style slicing example
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: feature,example
 
@@ -68,3 +68,25 @@ scores a point. Missed shapes fall away. Score is shown via the status bar.
   `Score` resource from `&World` (closures get `&World`).
 - Assumption: single numbered example `06_fruitninja.rs`; play field in a
   plane facing a static camera, mouse-drag to slice.
+
+## Close-out
+
+Shipped `examples/06_fruitninja.rs` (registered in AGENTS.md). Octahedron
+fruit arc up from below under hand-rolled gravity; hold LMB and swipe to
+slice them into exploding fragments via `ExplodeMeshPlugin`; fragments retire
+via `TempEntity`; score shown in the status bar. No new dependencies, no
+physics simulation (`PhysicsPlugins` is present only so the debug inspector
+boots under `--features debug` -- the explode retro's near-miss lesson).
+
+Review: 2 rounds. R1 raised one MAJOR -- the swipe segment was split across
+two `Update` systems (`track_cursor` + `slice_fruit`) sharing `CursorTrail`,
+so their unspecified order let the store race the read and collapse the
+swept segment to a point. Fixed by fusing them into one read-test-store
+system. Two NITs (fragment color inheritance, `Single` params) also taken.
+R2 APPROVE.
+
+Verification: 6 pure-geometry unit tests for `segment_hits_circle` (run via
+`cargo test --example`), the library's MinimalPlugins explode test covers the
+slice->fragments path, plus two real-GPU boots (plain + throwaway auto-slice)
+with no panic. Note: plain `cargo test` (what CI runs) does not execute an
+example's test module, so the 6 tests are compiled by CI but not run there.
