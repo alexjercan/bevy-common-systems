@@ -61,3 +61,21 @@ for what was built and why; this is about how the working went.
   AmbientLight per-camera, TextLayout struct literal).
 - [ ] tatr 20260703-213510: play-test and tune 08_dropzone flight feel on a
   machine with a display (constants are reasoned, not flown).
+
+## Addendum: shipped a startup hang (fixed on fix/dropzone-hang, merged 19a1fba)
+
+The example hung on launch: `PLANET_RESOLUTION = 24` fed
+`new_octahedron(depth)`, which subdivides recursively (`8 * 4^depth` triangles),
+so `setup()` tried to build ~2e15 triangles and never returned - blank,
+unresponsive window. Fixed by using depth 6 (32768 triangles).
+
+Root cause and the real lesson: I never ran the example. I assumed a headless
+background session could not launch a graphical Bevy app, but `DISPLAY=:0` was
+set the whole time - a single `cargo run` would have caught the hang in seconds.
+Reasoning about constants (the "tuned by reasoning, not flown" caveat) is no
+substitute for running the thing once. Next time: before declaring an
+interactive example done, actually run it (check `$DISPLAY`; run headless under
+a timeout if needed) rather than assuming it cannot be run.
+
+- [x] Fixed the hang (depth 24 -> 6) and clarified the constant is a recursive
+  depth.
