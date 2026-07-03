@@ -22,7 +22,7 @@ Verified independently:
 
 One robustness finding on the guard, and one optional note:
 
-- [ ] R1.1 (MINOR) scripts/check-ascii.sh:22 - the `if matches=$(grep ...)`
+- [x] R1.1 (MINOR) scripts/check-ascii.sh:22 - the `if matches=$(grep ...)`
   construct treats every non-zero grep exit as "no non-ASCII found", but
   grep exits 2 on error (e.g. a scanned directory renamed or removed). I
   reproduced this: pointing the roots at a missing dir prints
@@ -44,7 +44,7 @@ One robustness finding on the guard, and one optional note:
     structure suggested; verified all three branches (0 fails with listing,
     1 passes, 2 on a missing root now aborts with exit 2 instead of
     reporting success). shellcheck still clean.
-- [ ] R1.2 (NIT) .github/workflows/ci.yml:3-5 - `on: [push, pull_request]`
+- [x] R1.2 (NIT) .github/workflows/ci.yml:3-5 - `on: [push, pull_request]`
   with no branch filter double-runs for branches pushed inside this repo
   that also have an open PR (one `push` run, one `pull_request` run) - the
   concurrency groups differ (`github.ref` resolves differently per event),
@@ -63,3 +63,19 @@ One robustness finding on the guard, and one optional note:
 
 R1.1 is a MINOR, so REQUEST_CHANGES: the guard should be trustworthy under
 refactors before it ships. R1.2 is discretionary.
+
+## Round 2
+
+- VERDICT: APPROVE
+
+- R1.1 verified fixed in ebeddfe: independently ran all three branches -
+  clean tree exits 0, injected en-dash exits 1 with the file:line listing,
+  and a missing root now exits 2 with a "grep failed" message instead of
+  falsely reporting success. shellcheck clean; actionlint still clean.
+- R1.2: accepted the pushback. For a repo that merges feature branches to
+  master locally (as this session did), validating every pushed branch is
+  the right default and scoping `push` to master would leave feature
+  branches uncovered. The rare push+PR double-run is an acceptable cost.
+- No new findings. The one irreducible unknown (the runner installing apt
+  deps + nightly and Bevy linking headlessly) remains confirmable only on
+  first push, which is the maintainer's call and is documented as such.
