@@ -230,7 +230,8 @@ Examples:
   the run at a game-over screen. Uses Bevy states for menu/playing/game-over.
   Every gameplay event plays a one-shot sound via `SfxPlugin`; the files in
   `assets/sounds/` are generated placeholders (`scripts/gen-placeholder-sounds.py`),
-  see `assets/sounds/README.md` and `docs/audio.md`.
+  see `assets/sounds/README.md` and
+  `docs/2026-07-03-audio-and-fruitninja-sounds.md`.
 
 ## Workflow
 
