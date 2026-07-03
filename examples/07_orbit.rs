@@ -19,7 +19,9 @@
 //! - `ChaseCamera` follows the marker with `LerpSnap` smoothing, orbiting the
 //!   planet so "up" is always away from the surface and the horizon curves.
 //! - `HealthPlugin` owns the lose condition: a hazard deals damage, and the
-//!   `HealthZeroMarker` it inserts at zero health ends the run.
+//!   `HealthZeroMarker` it inserts at zero health ends the run. A hit also jolts
+//!   the camera (a decaying shake layered after `ChaseCamera` writes its
+//!   transform) and flashes a red overlay, so impacts read viscerally.
 //! - `SfxPlugin` plays a one-shot for every event (menu, pickup, hurt, level up,
 //!   game over); the files in `assets/sounds/` are generated placeholders (see
 //!   `assets/sounds/README.md`). Collecting orbs in quick succession builds a
@@ -127,6 +129,21 @@ const PICKUP_PITCH_MAX: f32 = 1.7;
 const POPUP_LIFETIME: f32 = 0.8;
 const POPUP_RISE_SPEED: f32 = 70.0;
 
+/// Camera-shake feel on a hazard hit. `trauma` is 0..1; it decays at
+/// `SHAKE_DECAY` per second and, squared, scales a random camera offset up to
+/// `SHAKE_MAX_OFFSET` world units. `HAZARD_TRAUMA` is the jolt one hit adds.
+/// Kept small on purpose: this is a smooth chase-camera game, not a fixed one,
+/// so a big shake would fight the `LerpSnap` glide.
+const SHAKE_DECAY: f32 = 2.2;
+const SHAKE_MAX_OFFSET: f32 = 0.5;
+const HAZARD_TRAUMA: f32 = 0.7;
+
+/// Damage-flash feel: a hazard hit spikes a red full-screen overlay to
+/// `DAMAGE_FLASH_PEAK_ALPHA` and it fades out at `DAMAGE_FLASH_DECAY` per
+/// second, so a hit is unmissable even when it lands off-camera.
+const DAMAGE_FLASH_PEAK_ALPHA: f32 = 0.38;
+const DAMAGE_FLASH_DECAY: f32 = 3.0;
+
 fn main() {
     let _ = Cli::parse();
     let mut app = App::new();
@@ -176,6 +193,8 @@ fn main() {
     app.init_resource::<Level>();
     app.init_resource::<HitCooldown>();
     app.init_resource::<Streak>();
+    app.init_resource::<CameraShake>();
+    app.init_resource::<DamageFlash>();
 
     // Persistent scene: camera, light, planet and the FPS status bar live for
     // the whole run, independent of game state.
@@ -203,6 +222,7 @@ fn main() {
             tick_hit_cooldown,
             tick_streak,
             blink_runner,
+            fade_damage_flash,
             update_hud,
             animate_floating_text,
             giveup_on_escape,
@@ -227,6 +247,16 @@ fn main() {
             .after(SphereRandomOrbitSystems::Sync)
             .before(ChaseCameraSystems::Sync)
             .run_if(in_state(GameState::Playing)),
+    );
+
+    // Camera shake jitters the camera *after* the chase camera has written its
+    // transform, so it layers on top instead of being overwritten. The chase
+    // sync resets the translation absolutely every frame, so the additive
+    // offset never accumulates. Left ungated by state so a fatal hit's shake
+    // plays out onto the game-over screen.
+    app.add_systems(
+        PostUpdate,
+        apply_camera_shake.after(ChaseCameraSystems::Sync),
     );
 
     // Game over screen.
@@ -299,6 +329,18 @@ impl Default for Level {
 #[derive(Resource, Default)]
 struct HitCooldown(f32);
 
+/// Camera-shake energy (trauma, 0..1); decays to zero, jittering the camera
+/// while positive. A hazard hit tops it up. Modelled on `06_fruitninja`.
+#[derive(Resource, Default)]
+struct CameraShake {
+    trauma: f32,
+}
+
+/// Red damage-flash intensity (0..1); a hazard hit spikes it to 1 and it fades
+/// to zero, driving the alpha of the full-screen damage overlay.
+#[derive(Resource, Default)]
+struct DamageFlash(f32);
+
 /// The player marker. Holds the moving frame on the sphere surface: `up` is the
 /// outward surface normal (also the direction fed to the orbit), and `forward`
 /// is the unit tangent it is travelling along. Steering rotates `forward` about
@@ -355,6 +397,10 @@ struct FloatingText {
 /// previous banner instead of overprinting it during a fast chain.
 #[derive(Component)]
 struct StreakBanner;
+
+/// Marker for the full-screen red damage-flash overlay.
+#[derive(Component)]
+struct DamageFlashOverlay;
 
 /// Shared render assets so the marker, hazards and orbs are cheap to spawn.
 #[derive(Resource)]
@@ -608,6 +654,16 @@ fn pickup_pitch_for(streak_count: usize) -> f32 {
     (1.0 + streak_count.saturating_sub(1) as f32 * PICKUP_PITCH_STEP).min(PICKUP_PITCH_MAX)
 }
 
+/// Decay camera-shake trauma by one step, clamped at zero so it settles.
+fn decay_trauma(trauma: f32, dt: f32) -> f32 {
+    (trauma - SHAKE_DECAY * dt).max(0.0)
+}
+
+/// Add trauma from a hit, clamped to the 0..1 range so the shake has a ceiling.
+fn add_trauma(trauma: f32, amount: f32) -> f32 {
+    (trauma + amount).clamp(0.0, 1.0)
+}
+
 // --- Input ----------------------------------------------------------------
 
 /// Steering input in -1..1: negative steers left, positive right. Sums the
@@ -746,6 +802,8 @@ fn start_game(
     mut level: ResMut<Level>,
     mut cooldown: ResMut<HitCooldown>,
     mut streak: ResMut<Streak>,
+    mut shake: ResMut<CameraShake>,
+    mut flash: ResMut<DamageFlash>,
 ) {
     score.0 = 0;
     elapsed.0 = 0.0;
@@ -753,6 +811,8 @@ fn start_game(
     cooldown.0 = 0.0;
     streak.count = 0;
     streak.timer = 0.0;
+    shake.trauma = 0.0;
+    flash.0 = 0.0;
 }
 
 /// Spawn the player marker: a `DirectionalSphereOrbit` rider plus the `Runner`
@@ -958,6 +1018,8 @@ fn resolve_collisions(
     mut score: ResMut<Score>,
     mut cooldown: ResMut<HitCooldown>,
     mut streak: ResMut<Streak>,
+    mut shake: ResMut<CameraShake>,
+    mut flash: ResMut<DamageFlash>,
     q_runner: Query<(Entity, &Transform), With<Runner>>,
     q_hazards: Query<(Entity, &Transform), With<Hazard>>,
     q_orbs: Query<(Entity, &Transform), With<Orb>>,
@@ -1039,6 +1101,11 @@ fn resolve_collisions(
             RUNNER_RADIUS + HAZARD_RADIUS,
         ) {
             cooldown.0 = HIT_COOLDOWN;
+            // A hit also breaks the streak, jolts the camera and flashes red.
+            streak.count = 0;
+            streak.timer = 0.0;
+            shake.trauma = add_trauma(shake.trauma, HAZARD_TRAUMA);
+            flash.0 = 1.0;
             commands.play_sfx(sfx.hurt.clone());
             commands.trigger(HealthApplyDamage {
                 entity: runner_entity,
@@ -1095,6 +1162,22 @@ fn blink_runner(cooldown: Res<HitCooldown>, mut q_runner: Query<&mut Visibility,
 
 /// Spawn the in-game HUD (score, level, health bar), scoped to `Playing`.
 fn spawn_hud(mut commands: Commands) {
+    // Full-screen red damage overlay, transparent until a hit spikes it. Spawned
+    // first and pinned below the HUD so it never hides the score / health.
+    commands.spawn((
+        Name::new("Damage Flash"),
+        DamageFlashOverlay,
+        DespawnOnExit(GameState::Playing),
+        GlobalZIndex(-1),
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.85, 0.05, 0.05, 0.0)),
+    ));
+
     commands.spawn((
         Name::new("Score HUD"),
         ScoreText,
@@ -1311,6 +1394,51 @@ fn animate_floating_text(
 
         let alpha = 1.0 - floating.age / floating.lifetime;
         text_color.0 = floating.color.with_alpha(alpha);
+    }
+}
+
+// --- Impact feedback ------------------------------------------------------
+
+/// Jolt the camera by a decaying random offset while trauma is positive. Runs
+/// after the chase camera has written its transform, so the offset is additive
+/// on top of the chase result; the chase sync overwrites translation next frame,
+/// so the offset never accumulates.
+fn apply_camera_shake(
+    time: Res<Time>,
+    mut shake: ResMut<CameraShake>,
+    mut q_camera: Query<&mut Transform, With<MainCamera>>,
+) {
+    shake.trauma = decay_trauma(shake.trauma, time.delta_secs());
+
+    // Square the trauma so small residual energy fades to nothing quickly.
+    let amount = shake.trauma * shake.trauma;
+    if amount <= 0.0 {
+        return;
+    }
+
+    let Ok(mut transform) = q_camera.single_mut() else {
+        return;
+    };
+    let mut rng = rand::rng();
+    let offset = Vec3::new(
+        rng.random_range(-1.0..1.0),
+        rng.random_range(-1.0..1.0),
+        rng.random_range(-1.0..1.0),
+    ) * SHAKE_MAX_OFFSET
+        * amount;
+    transform.translation += offset;
+}
+
+/// Fade the red damage overlay each frame, driving its alpha from the decaying
+/// `DamageFlash` intensity a hit spiked.
+fn fade_damage_flash(
+    time: Res<Time>,
+    mut flash: ResMut<DamageFlash>,
+    mut q_overlay: Query<&mut BackgroundColor, With<DamageFlashOverlay>>,
+) {
+    flash.0 = (flash.0 - DAMAGE_FLASH_DECAY * time.delta_secs()).max(0.0);
+    for mut color in q_overlay.iter_mut() {
+        color.0 = Color::srgba(0.85, 0.05, 0.05, flash.0 * DAMAGE_FLASH_PEAK_ALPHA);
     }
 }
 
@@ -1541,5 +1669,22 @@ mod tests {
         assert!(pickup_pitch_for(3) > pickup_pitch_for(1));
         // ... but never past the cap.
         assert!((pickup_pitch_for(1000) - PICKUP_PITCH_MAX).abs() < 1e-6);
+    }
+
+    #[test]
+    fn trauma_decays_to_zero_and_clamps() {
+        // A hit adds trauma, clamped to at most 1.
+        assert!((add_trauma(0.0, HAZARD_TRAUMA) - HAZARD_TRAUMA).abs() < 1e-6);
+        assert!((add_trauma(0.8, 0.8) - 1.0).abs() < 1e-6);
+        // Trauma decays and never goes negative.
+        let once = decay_trauma(1.0, DT);
+        assert!(once < 1.0 && once > 0.0);
+        assert_eq!(decay_trauma(0.001, 10.0), 0.0);
+        // Enough steps drive any starting trauma to exactly zero.
+        let mut t = 1.0;
+        for _ in 0..1000 {
+            t = decay_trauma(t, DT);
+        }
+        assert_eq!(t, 0.0);
     }
 }
