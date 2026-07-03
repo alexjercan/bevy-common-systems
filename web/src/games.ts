@@ -23,6 +23,24 @@ export const GAMES: Game[] = [
     controls: 'Hold the left mouse button and swipe across fruit to slice. Avoid the dark bombs.',
     accent: '#f2d94e',
   },
+  {
+    id: '07_orbit',
+    title: 'Orbit Runner',
+    blurb:
+      'Ride a marker around a planet, sweep up the glowing orbs, and dodge the red hazards as it gets crowded.',
+    controls:
+      'Steer with A/D or the arrow keys, or hold the mouse / a finger to one side. Collect orbs, avoid the red hazards.',
+    accent: '#5cc8ff',
+  },
+  {
+    id: '08_dropzone',
+    title: 'Drop Zone',
+    blurb:
+      'Fly a lander down onto a noise planet: thrust against gravity while a PD controller holds your attitude, and touch down soft and upright to score.',
+    controls:
+      'Space/Up to thrust, W/S to pitch, A/D to roll. Land slow and level, or crash into fragments.',
+    accent: '#5ad1ff',
+  },
 ];
 
 /** Path (relative to the site base) to a game's wasm page. */

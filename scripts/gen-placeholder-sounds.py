@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Generate tiny placeholder WAV sound effects for the 06_fruitninja example.
+"""Generate tiny placeholder WAV sound effects for the example games.
 
-The real game sounds are meant to be sourced by the user (see
-assets/sounds/README.md). Until then this writes a short, quiet sine "blip"
-for each event so the example runs and is audibly wired end to end. Each event
-gets its own frequency so they are distinguishable by ear while testing.
+Covers the events of both `06_fruitninja` and `07_orbit`. The real game sounds
+are meant to be sourced by the user (see assets/sounds/README.md). Until then
+this writes a short, quiet sine "blip" for each event so the examples run and
+are audibly wired end to end. Each event gets its own frequency so they are
+distinguishable by ear while testing.
 
 Run from the repo root:  python3 scripts/gen-placeholder-sounds.py
 
@@ -31,6 +32,10 @@ SOUNDS = {
     "bomb": (140.0, 0.30, 0.28),
     "game_over": (220.0, 0.60, 0.24),
     "launch": (520.0, 0.10, 0.16),
+    # 07_orbit events (menu_select and game_over are shared with 06_fruitninja).
+    "pickup": (1046.0, 0.10, 0.20),
+    "hurt": (196.0, 0.22, 0.26),
+    "level_up": (784.0, 0.20, 0.20),
 }
 
 

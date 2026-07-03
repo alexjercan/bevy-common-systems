@@ -36,3 +36,22 @@ dev = ["debug"]
 [lints.clippy]
 type_complexity = "allow"
 too_many_arguments = "allow"
+
+# Cap the peak RAM of `cargo test` / `cargo build`. Both build the lib unittest
+# plus one binary per example, and each statically links the whole Bevy/avian
+# engine. With the default embedded, full debuginfo each output binary is
+# ~1.5 GB (almost all DWARF), and cargo links up to one-per-core in parallel, so
+# rust-lld held many multi-GB binaries at once: peak ~38 GB on a 32 GB machine,
+# which thrashed swap ("uses the entire RAM").
+#
+# Two knobs, both measured on this repo (see docs/2026-07-03-test-memory.md):
+#   split-debuginfo = "unpacked"  -> DWARF stays in the .o files instead of being
+#     copied through the linker into the executable. Full debug info is retained;
+#     linked binary drops to ~350 MB; peak ~19.7 GB.
+#   debug = "line-tables-only"    -> keep file/line for backtraces but drop local
+#     variables; binary ~300 MB; peak ~16.5 GB. This crate debugs at runtime via
+#     bevy-inspector-egui rather than gdb, so losing locals costs nothing here.
+# To restore full local-variable debugging, set `debug = true` (peak ~19.7 GB).
+[profile.dev]
+split-debuginfo = "unpacked"
+debug = "line-tables-only"

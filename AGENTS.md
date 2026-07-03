@@ -235,6 +235,31 @@ Examples:
   `assets/sounds/` are generated placeholders (`scripts/gen-placeholder-sounds.py`),
   see `assets/sounds/README.md` and
   `docs/2026-07-03-audio-and-fruitninja-sounds.md`.
+- `07_orbit` - "Orbit Runner": a surface-dodge game on a sphere. Ride a glowing
+  marker around a planet steering with `DirectionalSphereOrbit` (A/D, arrow
+  keys, or drag), sweep up wandering orbs and dodge wandering red hazards, both
+  driven by `RandomSphereOrbit`. A `ChaseCamera` follows with `LerpSnap`
+  smoothing; a hazard deals damage through `HealthPlugin` and zero health ends
+  the run. The planet gets more crowded and faster as difficulty levels climb.
+  Same shape as `06_fruitninja`: menu/playing/game-over states, `SfxPlugin`
+  one-shots (`pickup`/`hurt`/`level_up`, sharing `menu_select`/`game_over`), and
+  a wasm/trunk showcase build. Exercises the whole `transform/*` orbit family,
+  `camera/chase` and `meth` under gameplay; grows out of `01_sphere`. See
+  `docs/2026-07-03-orbit-runner.md`.
+- `08_dropzone` - a lunar-lander game and the headline demo of
+  `PDControllerPlugin`. A noise-displaced planet (the `02_planet` recipe) sits
+  at the origin with radial gravity; you fly a lander down onto it. Space/Up
+  thrusts along the ship's local up, W/S and A/D lean the target attitude, and
+  the PD controller torques the avian3d rigid body toward that attitude (this
+  is the crate's first real physics sim, not just the debug renderer). Touch
+  down slow and upright to score; hit too hard or too tilted and the hull
+  breaks apart via `mesh/explode`. Pulls in `camera/skybox` (a procedurally
+  generated starfield, no asset file), `camera/post` bloom on the thruster
+  flame, `camera/chase`, `ui/status` gauges (altitude/speed/fuel) and `audio`.
+  The planet's avian trimesh collider is built inline from
+  `TriangleMeshBuilder::vertices_and_indices()`. Follows the `06_fruitninja`
+  shape (states, sounds, wasm). See `docs/2026-07-03-dropzone-example.md`;
+  the flight constants are tuned by reasoning and may need play-testing.
 
 ## Workflow
 
@@ -256,6 +281,15 @@ Examples:
 - `helpers/wasd` and `camera/wasd` are two halves of one feature: the
   camera math is input-agnostic on purpose, so games can swap the binding
   layer without touching camera behavior.
+- Bevy 0.19 UI/light API when writing a new example: copy the idioms from an
+  existing example rather than from memory. `TextFont.font_size` is
+  `FontSize::Px(..)` (not a bare `f32`), `TextLayout` is built as a struct
+  literal (`TextLayout { justify: Justify::Center, ..default() }`, no
+  `new_with_justify`), and `AmbientLight` is a per-camera component, not a
+  global resource. Grepping `06_fruitninja`/`08_dropzone` for `font_size:`,
+  `TextLayout` and `AmbientLight` up front avoids a batch of compile errors
+  (this has bitten two cycles now: `docs/retros/20260703-150200-bevy-019-migration.md`
+  and `docs/retros/20260703-165432-dropzone-example.md`).
 - Verifying builds: never judge a build/command by a piped `| tail`'s exit
   code -- the pipe reports `tail`'s status, so a failed `cargo build | tail`
   looks like it passed. Redirect to a file and check `$?` when pass/fail
