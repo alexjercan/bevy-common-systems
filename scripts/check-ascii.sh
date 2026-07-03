@@ -13,12 +13,27 @@ set -euo pipefail
 roots=(src bevy_common_systems_macros/src examples)
 
 # grep -P '[^\x00-\x7F]' matches any non-ASCII byte. -r recurse, -n line
-# numbers. It exits 1 when there are no matches, which is the success case
-# here, so invert the meaning explicitly.
-if matches=$(grep -rnP '[^\x00-\x7F]' "${roots[@]}"); then
-    echo "error: non-ASCII characters found (plain ASCII is required, see AGENTS.md):" >&2
-    echo "$matches" >&2
-    exit 1
-fi
+# numbers. Branch on the exact exit code: 0 = matches found (violation),
+# 1 = no matches (clean), >=2 = grep itself failed (e.g. a scanned
+# directory is missing). We must fail loudly on >=2 rather than treat it as
+# clean, otherwise a future refactor that renames a root would silently
+# disable the guard while CI stays green.
+set +e
+matches=$(grep -rnP '[^\x00-\x7F]' "${roots[@]}")
+status=$?
+set -e
 
-echo "check-ascii: no non-ASCII characters found in ${roots[*]}"
+case "$status" in
+    0)
+        echo "error: non-ASCII characters found (plain ASCII is required, see AGENTS.md):" >&2
+        echo "$matches" >&2
+        exit 1
+        ;;
+    1)
+        echo "check-ascii: no non-ASCII characters found in ${roots[*]}"
+        ;;
+    *)
+        echo "check-ascii: grep failed (exit $status); cannot verify ${roots[*]}" >&2
+        exit "$status"
+        ;;
+esac
