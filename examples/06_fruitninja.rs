@@ -69,6 +69,22 @@ const BLADE_TRAIL_LEN: usize = 16;
 /// slice and the combo resets, so holding the button still cannot farm points.
 const MIN_SWIPE_SPEED: f32 = 6.0;
 
+/// Resting camera position; shake offsets are applied relative to this.
+const CAMERA_BASE: Vec3 = Vec3::new(0.0, 0.0, 22.0);
+
+/// How fast camera shake trauma decays, per second.
+const SHAKE_DECAY: f32 = 1.8;
+
+/// Maximum camera offset at full trauma, in world units.
+const SHAKE_MAX_OFFSET: f32 = 0.6;
+
+/// Trauma added by slicing a fruit and by slicing a bomb.
+const SLICE_TRAUMA: f32 = 0.28;
+const BOMB_TRAUMA: f32 = 0.75;
+
+/// Seconds the red flash holds before the game-over screen after a bomb.
+const DYING_BEAT: f32 = 0.35;
+
 /// How long a floating "+N" popup lives before it despawns, in seconds.
 const POPUP_LIFETIME: f32 = 0.8;
 
@@ -117,6 +133,8 @@ fn main() {
     app.init_resource::<CursorTrail>();
     app.init_resource::<BladeTrail>();
     app.init_resource::<Combo>();
+    app.init_resource::<CameraShake>();
+    app.init_resource::<DyingTimer>();
 
     // Persistent scene: camera, light and the FPS status bar live for the whole
     // run, independent of game state.
@@ -141,10 +159,15 @@ fn main() {
             update_score_text,
             draw_blade_trail,
             animate_floating_text,
+            fade_red_flash,
+            advance_dying,
             giveup_on_escape,
         )
             .run_if(in_state(GameState::Playing)),
     );
+
+    // Camera shake settles the camera in any state, so it always eases back.
+    app.add_systems(Update, apply_camera_shake);
 
     // Game over screen.
     app.add_systems(OnEnter(GameState::GameOver), spawn_game_over);
@@ -200,6 +223,29 @@ struct Combo {
 fn advance_combo(combo: &mut Combo) -> usize {
     combo.count += 1;
     combo.count
+}
+
+/// Camera shake energy; decays to 0, offsetting the camera while positive.
+#[derive(Resource, Default)]
+struct CameraShake {
+    trauma: f32,
+}
+
+/// Countdown before the game-over screen after a bomb, for the red-flash beat.
+#[derive(Resource, Default)]
+struct DyingTimer {
+    remaining: Option<f32>,
+}
+
+/// Marker for the main camera so the shake system can find it.
+#[derive(Component)]
+struct MainCamera;
+
+/// Full-screen red flash shown briefly when a bomb ends the run.
+#[derive(Component)]
+struct RedFlash {
+    age: f32,
+    lifetime: f32,
 }
 
 /// Marker for the on-screen score HUD text.
@@ -300,8 +346,9 @@ fn setup(
     // Static camera looking straight down the -Z axis at the play plane.
     commands.spawn((
         Name::new("Main Camera"),
+        MainCamera,
         Camera3d::default(),
-        Transform::from_xyz(0.0, 0.0, 22.0).looking_at(Vec3::new(0.0, 0.0, PLAY_Z), Vec3::Y),
+        Transform::from_translation(CAMERA_BASE).looking_at(Vec3::new(0.0, 0.0, PLAY_Z), Vec3::Y),
     ));
 
     commands.spawn((
@@ -352,14 +399,99 @@ fn spawn_player(mut commands: Commands) {
     ));
 }
 
-/// When the player's health hits zero (a sliced bomb), end the run.
+/// When the player's health hits zero (a sliced bomb), kick a big shake and a
+/// red flash, then transition to game over after a short beat (see
+/// `advance_dying`). The `Escape` give-up stays instant.
 fn on_player_died(
     add: On<Add, HealthZeroMarker>,
     q_player: Query<(), With<Player>>,
+    mut commands: Commands,
+    mut shake: ResMut<CameraShake>,
+    mut dying: ResMut<DyingTimer>,
+) {
+    if !q_player.contains(add.entity) || dying.remaining.is_some() {
+        return;
+    }
+
+    shake.trauma = (shake.trauma + BOMB_TRAUMA).min(1.0);
+    dying.remaining = Some(DYING_BEAT);
+
+    commands.spawn((
+        Name::new("Red Flash"),
+        RedFlash {
+            age: 0.0,
+            lifetime: DYING_BEAT,
+        },
+        DespawnOnExit(GameState::Playing),
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.9, 0.1, 0.1, 0.5)),
+    ));
+}
+
+/// Ease the camera toward its base while applying a decaying random shake.
+fn apply_camera_shake(
+    time: Res<Time>,
+    mut shake: ResMut<CameraShake>,
+    mut q_camera: Query<&mut Transform, With<MainCamera>>,
+) {
+    let Ok(mut transform) = q_camera.single_mut() else {
+        return;
+    };
+
+    shake.trauma = (shake.trauma - SHAKE_DECAY * time.delta_secs()).max(0.0);
+
+    // Square the trauma so small residual energy fades to nothing quickly.
+    let amount = shake.trauma * shake.trauma;
+    if amount <= 0.0 {
+        transform.translation = CAMERA_BASE;
+        return;
+    }
+
+    let mut rng = rand::rng();
+    let offset = Vec3::new(
+        rng.random_range(-1.0..1.0),
+        rng.random_range(-1.0..1.0),
+        0.0,
+    ) * SHAKE_MAX_OFFSET
+        * amount;
+    transform.translation = CAMERA_BASE + offset;
+}
+
+/// Count down the post-bomb beat and switch to the game-over screen when done.
+fn advance_dying(
+    time: Res<Time>,
+    mut dying: ResMut<DyingTimer>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    if q_player.contains(add.entity) {
+    let Some(remaining) = dying.remaining.as_mut() else {
+        return;
+    };
+    *remaining -= time.delta_secs();
+    if *remaining <= 0.0 {
+        dying.remaining = None;
         next.set(GameState::GameOver);
+    }
+}
+
+/// Fade the red flash out over its lifetime, then despawn it.
+fn fade_red_flash(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut q_flash: Query<(Entity, &mut RedFlash, &mut BackgroundColor)>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut flash, mut background) in q_flash.iter_mut() {
+        flash.age += dt;
+        let alpha = (1.0 - flash.age / flash.lifetime).clamp(0.0, 1.0) * 0.5;
+        background.0 = Color::srgba(0.9, 0.1, 0.1, alpha);
+        if flash.age >= flash.lifetime {
+            commands.entity(entity).despawn();
+        }
     }
 }
 
@@ -479,6 +611,8 @@ fn start_game(
     mut trail: ResMut<CursorTrail>,
     mut blade: ResMut<BladeTrail>,
     mut combo: ResMut<Combo>,
+    mut shake: ResMut<CameraShake>,
+    mut dying: ResMut<DyingTimer>,
 ) {
     score.0 = 0;
     timer.reset();
@@ -487,6 +621,8 @@ fn start_game(
     // new run does not flash a stale blade.
     blade.points.clear();
     combo.count = 0;
+    shake.trauma = 0.0;
+    dying.remaining = None;
 }
 
 /// Spawn the in-game HUD (score), scoped to the `Playing` state.
@@ -622,6 +758,7 @@ fn slice_objects(
     mut trail: ResMut<CursorTrail>,
     mut blade: ResMut<BladeTrail>,
     mut combo: ResMut<Combo>,
+    mut shake: ResMut<CameraShake>,
     mut score: ResMut<Score>,
     q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>)>,
 ) {
@@ -697,6 +834,7 @@ fn slice_objects(
             // the last (1, 2, 3, ...); the button release resets the combo.
             let points = advance_combo(&mut combo);
             **score += points;
+            shake.trauma = (shake.trauma + SLICE_TRAUMA).min(1.0);
 
             if let Ok(viewport_pos) =
                 camera.world_to_viewport(camera_transform, transform.translation)
