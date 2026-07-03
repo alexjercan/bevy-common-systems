@@ -19,10 +19,15 @@
 //! - `ChaseCamera` follows the marker with `LerpSnap` smoothing, orbiting the
 //!   planet so "up" is always away from the surface and the horizon curves.
 //! - `HealthPlugin` owns the lose condition: a hazard deals damage, and the
-//!   `HealthZeroMarker` it inserts at zero health ends the run.
+//!   `HealthZeroMarker` it inserts at zero health ends the run. A hit also jolts
+//!   the camera (a decaying shake layered after `ChaseCamera` writes its
+//!   transform) and flashes a red overlay, so impacts read viscerally.
 //! - `SfxPlugin` plays a one-shot for every event (menu, pickup, hurt, level up,
 //!   game over); the files in `assets/sounds/` are generated placeholders (see
-//!   `assets/sounds/README.md`).
+//!   `assets/sounds/README.md`). Collecting orbs in quick succession builds a
+//!   streak: each orb is worth more, the pickup blip climbs in pitch, a rising
+//!   `combo` chime layers in, and a "+N" popup plus a "STREAK xN" banner flash.
+//!   Taking a hazard hit breaks the streak, so a clean run is worth chasing.
 //!
 //! It follows the shape of `06_fruitninja`: Bevy states for menu / playing /
 //! game-over, a persistent camera and light, and an in-game HUD, plus the same
@@ -108,6 +113,38 @@ const HIT_COOLDOWN: f32 = 1.3;
 /// one knob that makes the camera glide instead of snapping to the marker.
 const CAMERA_SMOOTHING: f32 = 0.12;
 
+/// Seconds after collecting an orb you have to grab the next one to keep the
+/// streak alive. Orbs are more spread out than fruit-ninja slices, so the
+/// window is a touch longer. When it lapses the streak resets to zero.
+const STREAK_WINDOW: f32 = 1.6;
+
+/// Pickup pitch climbs with the streak: each orb past the first nudges
+/// `pickup.wav`'s playback speed up by `PICKUP_PITCH_STEP`, capped at
+/// `PICKUP_PITCH_MAX`, so a run of pickups rises in pitch.
+const PICKUP_PITCH_STEP: f32 = 0.07;
+const PICKUP_PITCH_MAX: f32 = 1.7;
+
+/// How long a floating "+N" / "STREAK xN" popup lives before it despawns, and
+/// how fast it rises up the screen (pixels per second). Ported from
+/// `06_fruitninja`'s popup feel.
+const POPUP_LIFETIME: f32 = 0.8;
+const POPUP_RISE_SPEED: f32 = 70.0;
+
+/// Camera-shake feel on a hazard hit. `trauma` is 0..1; it decays at
+/// `SHAKE_DECAY` per second and, squared, scales a random camera offset up to
+/// `SHAKE_MAX_OFFSET` world units. `HAZARD_TRAUMA` is the jolt one hit adds.
+/// Kept small on purpose: this is a smooth chase-camera game, not a fixed one,
+/// so a big shake would fight the `LerpSnap` glide.
+const SHAKE_DECAY: f32 = 2.2;
+const SHAKE_MAX_OFFSET: f32 = 0.5;
+const HAZARD_TRAUMA: f32 = 0.7;
+
+/// Damage-flash feel: a hazard hit spikes a red full-screen overlay to
+/// `DAMAGE_FLASH_PEAK_ALPHA` and it fades out at `DAMAGE_FLASH_DECAY` per
+/// second, so a hit is unmissable even when it lands off-camera.
+const DAMAGE_FLASH_PEAK_ALPHA: f32 = 0.38;
+const DAMAGE_FLASH_DECAY: f32 = 3.0;
+
 fn main() {
     let _ = Cli::parse();
     let mut app = App::new();
@@ -156,6 +193,9 @@ fn main() {
     app.init_resource::<Elapsed>();
     app.init_resource::<Level>();
     app.init_resource::<HitCooldown>();
+    app.init_resource::<Streak>();
+    app.init_resource::<CameraShake>();
+    app.init_resource::<DamageFlash>();
 
     // Persistent scene: camera, light, planet and the FPS status bar live for
     // the whole run, independent of game state.
@@ -181,8 +221,11 @@ fn main() {
             steer_runner,
             maintain_objects,
             tick_hit_cooldown,
+            tick_streak,
             blink_runner,
+            fade_damage_flash,
             update_hud,
+            animate_floating_text,
             giveup_on_escape,
         )
             .run_if(in_state(GameState::Playing)),
@@ -205,6 +248,16 @@ fn main() {
             .after(SphereRandomOrbitSystems::Sync)
             .before(ChaseCameraSystems::Sync)
             .run_if(in_state(GameState::Playing)),
+    );
+
+    // Camera shake jitters the camera *after* the chase camera has written its
+    // transform, so it layers on top instead of being overwritten. The chase
+    // sync resets the translation absolutely every frame, so the additive
+    // offset never accumulates. Left ungated by state so a fatal hit's shake
+    // plays out onto the game-over screen.
+    app.add_systems(
+        PostUpdate,
+        apply_camera_shake.after(ChaseCameraSystems::Sync),
     );
 
     // Game over screen.
@@ -231,10 +284,22 @@ enum GameState {
     GameOver,
 }
 
-/// Running number of orbs collected this run. The displayed score folds in
-/// survival time too (see `score_value`).
+/// Points scored from collecting orbs this run. Each orb is worth
+/// `ORB_POINTS` times the current streak length (see `orb_points_for`), so a
+/// chain of quick pickups is worth much more than the same orbs collected
+/// slowly. The displayed score folds in survival time too (see `score_value`).
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
+
+/// The current pickup streak: how many orbs have been collected in quick
+/// succession, and how long is left on the window to keep it alive. Each pickup
+/// bumps the count and refreshes the window; when the window lapses the streak
+/// resets. Modelled on `06_fruitninja`'s `Combo`.
+#[derive(Resource, Default)]
+struct Streak {
+    count: usize,
+    timer: f32,
+}
 
 /// Best score across runs this session (not reset per run).
 #[derive(Resource, Default)]
@@ -264,6 +329,18 @@ impl Default for Level {
 /// and blinks while this is above zero.
 #[derive(Resource, Default)]
 struct HitCooldown(f32);
+
+/// Camera-shake energy (trauma, 0..1); decays to zero, jittering the camera
+/// while positive. A hazard hit tops it up. Modelled on `06_fruitninja`.
+#[derive(Resource, Default)]
+struct CameraShake {
+    trauma: f32,
+}
+
+/// Red damage-flash intensity (0..1); a hazard hit spikes it to 1 and it fades
+/// to zero, driving the alpha of the full-screen damage overlay.
+#[derive(Resource, Default)]
+struct DamageFlash(f32);
 
 /// The player marker. Holds the moving frame on the sphere surface: `up` is the
 /// outward surface normal (also the direction fed to the orbit), and `forward`
@@ -303,6 +380,29 @@ struct HealthBarFill;
 #[derive(Component)]
 struct MenuTitle;
 
+/// A short-lived UI text that rises and fades out (a "+N" pickup popup or a
+/// "STREAK xN" banner). Ported from `06_fruitninja`.
+#[derive(Component)]
+struct FloatingText {
+    /// Seconds since the popup was spawned.
+    age: f32,
+    /// Total lifetime in seconds; the popup despawns once `age` reaches it.
+    lifetime: f32,
+    /// Upward screen speed in pixels per second.
+    rise_speed: f32,
+    /// Base color; its alpha is ramped down as the popup ages.
+    color: Color,
+}
+
+/// Marker for the single "STREAK xN" banner, so a fresh one can replace the
+/// previous banner instead of overprinting it during a fast chain.
+#[derive(Component)]
+struct StreakBanner;
+
+/// Marker for the full-screen red damage-flash overlay.
+#[derive(Component)]
+struct DamageFlashOverlay;
+
 /// Shared render assets so the marker, hazards and orbs are cheap to spawn.
 #[derive(Resource)]
 struct OrbitAssets {
@@ -324,6 +424,9 @@ struct SfxAssets {
     menu_select: Handle<AudioSource>,
     /// An orb is collected.
     pickup: Handle<AudioSource>,
+    /// A streak reaches x2 or more (a rising chime layered over the pickup).
+    /// Shared with `06_fruitninja`, which uses it for its slice combos.
+    combo: Handle<AudioSource>,
     /// A hazard is touched (damage taken).
     hurt: Handle<AudioSource>,
     /// A new difficulty level is reached.
@@ -342,6 +445,7 @@ fn setup(
     commands.insert_resource(SfxAssets {
         menu_select: asset_server.load("sounds/menu_select.wav"),
         pickup: asset_server.load("sounds/pickup.wav"),
+        combo: asset_server.load("sounds/combo.wav"),
         hurt: asset_server.load("sounds/hurt.wav"),
         level_up: asset_server.load("sounds/level_up.wav"),
         game_over: asset_server.load("sounds/game_over.wav"),
@@ -524,10 +628,41 @@ fn wander_speed_for(level: usize) -> f32 {
     WANDER_SPEED_START + (WANDER_SPEED_MAX - WANDER_SPEED_START) * t
 }
 
-/// The displayed run score: `ORB_POINTS` per orb collected plus one point per
+/// The displayed run score: the orb points banked this run plus one point per
 /// whole second survived.
-fn score_value(orbs: usize, elapsed: f32) -> usize {
-    orbs * ORB_POINTS + elapsed.max(0.0) as usize
+fn score_value(orb_points: usize, elapsed: f32) -> usize {
+    orb_points + elapsed.max(0.0) as usize
+}
+
+/// Advance the streak for one more collected orb: bump the count, refresh the
+/// window, and return the new count (which scales the orb's value).
+fn advance_streak(streak: &mut Streak) -> usize {
+    streak.count += 1;
+    streak.timer = STREAK_WINDOW;
+    streak.count
+}
+
+/// Points a single orb is worth at a given streak length: the base `ORB_POINTS`
+/// scaled by the streak, so the 1st orb is worth `ORB_POINTS`, the 2nd twice
+/// that, and so on. A lone pickup (streak 1) is unchanged from before.
+fn orb_points_for(streak_count: usize) -> usize {
+    ORB_POINTS * streak_count.max(1)
+}
+
+/// Playback speed for `pickup.wav` at a given streak length: rises with the
+/// streak so a chain of pickups climbs in pitch, capped at `PICKUP_PITCH_MAX`.
+fn pickup_pitch_for(streak_count: usize) -> f32 {
+    (1.0 + streak_count.saturating_sub(1) as f32 * PICKUP_PITCH_STEP).min(PICKUP_PITCH_MAX)
+}
+
+/// Decay camera-shake trauma by one step, clamped at zero so it settles.
+fn decay_trauma(trauma: f32, dt: f32) -> f32 {
+    (trauma - SHAKE_DECAY * dt).max(0.0)
+}
+
+/// Add trauma from a hit, clamped to the 0..1 range so the shake has a ceiling.
+fn add_trauma(trauma: f32, amount: f32) -> f32 {
+    (trauma + amount).clamp(0.0, 1.0)
 }
 
 // --- Input ----------------------------------------------------------------
@@ -667,11 +802,18 @@ fn start_game(
     mut elapsed: ResMut<Elapsed>,
     mut level: ResMut<Level>,
     mut cooldown: ResMut<HitCooldown>,
+    mut streak: ResMut<Streak>,
+    mut shake: ResMut<CameraShake>,
+    mut flash: ResMut<DamageFlash>,
 ) {
     score.0 = 0;
     elapsed.0 = 0.0;
     level.0 = 1;
     cooldown.0 = 0.0;
+    streak.count = 0;
+    streak.timer = 0.0;
+    shake.trauma = 0.0;
+    flash.0 = 0.0;
 }
 
 /// Spawn the player marker: a `DirectionalSphereOrbit` rider plus the `Runner`
@@ -876,9 +1018,14 @@ fn resolve_collisions(
     sfx: Res<SfxAssets>,
     mut score: ResMut<Score>,
     mut cooldown: ResMut<HitCooldown>,
+    mut streak: ResMut<Streak>,
+    mut shake: ResMut<CameraShake>,
+    mut flash: ResMut<DamageFlash>,
     q_runner: Query<(Entity, &Transform), With<Runner>>,
     q_hazards: Query<(Entity, &Transform), With<Hazard>>,
     q_orbs: Query<(Entity, &Transform), With<Orb>>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    q_banners: Query<Entity, With<StreakBanner>>,
 ) {
     let Ok((runner_entity, runner_transform)) = q_runner.single() else {
         return;
@@ -894,8 +1041,52 @@ fn resolve_collisions(
             RUNNER_RADIUS + ORB_RADIUS,
         ) {
             commands.entity(orb).despawn();
-            score.0 += 1;
-            commands.play_sfx_volume(sfx.pickup.clone(), 0.8);
+
+            // Extend the streak and score the orb scaled by how long the chain
+            // is, so quick collecting pays off.
+            let count = advance_streak(&mut streak);
+            let points = orb_points_for(count);
+            score.0 += points;
+
+            // Pickup blip climbs in pitch as the streak grows; a chain of x2+
+            // also layers the rising combo chime.
+            commands.trigger(
+                PlaySfx::new(sfx.pickup.clone())
+                    .with_volume(0.8)
+                    .with_speed(pickup_pitch_for(count)),
+            );
+            if count >= 2 {
+                commands.trigger(
+                    PlaySfx::new(sfx.combo.clone())
+                        .with_volume(0.5)
+                        .with_speed(pickup_pitch_for(count)),
+                );
+            }
+
+            // Float a "+N" popup at the orb's screen position (best-effort:
+            // skip it if the orb is off-screen / behind the camera), and a
+            // "STREAK xN" banner near the top once the chain reaches x2.
+            if let Ok((camera, camera_transform)) = q_camera.single() {
+                if let Ok(viewport_pos) =
+                    camera.world_to_viewport(camera_transform, transform.translation)
+                {
+                    spawn_floating_text(
+                        &mut commands,
+                        viewport_pos,
+                        format!("+{points}"),
+                        34.0,
+                        Color::srgb(0.6, 0.95, 0.75),
+                    );
+                }
+            }
+            if count >= 2 {
+                // Replace any live banner so a fast chain updates the count in
+                // place instead of stacking overlapping popups.
+                for banner in q_banners.iter() {
+                    commands.entity(banner).despawn();
+                }
+                spawn_streak_banner(&mut commands, count);
+            }
         }
     }
 
@@ -911,6 +1102,11 @@ fn resolve_collisions(
             RUNNER_RADIUS + HAZARD_RADIUS,
         ) {
             cooldown.0 = HIT_COOLDOWN;
+            // A hit also breaks the streak, jolts the camera and flashes red.
+            streak.count = 0;
+            streak.timer = 0.0;
+            shake.trauma = add_trauma(shake.trauma, HAZARD_TRAUMA);
+            flash.0 = 1.0;
             commands.play_sfx(sfx.hurt.clone());
             commands.trigger(HealthApplyDamage {
                 entity: runner_entity,
@@ -967,6 +1163,22 @@ fn blink_runner(cooldown: Res<HitCooldown>, mut q_runner: Query<&mut Visibility,
 
 /// Spawn the in-game HUD (score, level, health bar), scoped to `Playing`.
 fn spawn_hud(mut commands: Commands) {
+    // Full-screen red damage overlay, transparent until a hit spikes it. Spawned
+    // first and pinned below the HUD so it never hides the score / health.
+    commands.spawn((
+        Name::new("Damage Flash"),
+        DamageFlashOverlay,
+        DespawnOnExit(GameState::Playing),
+        GlobalZIndex(-1),
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(0.85, 0.05, 0.05, 0.0)),
+    ));
+
     commands.spawn((
         Name::new("Score HUD"),
         ScoreText,
@@ -1078,6 +1290,156 @@ fn update_hud(
 fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
     if keys.just_pressed(KeyCode::Escape) {
         next.set(GameState::GameOver);
+    }
+}
+
+// --- Streak & floating popups ---------------------------------------------
+
+/// Count the streak window down; when it lapses the streak resets to zero so the
+/// next pickup starts a fresh chain.
+fn tick_streak(time: Res<Time>, mut streak: ResMut<Streak>) {
+    if streak.count == 0 {
+        return;
+    }
+    streak.timer -= time.delta_secs();
+    if streak.timer <= 0.0 {
+        streak.count = 0;
+        streak.timer = 0.0;
+    }
+}
+
+/// Spawn a floating popup at a viewport position, scoped to `Playing`. It rises
+/// and fades out via `animate_floating_text`.
+fn spawn_floating_text(
+    commands: &mut Commands,
+    viewport_pos: Vec2,
+    text: impl Into<String>,
+    size: f32,
+    color: Color,
+) {
+    commands.spawn((
+        Name::new("Floating Text"),
+        FloatingText {
+            age: 0.0,
+            lifetime: POPUP_LIFETIME,
+            rise_speed: POPUP_RISE_SPEED,
+            color,
+        },
+        DespawnOnExit(GameState::Playing),
+        Text::new(text.into()),
+        TextFont {
+            font_size: FontSize::Px(size),
+            ..default()
+        },
+        TextColor(color),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(viewport_pos.x),
+            top: Val::Px(viewport_pos.y),
+            ..default()
+        },
+    ));
+}
+
+/// Flash a "STREAK xN" banner high on the screen. It rises and fades like the
+/// "+N" popups but starts higher and brighter, so a hot streak is unmissable.
+fn spawn_streak_banner(commands: &mut Commands, count: usize) {
+    commands.spawn((
+        Name::new("Streak Banner"),
+        StreakBanner,
+        FloatingText {
+            age: 0.0,
+            lifetime: POPUP_LIFETIME,
+            rise_speed: POPUP_RISE_SPEED * 0.4,
+            color: Color::srgb(1.0, 0.85, 0.35),
+        },
+        DespawnOnExit(GameState::Playing),
+        Text::new(format!("STREAK x{count}")),
+        TextFont {
+            font_size: FontSize::Px(44.0),
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 0.85, 0.35)),
+        TextLayout {
+            justify: Justify::Center,
+            ..default()
+        },
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(130.0),
+            width: Val::Percent(100.0),
+            ..default()
+        },
+    ));
+}
+
+/// Advance floating popups: rise up the screen, fade out, and despawn at the
+/// end of their lifetime.
+fn animate_floating_text(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut q_text: Query<(Entity, &mut FloatingText, &mut Node, &mut TextColor)>,
+) {
+    let dt = time.delta_secs();
+
+    for (entity, mut floating, mut node, mut text_color) in q_text.iter_mut() {
+        floating.age += dt;
+        if floating.age >= floating.lifetime {
+            commands.entity(entity).despawn();
+            continue;
+        }
+
+        if let Val::Px(top) = node.top {
+            node.top = Val::Px(top - floating.rise_speed * dt);
+        }
+
+        let alpha = 1.0 - floating.age / floating.lifetime;
+        text_color.0 = floating.color.with_alpha(alpha);
+    }
+}
+
+// --- Impact feedback ------------------------------------------------------
+
+/// Jolt the camera by a decaying random offset while trauma is positive. Runs
+/// after the chase camera has written its transform, so the offset is additive
+/// on top of the chase result; the chase sync overwrites translation next frame,
+/// so the offset never accumulates.
+fn apply_camera_shake(
+    time: Res<Time>,
+    mut shake: ResMut<CameraShake>,
+    mut q_camera: Query<&mut Transform, With<MainCamera>>,
+) {
+    shake.trauma = decay_trauma(shake.trauma, time.delta_secs());
+
+    // Square the trauma so small residual energy fades to nothing quickly.
+    let amount = shake.trauma * shake.trauma;
+    if amount <= 0.0 {
+        return;
+    }
+
+    let Ok(mut transform) = q_camera.single_mut() else {
+        return;
+    };
+    let mut rng = rand::rng();
+    let offset = Vec3::new(
+        rng.random_range(-1.0..1.0),
+        rng.random_range(-1.0..1.0),
+        rng.random_range(-1.0..1.0),
+    ) * SHAKE_MAX_OFFSET
+        * amount;
+    transform.translation += offset;
+}
+
+/// Fade the red damage overlay each frame, driving its alpha from the decaying
+/// `DamageFlash` intensity a hit spiked.
+fn fade_damage_flash(
+    time: Res<Time>,
+    mut flash: ResMut<DamageFlash>,
+    mut q_overlay: Query<&mut BackgroundColor, With<DamageFlashOverlay>>,
+) {
+    flash.0 = (flash.0 - DAMAGE_FLASH_DECAY * time.delta_secs()).max(0.0);
+    for mut color in q_overlay.iter_mut() {
+        color.0 = Color::srgba(0.85, 0.05, 0.05, flash.0 * DAMAGE_FLASH_PEAK_ALPHA);
     }
 }
 
@@ -1278,9 +1640,52 @@ mod tests {
     }
 
     #[test]
-    fn score_counts_orbs_and_survival() {
-        // 3 orbs at 10 each, plus 5 whole seconds survived.
-        assert_eq!(score_value(3, 5.7), 3 * ORB_POINTS + 5);
+    fn score_folds_orb_points_and_survival() {
+        // 30 banked orb points plus 5 whole seconds survived.
+        assert_eq!(score_value(30, 5.7), 30 + 5);
         assert_eq!(score_value(0, 0.0), 0);
+    }
+
+    #[test]
+    fn streak_advances_and_scores_more_each_orb() {
+        let mut streak = Streak::default();
+        // First orb: streak 1, worth the base value; window is armed.
+        assert_eq!(advance_streak(&mut streak), 1);
+        assert_eq!(orb_points_for(1), ORB_POINTS);
+        assert!((streak.timer - STREAK_WINDOW).abs() < 1e-6);
+        // Second and third orbs are worth progressively more.
+        assert_eq!(advance_streak(&mut streak), 2);
+        assert_eq!(advance_streak(&mut streak), 3);
+        assert_eq!(orb_points_for(2), 2 * ORB_POINTS);
+        assert!(orb_points_for(3) > orb_points_for(2));
+        // A zero streak still values an orb at the base (never zero points).
+        assert_eq!(orb_points_for(0), ORB_POINTS);
+    }
+
+    #[test]
+    fn pickup_pitch_rises_with_streak_and_caps() {
+        // A lone pickup plays at normal speed.
+        assert!((pickup_pitch_for(1) - 1.0).abs() < 1e-6);
+        // It climbs with the streak...
+        assert!(pickup_pitch_for(3) > pickup_pitch_for(1));
+        // ... but never past the cap.
+        assert!((pickup_pitch_for(1000) - PICKUP_PITCH_MAX).abs() < 1e-6);
+    }
+
+    #[test]
+    fn trauma_decays_to_zero_and_clamps() {
+        // A hit adds trauma, clamped to at most 1.
+        assert!((add_trauma(0.0, HAZARD_TRAUMA) - HAZARD_TRAUMA).abs() < 1e-6);
+        assert!((add_trauma(0.8, 0.8) - 1.0).abs() < 1e-6);
+        // Trauma decays and never goes negative.
+        let once = decay_trauma(1.0, DT);
+        assert!(once < 1.0 && once > 0.0);
+        assert_eq!(decay_trauma(0.001, 10.0), 0.0);
+        // Enough steps drive any starting trauma to exactly zero.
+        let mut t = 1.0;
+        for _ in 0..1000 {
+            t = decay_trauma(t, DT);
+        }
+        assert_eq!(t, 0.0);
     }
 }

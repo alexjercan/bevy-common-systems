@@ -7,9 +7,11 @@ generated placeholders** (short sine blips, one distinct pitch each) produced by
 `scripts/gen-placeholder-sounds.py` so the examples run and are audible out of
 the box. They are not meant to be shipped as the final sound design.
 
-`menu_select.wav` and `game_over.wav` are shared between the two games; the
-rest are per-game (`slice`/`splat`/`combo`/`golden`/`bomb`/`launch` for fruit
-ninja, `pickup`/`hurt`/`level_up` for orbit runner).
+`menu_select.wav`, `game_over.wav` and `combo.wav` are shared between the two
+games; the rest are per-game (`slice`/`splat`/`golden`/`bomb`/`launch` for fruit
+ninja, `pickup`/`hurt`/`level_up` for orbit runner). Orbit runner plays
+`combo.wav` over the `pickup` blip once a collection streak reaches x2, pitched
+up with the chain, the same way fruit ninja uses it for slice combos.
 
 ## Dropping in real audio
 
