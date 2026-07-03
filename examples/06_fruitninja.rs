@@ -118,7 +118,6 @@ fn main() {
             slice_objects,
             move_fragments,
             update_score_text,
-            update_health_text,
             giveup_on_escape,
         )
             .run_if(in_state(GameState::Playing)),
@@ -162,10 +161,6 @@ struct CursorTrail {
 /// Marker for the on-screen score HUD text.
 #[derive(Component)]
 struct ScoreText;
-
-/// Marker for the on-screen health HUD text.
-#[derive(Component)]
-struct HealthText;
 
 /// A slice-able object (fruit or bomb) flying through the scene.
 #[derive(Component)]
@@ -290,26 +285,6 @@ fn update_score_text(score: Res<Score>, mut q_text: Query<&mut Text, With<ScoreT
     }
 }
 
-/// Text shown by the health HUD: one heart per remaining health point.
-fn health_label(health: &Health) -> String {
-    let hearts = health.current.ceil().max(0.0) as usize;
-    format!("Health: {}", "<3 ".repeat(hearts).trim_end())
-}
-
-/// Refresh the health HUD text when the player's health changes.
-fn update_health_text(
-    q_player: Query<&Health, (With<Player>, Changed<Health>)>,
-    mut q_text: Query<&mut Text, With<HealthText>>,
-) {
-    let Ok(health) = q_player.single() else {
-        return;
-    };
-
-    for mut text in q_text.iter_mut() {
-        **text = health_label(health);
-    }
-}
-
 /// Spawn the player entity that owns the run's health, scoped to `Playing`.
 fn spawn_player(mut commands: Commands) {
     commands.spawn((
@@ -393,7 +368,7 @@ fn start_game(
     trail.previous = None;
 }
 
-/// Spawn the in-game HUD (score + health), scoped to the `Playing` state.
+/// Spawn the in-game HUD (score), scoped to the `Playing` state.
 fn spawn_hud(mut commands: Commands) {
     commands.spawn((
         Name::new("Score HUD"),
@@ -409,24 +384,6 @@ fn spawn_hud(mut commands: Commands) {
             position_type: PositionType::Absolute,
             top: Val::Px(16.0),
             left: Val::Px(16.0),
-            ..default()
-        },
-    ));
-
-    commands.spawn((
-        Name::new("Health HUD"),
-        HealthText,
-        DespawnOnExit(GameState::Playing),
-        Text::new(health_label(&Health::new(PLAYER_HEALTH))),
-        TextFont {
-            font_size: 40.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.9, 0.25, 0.25)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(16.0),
-            right: Val::Px(16.0),
             ..default()
         },
     ));
