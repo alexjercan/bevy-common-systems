@@ -185,11 +185,13 @@ struct Planet;
 #[derive(Component)]
 struct Thruster;
 
-/// The ship's speed captured each `FixedUpdate` tick, before avian's
-/// `FixedPostUpdate` solver runs. On the frame the ship touches down the solver
+/// The ship's speed captured once per render frame in `PreUpdate`, before the
+/// fixed-physics loop runs. On the frame the ship touches down avian's solver
 /// has already killed most of the impact velocity, so judging the landing by the
-/// live `LinearVelocity` would under-report the impact (a hard crash could even
-/// read as a soft landing). `resolve_landing` uses this pre-impact value instead.
+/// live `LinearVelocity` in `resolve_landing` would under-report the impact (a
+/// hard crash could even read as a soft landing). Capturing in `PreUpdate` keeps
+/// this robust even when a stuttering frame runs several physics substeps: the
+/// value predates all of that frame's collisions. `resolve_landing` uses it.
 #[derive(Component, Default)]
 struct ApproachSpeed(f32);
 
@@ -293,9 +295,15 @@ fn main() {
         (
             set_attitude_target.before(PDControllerSystems::Sync),
             apply_ship_forces.after(PDControllerSystems::Sync),
-            track_approach_speed,
         )
             .run_if(in_state(GameState::Playing)),
+    );
+    // Capture the approach speed once per render frame in PreUpdate, before the
+    // fixed-physics loop runs, so no collision substep can overwrite it. See
+    // `ApproachSpeed`.
+    app.add_systems(
+        PreUpdate,
+        track_approach_speed.run_if(in_state(GameState::Playing)),
     );
 
     // Result.
@@ -772,9 +780,9 @@ fn apply_ship_forces(
     spin.0 = torque.0;
 }
 
-/// Record the ship's speed each `FixedUpdate` tick. This runs before avian's
-/// `FixedPostUpdate` solver, so on the touchdown frame it holds the speed the
-/// ship was actually travelling at just before contact - see [`ApproachSpeed`].
+/// Record the ship's speed once per render frame in `PreUpdate`, before the
+/// fixed-physics loop. On the touchdown frame this predates every collision
+/// substep, so it holds the speed just before contact - see [`ApproachSpeed`].
 fn track_approach_speed(mut q_ship: Query<(&LinearVelocity, &mut ApproachSpeed), With<Ship>>) {
     if let Ok((velocity, mut approach)) = q_ship.single_mut() {
         approach.0 = velocity.0.length();
