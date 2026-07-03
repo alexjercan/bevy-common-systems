@@ -13,6 +13,8 @@
 //! cleanup), `HealthPlugin` (the lose condition) and `StatusBarPlugin` (the FPS
 //! overlay); the menu / states use Bevy's own state machine.
 
+use std::collections::VecDeque;
+
 use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_common_systems::prelude::*;
@@ -167,7 +169,7 @@ struct CursorTrail {
 /// a fading "blade" and cleared when the button is released.
 #[derive(Resource, Default)]
 struct BladeTrail {
-    points: std::collections::VecDeque<Vec3>,
+    points: VecDeque<Vec3>,
 }
 
 /// Marker for the on-screen score HUD text.
@@ -374,10 +376,14 @@ fn start_game(
     mut score: ResMut<Score>,
     mut timer: ResMut<SpawnTimer>,
     mut trail: ResMut<CursorTrail>,
+    mut blade: ResMut<BladeTrail>,
 ) {
     score.0 = 0;
     timer.reset();
     trail.previous = None;
+    // Clear any trail left over from a swipe that ended the previous run so the
+    // new run does not flash a stale blade.
+    blade.points.clear();
 }
 
 /// Spawn the in-game HUD (score), scoped to the `Playing` state.

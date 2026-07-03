@@ -1,6 +1,6 @@
 # Fruit ninja: blade trail along the swipe
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: feature,example
 
@@ -43,3 +43,12 @@ slice is visible on screen. The trail fades from head (newest, opaque) to tail
   clearing the deque on release.
 - The debug inspector / avian also use gizmos; no conflict expected.
 - No new dependencies.
+
+## Close-out
+
+Added the blade trail: `BladeTrail` (capped `VecDeque<Vec3>`) filled from
+`slice_objects` while LMB is held, cleared on release and in `start_game`;
+`draw_blade_trail` renders it with `Gizmos::line` and a tail->head alpha ramp,
+lifted toward the camera. Review: 1 round APPROVE; R1.1 (reset BladeTrail per
+run) and R1.2 (VecDeque import) both fixed in-round. Verified on real GPU: the
+gizmo draw path runs every frame with no panic.
