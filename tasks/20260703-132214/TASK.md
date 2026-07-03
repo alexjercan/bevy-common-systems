@@ -1,6 +1,6 @@
 # Fruit ninja: combo scoring and combo text
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: feature,example
 
@@ -48,3 +48,13 @@ shows a flashy "COMBO xN" banner. This turns the flat "+1" into escalating
 - Keep the combo banner cheap: it is just another `FloatingText` with a bigger
   font and a bright color; no new system needed beyond `animate_floating_text`.
 - No new dependencies.
+
+## Close-out
+
+Added combo scoring: `Combo` resource + pure `advance_combo` (k-th fruit in a
+swipe = k points), escalating "+N" popups and a "COMBO xN" banner at combo >= 2,
+all reusing `spawn_floating_text`. Combo resets on release and in `start_game`.
+Two unit tests cover escalation and reset (run via `cargo test --example`).
+Module doc + AGENTS.md updated. Review: 1 round APPROVE; R1.1 (stacking banners)
+and R1.2 (hold-to-chain) both accepted as intended/by-design. Verified: 8
+example tests pass, boots clean, no panic.
