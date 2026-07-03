@@ -23,3 +23,16 @@ which matters because accuracy is this task's entire purpose.
     `docs/2026-07-03-audio-and-fruitninja-sounds.md`. Grepped the tree: no
     other live reference to `docs/audio.md` remains (only the plan step's
     "e.g." and this finding).
+
+## Round 2
+
+- VERDICT: APPROVE
+
+Verified R1.1: AGENTS.md:234 now references
+`docs/2026-07-03-audio-and-fruitninja-sounds.md`, which exists on disk. No
+remaining live reference to the non-existent `docs/audio.md` (grep confirmed).
+`./scripts/check-ascii.sh` and `cargo fmt --check` clean. Docs are accurate and
+consistent with the wiring; approved.
+
+- [x] R1.1 (MINOR) AGENTS.md:230 - broken `docs/audio.md` reference.
+  - Confirmed fixed.
