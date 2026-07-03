@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Cancel superseded runs on the same ref to save runner time.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: fmt / clippy / test / ascii
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Bevy needs ALSA and udev headers to build and link on Linux. The
+      # examples are compiled by `cargo test` but never run, so the graphics
+      # stack (vulkan / x11 / wayland) is not required in CI.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libasound2-dev libudev-dev
+
+      # rust-toolchain.toml pins nightly with rustfmt and clippy; install it
+      # explicitly so failures are clear and the first cargo call is not slow.
+      - name: Install Rust nightly toolchain
+        run: rustup toolchain install nightly --profile minimal -c rustfmt -c clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The suite documented in AGENTS.md, run exactly as a developer would.
+      - name: Formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets
+
+      - name: Clippy (debug feature)
+        run: cargo clippy --all-targets --features debug
+
+      - name: Tests
+        run: cargo test
+
+      - name: Tests (debug feature)
+        run: cargo test --features debug
+
+      - name: Plain-ASCII check
+        run: ./scripts/check-ascii.sh
