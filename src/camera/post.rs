@@ -1,8 +1,9 @@
 //! A plugin that applies default post processing settings to 3D cameras.
 //!
-//! This plugin automatically enables tonemapping and bloom on any entity
-//! that receives a `Camera3d` component. It is meant to provide a simple
-//! and visually appealing default look without requiring any manual setup.
+//! This plugin automatically enables tonemapping and bloom on any `Camera3d`
+//! entity marked with the `PostProcessingCamera` component. It is meant to
+//! provide a simple and visually appealing default look without requiring
+//! any manual setup.
 //!
 //! The current defaults are:
 //! - Tonemapping::TonyMcMapface
@@ -11,12 +12,16 @@
 //! Example usage:
 //!
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::prelude::*;
+//! # fn demo(mut commands: Commands) {
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
-//!     .add_plugin(PostProcessingDefaultPlugin);
+//!     .add_plugins(PostProcessingDefaultPlugin);
 //!
-//! // Any spawned Camera3d will automatically receive bloom and tonemapping:
+//! // Cameras marked with PostProcessingCamera receive bloom and tonemapping:
 //! commands.spawn((Camera3d::default(), PostProcessingCamera));
+//! # }
 //! ```
 //!
 //! If you want different defaults or more control over post processing,

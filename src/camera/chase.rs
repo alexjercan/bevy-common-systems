@@ -24,6 +24,9 @@
 //! ## Usage
 //!
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::prelude::*;
+//! # fn setup(mut commands: Commands) {
 //! commands.spawn((
 //!     Camera3d::default(),
 //!     ChaseCamera {
@@ -32,10 +35,13 @@
 //!         smoothing: 0.1,
 //!     },
 //! ));
+//! # }
 //!
 //! // In your player movement system:
+//! # fn player_movement(input: &mut ChaseCameraInput, player_position: Vec3, player_rotation: Quat) {
 //! input.anchor_pos = player_position;
 //! input.anchor_rot = player_rotation;
+//! # }
 //! ```
 //!
 //! After inserting `ChaseCamera`, the plugin automatically initializes required

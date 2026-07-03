@@ -182,16 +182,15 @@ Verified working as of 2026-07-03:
 cargo build                                  # library + macros subcrate
 cargo fmt --check                            # formatting
 cargo clippy --all-targets                   # lints; currently clean, keep it clean
-cargo clippy --all-targets --features debug  # 1 known warning, tasks/20260703-095339
-cargo test --all-targets                     # runs the unit tests, skips doctests
+cargo clippy --all-targets --features debug  # lints with the debug module
+cargo test                                   # unit tests + doctests
+cargo test --features debug                  # same, plus the debug module
 cargo run --example 01_sphere                # opens a window
 cargo run --example 01_sphere --features debug   # same, with inspector UI
 ```
 
-Known issue: plain `cargo test` (which includes doctests) currently fails -
-10 module-doc snippets are illustrative and do not compile as doctests.
-Fixing them is tracked in `tasks/20260703-095339`; until that lands, use
-`cargo test --all-targets`.
+(The only warning surfaced by clippy is a future-incompat note from the
+transitive `proc-macro-error2` dependency, not from this crate's code.)
 
 Testing convention: pure math and geometry functions get `#[cfg(test)]`
 unit tests next to the code (13 today, in `meth/sphere`, `mesh/builder`,

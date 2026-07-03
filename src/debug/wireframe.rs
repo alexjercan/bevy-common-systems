@@ -5,7 +5,11 @@
 //!
 //! Usage:
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::debug::prelude::*;
+//! # fn demo(app: &mut App) {
 //! app.add_plugins(WireframeDebugPlugin);
+//! # }
 //! ```
 //!
 //! Press F11 to toggle the wireframe mode on or off.

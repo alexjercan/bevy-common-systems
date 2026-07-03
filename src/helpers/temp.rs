@@ -13,9 +13,13 @@
 //! ## Usage
 //!
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::prelude::*;
+//! # fn demo(mut commands: Commands) {
 //! commands.spawn((
 //!     TempEntity(5.0), // despawns after 5 seconds
 //! ));
+//! # }
 //! ```
 //!
 //! The plugin handles initialization and updating of timers automatically.

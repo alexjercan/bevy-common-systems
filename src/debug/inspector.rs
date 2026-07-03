@@ -55,7 +55,7 @@ impl Plugin for InspectorDebugPlugin {
 
         // Physics debug plugins.
         app.add_plugins((
-            avian3d::prelude::PhysicsDebugPlugin::default(),
+            avian3d::prelude::PhysicsDebugPlugin,
             PhysicsDiagnosticsPlugin,
             PhysicsDiagnosticsUiPlugin,
         ));

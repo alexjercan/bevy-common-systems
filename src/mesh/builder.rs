@@ -12,6 +12,9 @@
 //! Example usage:
 //!
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::mesh::prelude::*;
+//! # let my_noise_fn = noise::Fbm::<noise::Perlin>::new(0);
 //! let mut builder = TriangleMeshBuilder::new_octahedron(2);
 //! builder.apply_noise(&my_noise_fn);
 //! let mesh = builder.build();

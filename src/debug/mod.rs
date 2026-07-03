@@ -7,7 +7,8 @@
 //! ## Usage
 //! Add whichever plugins you want, or pull them all via the `prelude`:
 //!
-//! ```rust
+//! ```rust,no_run
+//! use bevy::prelude::*;
 //! use bevy_common_systems::debug::prelude::*;
 //!
 //! fn main() {
