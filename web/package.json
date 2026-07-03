@@ -9,6 +9,7 @@
     "build:web": "webpack --config webpack.config.js",
     "build": "npm run build:games && npm run build:web",
     "serve": "webpack serve --config webpack.config.js",
+    "serve:lan": "webpack serve --config webpack.config.js --host 0.0.0.0 --allowed-hosts all",
     "format": "prettier --write \"src/**/*.{ts,html,css}\" *.js *.json",
     "format:check": "prettier --check \"src/**/*.{ts,html,css}\" *.js *.json",
     "lint": "eslint \"src/**/*.ts\"",

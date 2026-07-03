@@ -21,7 +21,12 @@ dev server:
 
 ```sh
 npm run serve        # http://localhost:8080  (run `npm run build:games` once first)
+npm run serve:lan    # same, bound to 0.0.0.0 so other devices on the LAN can reach it
 ```
+
+`serve` binds to localhost only; `serve:lan` binds to `0.0.0.0` (and sets
+`--allowed-hosts all` so requests by LAN IP are not rejected) -- reach it from
+another device at `http://<your-LAN-IP>:8080`.
 
 `npm run build:games` and `npm run build:web` run the two halves separately.
 
