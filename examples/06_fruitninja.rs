@@ -90,6 +90,10 @@ const BOMB_TRAUMA: f32 = 0.75;
 /// Seconds the red flash holds before the game-over screen after a bomb.
 const DYING_BEAT: f32 = 0.35;
 
+/// How long a fruit "pops" (scales up) before it bursts, and how far it grows.
+const SLICE_POP_TIME: f32 = 0.08;
+const SLICE_POP_SCALE: f32 = 1.45;
+
 /// How long a floating "+N" popup lives before it despawns, in seconds.
 const POPUP_LIFETIME: f32 = 0.8;
 
@@ -164,6 +168,7 @@ fn main() {
             spawn_projectile,
             move_projectiles,
             slice_objects,
+            resolve_slice_pop,
             move_fragments,
             update_score_text,
             draw_blade_trail,
@@ -281,6 +286,38 @@ struct MainCamera;
 struct RedFlash {
     age: f32,
     lifetime: f32,
+}
+
+/// A sliced fruit mid-"pop": it scales up for a beat, then bursts.
+#[derive(Component)]
+struct SlicePop {
+    timer: f32,
+    base_scale: Vec3,
+}
+
+/// Grow a popping fruit, then trigger its explosion when the pop finishes.
+fn resolve_slice_pop(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut q_pop: Query<(Entity, &mut Transform, &mut SlicePop)>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut transform, mut pop) in q_pop.iter_mut() {
+        pop.timer -= dt;
+        if pop.timer <= 0.0 {
+            // Restore the base scale so fragments burst at the fruit's size.
+            transform.scale = pop.base_scale;
+            commands
+                .entity(entity)
+                .remove::<SlicePop>()
+                .insert(ExplodeMesh {
+                    fragment_count: FRAGMENT_COUNT,
+                });
+            continue;
+        }
+        let progress = 1.0 - (pop.timer / SLICE_POP_TIME).clamp(0.0, 1.0);
+        transform.scale = pop.base_scale * (1.0 + (SLICE_POP_SCALE - 1.0) * progress);
+    }
 }
 
 /// Marker for the on-screen score HUD text.
@@ -872,20 +909,26 @@ fn slice_objects(
         commands
             .entity(entity)
             .remove::<Sliceable>()
-            .remove::<Projectile>()
-            .insert(ExplodeMesh {
-                fragment_count: FRAGMENT_COUNT,
-            });
+            .remove::<Projectile>();
 
         if is_bomb {
-            // Slicing a bomb is an instant loss: deal lethal damage to the
-            // player, which trips HealthZeroMarker -> GameOver.
+            // A bomb explodes instantly and is an instant loss: deal lethal
+            // damage to the player, which trips HealthZeroMarker -> GameOver.
+            commands.entity(entity).insert(ExplodeMesh {
+                fragment_count: FRAGMENT_COUNT,
+            });
             commands.trigger(HealthApplyDamage {
                 entity: *player,
                 source: Some(entity),
                 amount: PLAYER_HEALTH,
             });
         } else {
+            // Fruit pops (scales up briefly) before it bursts, so the cut reads
+            // as impactful; `resolve_slice_pop` inserts ExplodeMesh when done.
+            commands.entity(entity).insert(SlicePop {
+                timer: SLICE_POP_TIME,
+                base_scale: transform.scale,
+            });
             // Each fruit in one continuous swipe is worth one more point than
             // the last (1, 2, 3, ...); the button release resets the combo.
             let points = advance_combo(&mut combo);

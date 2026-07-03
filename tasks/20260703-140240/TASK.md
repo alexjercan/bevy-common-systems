@@ -1,6 +1,6 @@
 # Fruit ninja: slice pop flash on fruit
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 88
 - TAGS: feature,example
 
@@ -11,22 +11,22 @@ object right before it bursts, instead of it vanishing instantly into fragments.
 
 ## Steps
 
-- [ ] Decide the beat: the sliced shell currently gets `ExplodeMesh` and is
+- [x] Decide the beat: the sliced shell currently gets `ExplodeMesh` and is
       despawned by `on_fragments_spawned` the same frame. To show a flash, delay
       the explode by ~0.05-0.1s: on slice, instead of inserting `ExplodeMesh`
       immediately, insert a `SlicePop { timer }` (and remove `Sliceable` /
       `Projectile`), swap the material to a bright/white flash and bump the
       scale up.
-- [ ] Add a `resolve_slice_pop` system (Update, `Playing`) that ticks
+- [x] Add a `resolve_slice_pop` system (Update, `Playing`) that ticks
       `SlicePop`; while active it can keep the pop scaled, and when it elapses
       inserts `ExplodeMesh` so the existing explosion path runs.
-- [ ] Keep it cheap: a single extra material handle (white) in `FruitAssets`
+- [x] Keep it cheap: a single extra material handle (white) in `FruitAssets`
       for the flash, or tint via a new StandardMaterial; reuse the existing
       explode/ fragment flow unchanged after the pop.
-- [ ] Make sure a bomb still triggers game over on the slice frame (bombs should
+- [x] Make sure a bomb still triggers game over on the slice frame (bombs should
       not wait for the pop, or the pop is fine but the health hit is immediate);
       note the chosen behavior.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, real boot (auto-slice; confirm the
       pop then explosion, no panic).
 
@@ -42,3 +42,10 @@ object right before it bursts, instead of it vanishing instantly into fragments.
 - Depends on nothing, but coexists with the golden-fruit and variety tasks
   (shared spawn/slice code) -- expect light merge overlap.
 - No new dependencies.
+
+## Close-out
+
+Fruit now `SlicePop`s (scales up over SLICE_POP_TIME to SLICE_POP_SCALE) before
+bursting; `resolve_slice_pop` restores base scale and inserts ExplodeMesh when
+the pop ends. Bombs still explode instantly (and keep the instant loss), so the
+death beat is unaffected. Verified: fruit -> pop -> fragments.
