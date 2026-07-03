@@ -46,9 +46,12 @@ use rand::Rng;
 
 /// Base radius of the planet before noise displacement (world units).
 const PLANET_BASE_RADIUS: f32 = 40.0;
-/// Octahedron subdivision level; higher is smoother terrain and a heavier
-/// trimesh collider.
-const PLANET_RESOLUTION: u32 = 24;
+/// Octahedron subdivision *depth* passed to `TriangleMeshBuilder::new_octahedron`.
+/// This is recursive: the triangle count is `8 * 4^depth`, so keep it small.
+/// Depth 6 is `8 * 4096 = 32768` triangles - smooth enough to land on and a
+/// cheap static trimesh. (Do NOT raise this to tens: depth 24 is ~2e15
+/// triangles and hangs the mesh build.)
+const PLANET_RESOLUTION: u32 = 6;
 /// Terrain height as a fraction of the base radius (peaks and valleys).
 const TERRAIN_AMPLITUDE: f64 = 0.10;
 /// How high above the tallest peak the ship starts.
