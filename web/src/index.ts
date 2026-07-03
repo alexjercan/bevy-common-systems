@@ -44,6 +44,7 @@ function openGame(game: Game): void {
 
 function closeGame(): void {
   overlay().hidden = true;
+  overlay().scrollTop = 0;
   // Drop the iframe src so the wasm app stops and audio/input release.
   frame().src = 'about:blank';
   document.body.classList.remove('is-playing');
@@ -55,7 +56,7 @@ function main(): void {
     grid.appendChild(card(game));
   }
 
-  (document.getElementById('game-overlay-close') as HTMLButtonElement).addEventListener(
+  (document.getElementById('game-overlay-back') as HTMLButtonElement).addEventListener(
     'click',
     closeGame,
   );

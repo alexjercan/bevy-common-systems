@@ -19,21 +19,31 @@
       <ul id="game-grid" class="game-grid" aria-label="Games"></ul>
     </main>
 
-    <!-- Full-screen overlay that hosts the selected game in an iframe. -->
+    <!-- Full-screen, scrollable game page (itch.io style): the game embed sits
+         centered at a mobile-ish portrait size, with instructions below it. -->
     <div id="game-overlay" class="game-overlay" hidden>
-      <div class="game-overlay__bar">
-        <span id="game-overlay-title" class="game-overlay__title"></span>
-        <span id="game-overlay-controls" class="game-overlay__controls"></span>
-        <button id="game-overlay-close" class="game-overlay__close" aria-label="Close game">
-          &times;
-        </button>
+      <div class="game-page">
+        <div class="game-page__topbar">
+          <button id="game-overlay-back" class="game-page__back" type="button">
+            &larr; Back to games
+          </button>
+          <span id="game-overlay-title" class="game-page__title"></span>
+        </div>
+
+        <div class="game-embed">
+          <iframe
+            id="game-frame"
+            class="game-embed__frame"
+            title="Game"
+            allow="autoplay; fullscreen; gamepad"
+          ></iframe>
+        </div>
+
+        <section class="game-info">
+          <h2 class="game-info__heading">How to play</h2>
+          <p id="game-overlay-controls" class="game-info__controls"></p>
+        </section>
       </div>
-      <iframe
-        id="game-frame"
-        class="game-overlay__frame"
-        title="Game"
-        allow="autoplay; fullscreen; gamepad"
-      ></iframe>
     </div>
 
     <footer class="site-footer">
