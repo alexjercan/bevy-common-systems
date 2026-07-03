@@ -33,6 +33,11 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
 
 ## Module Map
 
+- `audio` - `SfxPlugin`: fire-and-forget one-shot sound effects. Game code
+  triggers `PlaySfx` (or calls `commands.play_sfx(handle)`) with an
+  `AudioSource` handle and the plugin spawns a self-despawning `AudioPlayer`;
+  a global `SfxMasterVolume` resource scales every sound. One concern: SFX
+  only, not music or a mixer. Demoed by `examples/06_fruitninja`.
 - `camera/`
   - `chase` - `ChaseCameraPlugin`: third-person chase camera with offset,
     smoothing and look-ahead. Game code writes `ChaseCameraInput`.
@@ -223,6 +228,9 @@ Examples:
   in one swipe builds an escalating combo with a "COMBO xN" banner. Dark bombs
   are mixed in -- slicing one deals lethal damage via `HealthPlugin` and ends
   the run at a game-over screen. Uses Bevy states for menu/playing/game-over.
+  Every gameplay event plays a one-shot sound via `SfxPlugin`; the files in
+  `assets/sounds/` are generated placeholders (`scripts/gen-placeholder-sounds.py`),
+  see `assets/sounds/README.md` and `docs/audio.md`.
 
 ## Workflow
 

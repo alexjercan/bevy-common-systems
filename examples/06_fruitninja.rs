@@ -12,11 +12,16 @@
 //! through the crate's health system and ends the run at the game-over screen.
 //! Fruit you miss just falls off the bottom.
 //!
-//! Everything here is plain shapes and hand-rolled kinematics: no assets, no
-//! physics engine. It reuses the crate's `TriangleMeshBuilder` (meshes),
+//! The visuals are all plain shapes and hand-rolled kinematics, no physics
+//! engine. Sound effects are the one asset dependency: each gameplay event
+//! (menu click, slice, burst, combo, golden, bomb, launch, game over) plays a
+//! one-shot via the crate's `SfxPlugin`, loaded from `assets/sounds/`. Those
+//! files are tiny generated placeholders; see `assets/sounds/README.md` to drop
+//! in real audio. It reuses the crate's `TriangleMeshBuilder` (meshes),
 //! `ExplodeMeshPlugin` (the slice effect), `TempEntityPlugin` (fragment
-//! cleanup), `HealthPlugin` (the lose condition) and `StatusBarPlugin` (the FPS
-//! overlay); the menu / states use Bevy's own state machine.
+//! cleanup), `HealthPlugin` (the lose condition), `SfxPlugin` (the sound
+//! effects) and `StatusBarPlugin` (the FPS overlay); the menu / states use
+//! Bevy's own state machine.
 
 use std::collections::VecDeque;
 
