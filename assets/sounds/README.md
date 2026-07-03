@@ -1,10 +1,15 @@
-# Fruit ninja sound effects
+# Example game sound effects
 
-The `06_fruitninja` example (`examples/06_fruitninja.rs`) loads one sound per
+The `06_fruitninja` and `07_orbit` examples
+(`examples/06_fruitninja.rs`, `examples/07_orbit.rs`) load one sound per
 gameplay event from this directory. The files committed here are **tiny
 generated placeholders** (short sine blips, one distinct pitch each) produced by
-`scripts/gen-placeholder-sounds.py` so the example runs and is audible out of
+`scripts/gen-placeholder-sounds.py` so the examples run and are audible out of
 the box. They are not meant to be shipped as the final sound design.
+
+`menu_select.wav` and `game_over.wav` are shared between the two games; the
+rest are per-game (`slice`/`splat`/`combo`/`golden`/`bomb`/`launch` for fruit
+ninja, `pickup`/`hurt`/`level_up` for orbit runner).
 
 ## Dropping in real audio
 
@@ -31,14 +36,18 @@ audio module (`SfxPlugin`) plays whatever handle it is given.
 | `combo.wav` | A combo reaches x2 or more (pitched up with the chain) | rising chime / ding, ~0.3-0.5 s |
 | `golden.wav` | A golden bonus fruit is sliced | bright sparkle / shimmer, ~0.3-0.5 s |
 | `bomb.wav` | A bomb is sliced (lethal) | punchy explosion, ~0.4-0.8 s |
-| `game_over.wav` | The run ends (game-over screen) | short somber sting, ~0.8-1.5 s |
+| `game_over.wav` | The run ends (game-over screen); shared with orbit runner | short somber sting, ~0.8-1.5 s |
 | `launch.wav` | A fruit or bomb is launched from below | soft airy whoosh, ~0.2 s (played quietly) |
+| `pickup.wav` | `07_orbit`: an orb is collected | bright blip / chime, ~0.1 s |
+| `hurt.wav` | `07_orbit`: a hazard is touched (damage taken) | low thud / buzz, ~0.2 s |
+| `level_up.wav` | `07_orbit`: a new difficulty level is reached | rising ding, ~0.2 s |
 
 ## Web (wasm) builds
 
-These files are shipped into the web build by a `data-trunk rel="copy-dir"`
-directive in `web/games/06_fruitninja/index.html`; without it trunk copies no
-assets and the browser fetch of `sounds/*.wav` 404s (silent game). See
+These files are shipped into each web build by a `data-trunk rel="copy-dir"`
+directive in `web/games/06_fruitninja/index.html` and
+`web/games/07_orbit/index.html`; without it trunk copies no assets and the
+browser fetch of `sounds/*.wav` 404s (silent game). See
 `docs/wasm-web-builds.md` ("Assets") for the copy directive and the exact
 fetched URL. Browser audio also needs a user gesture before it will play; the
 game satisfies this with the in-canvas click that starts a run, so the first
