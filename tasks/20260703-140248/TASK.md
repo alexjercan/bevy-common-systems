@@ -1,6 +1,6 @@
 # Fruit ninja: cursor play-plane indicator
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 60
 - TAGS: feature,example
 
@@ -11,14 +11,14 @@ clearly even when the player is not actively swiping.
 
 ## Steps
 
-- [ ] Add a `draw_cursor_indicator` system (Update, `Playing`) that computes the
+- [x] Add a `draw_cursor_indicator` system (Update, `Playing`) that computes the
       cursor world position with `cursor_on_play_plane` and draws a small gizmo
       circle there (`gizmos.circle` / `circle_2d` as appropriate), lifted
       slightly toward the camera like the blade trail.
-- [ ] Skip drawing when the cursor is off-window (projection returns `None`).
-- [ ] Optionally change the indicator color/size while the left button is held
+- [x] Skip drawing when the cursor is off-window (projection returns `None`).
+- [x] Optionally change the indicator color/size while the left button is held
       (swiping) vs idle, for a subtle active-state cue.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, real boot no panic.
 
 ## Notes
@@ -28,3 +28,9 @@ clearly even when the player is not actively swiping.
 - Gizmos are immediate-mode (like `draw_blade_trail`); no entity, no cleanup.
 - Keep it subtle so it does not compete with the blade trail.
 - No new dependencies.
+
+## Close-out
+
+draw_cursor_indicator draws a gizmo ring at the cursor's play-plane point
+(lifted toward the camera), brighter/larger while LMB is held, skipped when the
+cursor is off-window. Immediate-mode, no entity. Verified boot.

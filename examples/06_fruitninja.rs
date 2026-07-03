@@ -189,6 +189,7 @@ fn main() {
             update_score_text,
             update_combo_text,
             draw_blade_trail,
+            draw_cursor_indicator,
             animate_floating_text,
             fade_red_flash,
             advance_dying,
@@ -1150,6 +1151,34 @@ fn slice_objects(
             }
         }
     }
+}
+
+/// Draw a small ring where the cursor meets the play plane, so aiming reads
+/// clearly even when not swiping. Brighter/larger while the button is held.
+fn draw_cursor_indicator(
+    window: Single<&Window>,
+    camera: Single<(&Camera, &GlobalTransform)>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut gizmos: Gizmos,
+) {
+    let (camera, camera_transform) = *camera;
+    let Some(pos) = cursor_on_play_plane(&window, camera, camera_transform) else {
+        return;
+    };
+
+    let held = mouse.pressed(MouseButton::Left);
+    let radius = if held { 0.5 } else { 0.35 };
+    let color = if held {
+        Color::srgba(0.9, 0.98, 1.0, 0.9)
+    } else {
+        Color::srgba(0.7, 0.9, 1.0, 0.45)
+    };
+    // Lift toward the camera so the ring sits in front of the play plane.
+    gizmos.circle(
+        Isometry3d::from_translation(pos + Vec3::Z * 0.6),
+        radius,
+        color,
+    );
 }
 
 /// Draw the current swipe as a blade trail: fading line segments from the
