@@ -260,6 +260,8 @@ struct BladeTrail {
 struct Combo {
     count: usize,
     timer: f32,
+    /// Total points scored during the current combo, for the end-of-combo tally.
+    points: usize,
 }
 
 /// Advance the combo for one more sliced fruit: bump the count, refresh the
@@ -267,18 +269,40 @@ struct Combo {
 fn advance_combo(combo: &mut Combo) -> usize {
     combo.count += 1;
     combo.timer = COMBO_WINDOW;
+    combo.points += combo.count;
     combo.count
 }
 
-/// Count the combo window down; when it runs out, the combo ends (resets).
-fn tick_combo(time: Res<Time>, mut combo: ResMut<Combo>) {
+/// Count the combo window down; when it runs out the combo ends: show a tally
+/// for a real (>= 2 hit) combo, then reset it.
+fn tick_combo(
+    time: Res<Time>,
+    mut commands: Commands,
+    window: Single<&Window>,
+    mut combo: ResMut<Combo>,
+) {
     if combo.count == 0 {
         return;
     }
     combo.timer -= time.delta_secs();
-    if combo.timer <= 0.0 {
-        combo.count = 0;
+    if combo.timer > 0.0 {
+        return;
     }
+
+    if combo.count >= 2 {
+        // Centered-ish tally near the top of the screen.
+        let pos = Vec2::new(window.width() * 0.5 - 110.0, window.height() * 0.3);
+        spawn_floating_text(
+            &mut commands,
+            pos,
+            format!("COMBO x{} +{}", combo.count, combo.points),
+            52.0,
+            Color::srgb(1.0, 0.75, 0.2),
+        );
+    }
+
+    combo.count = 0;
+    combo.points = 0;
 }
 
 /// Seconds elapsed in the current run, driving the difficulty ramp.
@@ -760,6 +784,7 @@ fn start_game(
     blade.points.clear();
     combo.count = 0;
     combo.timer = 0.0;
+    combo.points = 0;
     shake.trauma = 0.0;
     dying.remaining = None;
     elapsed.0 = 0.0;
@@ -1038,6 +1063,12 @@ fn slice_objects(
                 // Golden fruit: flat bonus, and it buys extra combo time by
                 // stretching the window, without advancing the combo count.
                 **score += GOLDEN_POINTS;
+                // Only fold into the combo tally when a combo is actually
+                // running, otherwise `points` would leak (tick_combo only
+                // clears it when a counted combo ends).
+                if combo.count > 0 {
+                    combo.points += GOLDEN_POINTS;
+                }
                 combo.timer = combo.timer.max(COMBO_WINDOW_GOLDEN);
                 if let Some(viewport_pos) = viewport_pos {
                     spawn_floating_text(
@@ -1317,6 +1348,16 @@ mod tests {
         combo.timer = 0.1;
         advance_combo(&mut combo);
         assert!((combo.timer - COMBO_WINDOW).abs() < 1e-6);
+    }
+
+    #[test]
+    fn combo_accumulates_tally_points() {
+        // A 3-hit combo tallies 1 + 2 + 3 = 6 points for the end summary.
+        let mut combo = Combo::default();
+        advance_combo(&mut combo);
+        advance_combo(&mut combo);
+        advance_combo(&mut combo);
+        assert_eq!(combo.points, 6);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Fruit ninja: combo end summary
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 70
 - TAGS: feature,example
 
@@ -11,16 +11,16 @@ a combo is clear, instead of only the per-fruit "+N" popups.
 
 ## Steps
 
-- [ ] Track the points earned during the current combo: extend `Combo` with a
+- [x] Track the points earned during the current combo: extend `Combo` with a
       `points: usize` accumulator (added to alongside `count` on each slice) and
       reset with the combo.
-- [ ] On combo end (the timer-expiry reset added by the time-window task), if
+- [x] On combo end (the timer-expiry reset added by the time-window task), if
       `count >= 2`, spawn a centered "COMBO x{count} +{points}" summary popup
       (reuse `spawn_floating_text`, larger font, distinct color), placed near
       screen center or above the HUD.
-- [ ] Make sure the summary is spawned from the combo-end code path (the
+- [x] Make sure the summary is spawned from the combo-end code path (the
       `tick_combo` reset), reading `count`/`points` before zeroing them.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, real boot no panic.
 
 ## Notes
@@ -32,3 +32,10 @@ a combo is clear, instead of only the per-fruit "+N" popups.
 - Keep it from overlapping the per-slice "+N" popups: place the summary higher /
   larger so it reads as a distinct tally.
 - No new dependencies.
+
+## Close-out
+
+Combo gained a `points` tally (advance_combo accumulates count; golden folds in
+its +5 only when a combo is active, to avoid a leak). tick_combo, on window
+expiry with count>=2, spawns a centered "COMBO xN +M" summary before resetting
+count+points. points reset in start_game. Unit test covers the 1+2+3=6 tally.
