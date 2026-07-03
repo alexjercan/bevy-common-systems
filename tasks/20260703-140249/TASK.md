@@ -1,6 +1,6 @@
 # Fruit ninja: menu title pulse
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 55
 - TAGS: feature,example
 
@@ -11,12 +11,12 @@ menu is not a static screen.
 
 ## Steps
 
-- [ ] Add a `MenuTitle` marker to the title text spawned in `spawn_menu`.
-- [ ] Add a `pulse_menu_title` system (Update, `Menu`) that oscillates the
+- [x] Add a `MenuTitle` marker to the title text spawned in `spawn_menu`.
+- [x] Add a `pulse_menu_title` system (Update, `Menu`) that oscillates the
       title's `TextColor` alpha (and/or color between two golds) over time using
       a sine of elapsed seconds, for a soft breathing effect.
-- [ ] Keep it `Menu`-only via `run_if(in_state(GameState::Menu))`.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Keep it `Menu`-only via `run_if(in_state(GameState::Menu))`.
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, real boot (sit on the menu; confirm
       the pulse and no panic).
 
@@ -30,3 +30,8 @@ menu is not a static screen.
   font size for the pulse (scaling UI text is awkward).
 - Smallest task; purely cosmetic, menu-only.
 - No new dependencies.
+
+## Close-out
+
+Marked the menu title `MenuTitle`; `pulse_menu_title` (Menu-only) oscillates its
+alpha via sin(elapsed) for a soft breathing effect. Verified boot on the menu.

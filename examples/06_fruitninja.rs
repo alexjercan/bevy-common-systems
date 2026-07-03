@@ -169,7 +169,10 @@ fn main() {
 
     // Main menu.
     app.add_systems(OnEnter(GameState::Menu), spawn_menu);
-    app.add_systems(Update, menu_click.run_if(in_state(GameState::Menu)));
+    app.add_systems(
+        Update,
+        (menu_click, pulse_menu_title).run_if(in_state(GameState::Menu)),
+    );
 
     // Playing: reset the run, spawn the player + HUD, then run the gameplay loop.
     app.add_systems(
@@ -395,6 +398,10 @@ struct ScoreText;
 /// Marker for the live combo HUD text.
 #[derive(Component)]
 struct ComboText;
+
+/// Marker for the menu title text, so it can be pulsed.
+#[derive(Component)]
+struct MenuTitle;
 
 /// A short-lived UI text that rises and fades out (a "+N" or combo popup).
 #[derive(Component)]
@@ -748,7 +755,10 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
         DespawnOnExit(GameState::Menu),
         centered_screen(),
         children![
-            screen_text("FRUIT NINJA", 72.0, Color::srgb(0.95, 0.85, 0.25)),
+            (
+                screen_text("FRUIT NINJA", 72.0, Color::srgb(0.95, 0.85, 0.25)),
+                MenuTitle,
+            ),
             screen_text("Click to play", 32.0, Color::WHITE),
             screen_text(
                 format!("Best: {}", high.0),
@@ -765,6 +775,14 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
 }
 
 /// Start the game on a click from the menu.
+/// Gently pulse the menu title's alpha so the menu breathes.
+fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<MenuTitle>>) {
+    let alpha = 0.65 + 0.35 * (time.elapsed_secs() * 2.5).sin();
+    for mut color in q_title.iter_mut() {
+        color.0 = Color::srgba(0.95, 0.85, 0.25, alpha);
+    }
+}
+
 fn menu_click(mouse: Res<ButtonInput<MouseButton>>, mut next: ResMut<NextState<GameState>>) {
     if mouse.just_pressed(MouseButton::Left) {
         next.set(GameState::Playing);
