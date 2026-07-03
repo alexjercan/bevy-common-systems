@@ -18,3 +18,6 @@ comes after 07_orbit. Needs a collider from the planet mesh (avian trimesh);
 consider extracting a `collider-from-TriangleMeshBuilder` helper if a second
 game needs it too. Grows out of `examples/02_planet`.
 
+Scope: this is a library example. Keep it small (~1000 LoC), basic but fun for
+~15 minutes -- a landing challenge, not a full flight sim.
+

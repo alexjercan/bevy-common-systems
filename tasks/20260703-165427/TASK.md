@@ -15,3 +15,6 @@ Exercises the whole `transform/*` orbit family, `camera/chase` and `meth`,
 none of which any current example demos under gameplay. Grows out of
 `examples/01_sphere`.
 
+Scope: this is a library example. Keep it small (~1000 LoC), basic but fun for
+~15 minutes -- dodge and collect on a sphere, not an open-world runner.
+
