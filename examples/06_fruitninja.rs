@@ -684,7 +684,7 @@ fn spawn_floating_text(
         DespawnOnExit(GameState::Playing),
         Text::new(text.into()),
         TextFont {
-            font_size: size,
+            font_size: FontSize::Px(size),
             ..default()
         },
         TextColor(color),
@@ -741,7 +741,7 @@ fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle 
     (
         Text::new(text.into()),
         TextFont {
-            font_size: size,
+            font_size: FontSize::Px(size),
             ..default()
         },
         TextColor(color),
@@ -823,7 +823,7 @@ fn spawn_hud(mut commands: Commands) {
         DespawnOnExit(GameState::Playing),
         Text::new(score_label(0)),
         TextFont {
-            font_size: 40.0,
+            font_size: FontSize::Px(40.0),
             ..default()
         },
         TextColor(Color::srgb(0.95, 0.85, 0.25)),
@@ -841,7 +841,7 @@ fn spawn_hud(mut commands: Commands) {
         DespawnOnExit(GameState::Playing),
         Text::new(""),
         TextFont {
-            font_size: 34.0,
+            font_size: FontSize::Px(34.0),
             ..default()
         },
         TextColor(Color::srgba(1.0, 0.55, 0.1, 0.0)),
