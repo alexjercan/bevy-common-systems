@@ -1,6 +1,6 @@
 # Fruit ninja: floating +N score popup
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: feature,example
 
@@ -47,3 +47,12 @@ that rises and fades out, giving immediate feedback for the points earned.
   (20260703-132214) reuses `spawn_floating_text` for the "+N" value and the
   "COMBO xN" banner.
 - No new dependencies.
+
+## Close-out
+
+Added the floating "+N" popup: `FloatingText` component + reusable
+`spawn_floating_text` helper + `animate_floating_text` (rise, alpha fade,
+self-despawn at end of lifetime). Wired into `slice_objects`' fruit branch via
+`world_to_viewport`. Review: 1 round APPROVE, one cosmetic anchor NIT left
+intentionally. Verified on real GPU: in-view slices produce on-screen popups
+that animate and despawn, no panic.
