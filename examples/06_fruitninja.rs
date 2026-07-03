@@ -61,6 +61,12 @@ const FRAGMENT_LIFETIME: f32 = 3.0;
 /// Maximum number of cursor points kept for the blade trail.
 const BLADE_TRAIL_LEN: usize = 16;
 
+/// How long a floating "+N" popup lives before it despawns, in seconds.
+const POPUP_LIFETIME: f32 = 0.8;
+
+/// How fast a floating popup rises up the screen, in pixels per second.
+const POPUP_RISE_SPEED: f32 = 70.0;
+
 /// Chance that a launched object is a bomb rather than a fruit.
 const BOMB_CHANCE: f64 = 0.2;
 
@@ -125,6 +131,7 @@ fn main() {
             move_fragments,
             update_score_text,
             draw_blade_trail,
+            animate_floating_text,
             giveup_on_escape,
         )
             .run_if(in_state(GameState::Playing)),
@@ -175,6 +182,19 @@ struct BladeTrail {
 /// Marker for the on-screen score HUD text.
 #[derive(Component)]
 struct ScoreText;
+
+/// A short-lived UI text that rises and fades out (a "+N" or combo popup).
+#[derive(Component)]
+struct FloatingText {
+    /// Seconds since the popup was spawned.
+    age: f32,
+    /// Total lifetime in seconds; the popup despawns once `age` reaches it.
+    lifetime: f32,
+    /// Upward screen speed in pixels per second.
+    rise_speed: f32,
+    /// Base color; its alpha is ramped down as the popup ages.
+    color: Color,
+}
 
 /// A slice-able object (fruit or bomb) flying through the scene.
 #[derive(Component)]
@@ -317,6 +337,64 @@ fn on_player_died(
 ) {
     if q_player.contains(add.entity) {
         next.set(GameState::GameOver);
+    }
+}
+
+/// Spawn a floating "+N" / combo popup at a viewport position, scoped to
+/// `Playing`. It rises and fades out via `animate_floating_text`.
+fn spawn_floating_text(
+    commands: &mut Commands,
+    viewport_pos: Vec2,
+    text: impl Into<String>,
+    size: f32,
+    color: Color,
+) {
+    commands.spawn((
+        Name::new("Floating Text"),
+        FloatingText {
+            age: 0.0,
+            lifetime: POPUP_LIFETIME,
+            rise_speed: POPUP_RISE_SPEED,
+            color,
+        },
+        DespawnOnExit(GameState::Playing),
+        Text::new(text.into()),
+        TextFont {
+            font_size: size,
+            ..default()
+        },
+        TextColor(color),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(viewport_pos.x),
+            top: Val::Px(viewport_pos.y),
+            ..default()
+        },
+    ));
+}
+
+/// Advance floating popups: rise up the screen, fade out, and despawn at the
+/// end of their lifetime.
+fn animate_floating_text(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut q_text: Query<(Entity, &mut FloatingText, &mut Node, &mut TextColor)>,
+) {
+    let dt = time.delta_secs();
+
+    for (entity, mut floating, mut node, mut text_color) in q_text.iter_mut() {
+        floating.age += dt;
+        if floating.age >= floating.lifetime {
+            commands.entity(entity).despawn();
+            continue;
+        }
+
+        if let Val::Px(top) = node.top {
+            node.top = Val::Px(top - floating.rise_speed * dt);
+        }
+
+        let alpha = 1.0 - floating.age / floating.lifetime;
+        text_color.0 = floating.color.with_alpha(alpha);
     }
 }
 
@@ -576,6 +654,19 @@ fn slice_objects(
             });
         } else {
             **score += 1;
+
+            // Pop a rising "+1" at the fruit's screen position for feedback.
+            if let Ok(viewport_pos) =
+                camera.world_to_viewport(camera_transform, transform.translation)
+            {
+                spawn_floating_text(
+                    &mut commands,
+                    viewport_pos,
+                    "+1",
+                    30.0,
+                    Color::srgb(0.95, 0.85, 0.25),
+                );
+            }
         }
     }
 }
