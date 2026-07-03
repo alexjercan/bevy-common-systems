@@ -235,6 +235,17 @@ Examples:
   `assets/sounds/` are generated placeholders (`scripts/gen-placeholder-sounds.py`),
   see `assets/sounds/README.md` and
   `docs/2026-07-03-audio-and-fruitninja-sounds.md`.
+- `07_orbit` - "Orbit Runner": a surface-dodge game on a sphere. Ride a glowing
+  marker around a planet steering with `DirectionalSphereOrbit` (A/D, arrow
+  keys, or drag), sweep up wandering orbs and dodge wandering red hazards, both
+  driven by `RandomSphereOrbit`. A `ChaseCamera` follows with `LerpSnap`
+  smoothing; a hazard deals damage through `HealthPlugin` and zero health ends
+  the run. The planet gets more crowded and faster as difficulty levels climb.
+  Same shape as `06_fruitninja`: menu/playing/game-over states, `SfxPlugin`
+  one-shots (`pickup`/`hurt`/`level_up`, sharing `menu_select`/`game_over`), and
+  a wasm/trunk showcase build. Exercises the whole `transform/*` orbit family,
+  `camera/chase` and `meth` under gameplay; grows out of `01_sphere`. See
+  `docs/2026-07-03-orbit-runner.md`.
 
 ## Workflow
 
