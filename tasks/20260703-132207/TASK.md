@@ -1,6 +1,6 @@
 # Fruit ninja: blade trail along the swipe
 
-- STATUS: OPEN
+- STATUS: IN_PROGRESS
 - PRIORITY: 100
 - TAGS: feature,example
 
@@ -12,20 +12,20 @@ slice is visible on screen. The trail fades from head (newest, opaque) to tail
 
 ## Steps
 
-- [ ] Add a `BladeTrail` resource holding a capped `VecDeque<Vec3>` of recent
+- [x] Add a `BladeTrail` resource holding a capped `VecDeque<Vec3>` of recent
       cursor world positions on the play plane (cap ~16 points). `init_resource`
       it in `main`.
-- [ ] In `slice_objects` (where `current` cursor world pos is already computed),
+- [x] In `slice_objects` (where `current` cursor world pos is already computed),
       push `current` onto `BladeTrail` and pop the front when over the cap. In
       the not-pressed branch (where `trail.previous` is cleared), also clear
       `BladeTrail` so a new swipe starts a fresh trail.
-- [ ] Add a `draw_blade_trail` system (run in `GameState::Playing`) that takes
+- [x] Add a `draw_blade_trail` system (run in `GameState::Playing`) that takes
       `Gizmos` and the `BladeTrail`, and draws connected segments with
       `gizmos.line(a, b, color)`, ramping alpha (and optionally color) from tail
       to head so the trail looks like a fading blade. Use a bright color
       (near-white / cyan).
-- [ ] Register `draw_blade_trail` in the `Playing` Update set.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Register `draw_blade_trail` in the `Playing` Update set.
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, and a real boot: swiping shows a
       fading trail that clears on release (throwaway auto-swipe if needed).
 

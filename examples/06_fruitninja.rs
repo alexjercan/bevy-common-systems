@@ -56,6 +56,9 @@ const FRAGMENT_SPEED: f32 = 5.0;
 /// How long a fragment lives before it despawns, in seconds.
 const FRAGMENT_LIFETIME: f32 = 3.0;
 
+/// Maximum number of cursor points kept for the blade trail.
+const BLADE_TRAIL_LEN: usize = 16;
+
 /// Chance that a launched object is a bomb rather than a fruit.
 const BOMB_CHANCE: f64 = 0.2;
 
@@ -96,6 +99,7 @@ fn main() {
         TimerMode::Repeating,
     )));
     app.init_resource::<CursorTrail>();
+    app.init_resource::<BladeTrail>();
 
     // Persistent scene: camera, light and the FPS status bar live for the whole
     // run, independent of game state.
@@ -118,6 +122,7 @@ fn main() {
             slice_objects,
             move_fragments,
             update_score_text,
+            draw_blade_trail,
             giveup_on_escape,
         )
             .run_if(in_state(GameState::Playing)),
@@ -156,6 +161,13 @@ struct SpawnTimer(Timer);
 struct CursorTrail {
     /// Cursor world position on the play plane last frame, if it was on screen.
     previous: Option<Vec3>,
+}
+
+/// Recent cursor world positions along the current swipe, newest last. Drawn as
+/// a fading "blade" and cleared when the button is released.
+#[derive(Resource, Default)]
+struct BladeTrail {
+    points: std::collections::VecDeque<Vec3>,
 }
 
 /// Marker for the on-screen score HUD text.
@@ -498,13 +510,16 @@ fn slice_objects(
     player: Single<Entity, With<Player>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut trail: ResMut<CursorTrail>,
+    mut blade: ResMut<BladeTrail>,
     mut score: ResMut<Score>,
     q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>)>,
 ) {
     // Releasing the button ends the swipe, so the next press starts a fresh
-    // segment instead of jumping across the screen from a stale point.
+    // segment instead of jumping across the screen from a stale point, and the
+    // blade trail is cleared so it does not linger.
     if !mouse.pressed(MouseButton::Left) {
         trail.previous = None;
+        blade.points.clear();
         return;
     }
 
@@ -512,6 +527,13 @@ fn slice_objects(
     let Some(current) = cursor_on_play_plane(&window, camera, camera_transform) else {
         return;
     };
+
+    // Record the cursor point for the blade trail, dropping the oldest once the
+    // trail is at its cap.
+    blade.points.push_back(current);
+    while blade.points.len() > BLADE_TRAIL_LEN {
+        blade.points.pop_front();
+    }
 
     // On the first frame of a press there is no previous point yet; treat the
     // segment as degenerate (a point) so a stationary click can still slice.
@@ -549,6 +571,31 @@ fn slice_objects(
         } else {
             **score += 1;
         }
+    }
+}
+
+/// Draw the current swipe as a blade trail: fading line segments from the
+/// oldest (faint) cursor point to the newest (bright).
+fn draw_blade_trail(blade: Res<BladeTrail>, mut gizmos: Gizmos) {
+    let count = blade.points.len();
+    if count < 2 {
+        return;
+    }
+
+    // Lift the trail slightly toward the camera so it draws in front of fruit.
+    let lift = Vec3::Z * 0.5;
+
+    for (i, (a, b)) in blade
+        .points
+        .iter()
+        .zip(blade.points.iter().skip(1))
+        .enumerate()
+    {
+        // t ramps 0 -> 1 from tail to head; alpha follows so the blade looks
+        // like it is trailing the cursor.
+        let t = (i + 1) as f32 / (count - 1) as f32;
+        let color = Color::srgba(0.7, 0.95, 1.0, t);
+        gizmos.line(*a + lift, *b + lift, color);
     }
 }
 
