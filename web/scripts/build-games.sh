@@ -6,12 +6,18 @@
 # iframe it. PUBLIC_PATH (default "/") makes the assets resolve under a GitHub
 # Pages subpath; it must match the gallery's PUBLIC_PATH.
 #
-# Requires the nix devshell (trunk + the wasm32 target). Run from the repo root
-# or anywhere; paths are resolved relative to this script.
+# Requires the nix devshell (trunk + the wasm32 target). Can be run from
+# anywhere (e.g. `npm run build:games`, which invokes it from web/); it cd's to
+# the repo root itself.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 public_path="${PUBLIC_PATH:-/}"
+
+# trunk resolves its target / cargo project relative to the current directory
+# and fails ("Unable to find any Trunk configuration") if run from a subdir like
+# web/, so always drive it from the repo root.
+cd "$repo_root"
 # Games build into a staging dir; webpack's CopyPlugin copies it into dist/games
 # (webpack owns dist/ and cleans it, so the games cannot live directly there).
 out_root="${OUT_ROOT:-$repo_root/web/build/games}"
@@ -26,12 +32,13 @@ for entry in "${games[@]}"; do
   echo ">> building $example"
   # Games are served from "<public_path>games/<example>/".
   game_public_path="${public_path%/}/games/$example/"
+  # Path is relative to repo_root (we cd'd there above).
   trunk build \
     --release \
     --example "$example" \
     --public-url "$game_public_path" \
     --dist "$out_root/$example" \
-    "$repo_root/$html_dir/index.html"
+    "$html_dir/index.html"
 done
 
 echo ">> games built into $out_root"
