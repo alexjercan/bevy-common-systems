@@ -1,14 +1,17 @@
 //! A tiny "fruit ninja" style game built entirely from procedural shapes.
 //!
-//! Octahedron "fruits" are launched up in a parabolic arc from below the view.
-//! Hold the Left Mouse Button and swipe the cursor across a fruit to slice it:
-//! the mesh is cut into flying fragments by `ExplodeMeshPlugin` and your score
-//! goes up. Fruit you miss falls back off the bottom of the screen.
+//! Boot into a main menu, click to play. Octahedron "fruits" are launched up in
+//! a parabolic arc from below the view; hold the Left Mouse Button and swipe the
+//! cursor across one to slice it into flying fragments (via `ExplodeMeshPlugin`)
+//! and score a point. Dark "bombs" are mixed in: slicing a bomb deals lethal
+//! damage to the player through the crate's health system and ends the run at
+//! the game-over screen. Fruit you miss just falls off the bottom.
 //!
 //! Everything here is plain shapes and hand-rolled kinematics: no assets, no
 //! physics engine. It reuses the crate's `TriangleMeshBuilder` (meshes),
 //! `ExplodeMeshPlugin` (the slice effect), `TempEntityPlugin` (fragment
-//! cleanup) and `StatusBarPlugin` (the score / FPS overlay).
+//! cleanup), `HealthPlugin` (the lose condition) and `StatusBarPlugin` (the FPS
+//! overlay); the menu / states use Bevy's own state machine.
 
 use avian3d::prelude::*;
 use bevy::prelude::*;
@@ -53,6 +56,14 @@ const FRAGMENT_SPEED: f32 = 5.0;
 /// How long a fragment lives before it despawns, in seconds.
 const FRAGMENT_LIFETIME: f32 = 3.0;
 
+/// Chance that a launched object is a bomb rather than a fruit.
+const BOMB_CHANCE: f64 = 0.2;
+
+/// Player health at the start of a run. Slicing a bomb deals lethal damage,
+/// so this is effectively a single life; it is still a real `Health` value so
+/// the example drives the crate's health system end to end.
+const PLAYER_HEALTH: f32 = 1.0;
+
 fn main() {
     let _ = Cli::parse();
     let mut app = App::new();
@@ -75,6 +86,7 @@ fn main() {
     app.add_plugins(ExplodeMeshPlugin);
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
+    app.add_plugins(HealthPlugin);
 
     app.init_state::<GameState>();
 
@@ -93,16 +105,20 @@ fn main() {
     app.add_systems(OnEnter(GameState::Menu), spawn_menu);
     app.add_systems(Update, menu_click.run_if(in_state(GameState::Menu)));
 
-    // Playing: reset the run, show the HUD, then run the gameplay loop.
-    app.add_systems(OnEnter(GameState::Playing), (start_game, spawn_hud));
+    // Playing: reset the run, spawn the player + HUD, then run the gameplay loop.
+    app.add_systems(
+        OnEnter(GameState::Playing),
+        (start_game, spawn_player, spawn_hud),
+    );
     app.add_systems(
         Update,
         (
-            spawn_fruit,
-            move_fruit,
-            slice_fruit,
+            spawn_projectile,
+            move_projectiles,
+            slice_objects,
             move_fragments,
             update_score_text,
+            update_health_text,
             giveup_on_escape,
         )
             .run_if(in_state(GameState::Playing)),
@@ -113,6 +129,7 @@ fn main() {
     app.add_systems(Update, gameover_click.run_if(in_state(GameState::GameOver)));
 
     app.add_observer(on_fragments_spawned);
+    app.add_observer(on_player_died);
 
     app.run();
 }
@@ -146,16 +163,29 @@ struct CursorTrail {
 #[derive(Component)]
 struct ScoreText;
 
-/// A slice-able fruit flying through the scene.
+/// Marker for the on-screen health HUD text.
 #[derive(Component)]
-struct Fruit {
+struct HealthText;
+
+/// A slice-able object (fruit or bomb) flying through the scene.
+#[derive(Component)]
+struct Sliceable {
     /// Slice hit radius in world units.
     radius: f32,
 }
 
-/// Velocity carried by a flying fruit.
+/// Marker for a bomb. Slicing one is an instant loss; a plain `Sliceable`
+/// without this marker is fruit.
 #[derive(Component)]
-struct FruitMotion {
+struct Bomb;
+
+/// Marker for the player entity that owns the run's `Health`.
+#[derive(Component)]
+struct Player;
+
+/// Velocity carried by a flying projectile (fruit or bomb).
+#[derive(Component)]
+struct Projectile {
     velocity: Vec3,
 }
 
@@ -165,11 +195,12 @@ struct FragmentMotion {
     velocity: Vec3,
 }
 
-/// Shared render assets so fruit and fragments are cheap to spawn.
+/// Shared render assets so fruit, bombs and fragments are cheap to spawn.
 #[derive(Resource)]
 struct FruitAssets {
     mesh: Handle<Mesh>,
     materials: Vec<Handle<StandardMaterial>>,
+    bomb_material: Handle<StandardMaterial>,
 }
 
 fn setup(
@@ -190,7 +221,7 @@ fn setup(
         Color::srgb(0.55, 0.35, 0.80),
         Color::srgb(0.95, 0.85, 0.25),
     ];
-    let materials = palette
+    let fruit_materials = palette
         .into_iter()
         .map(|color| {
             materials.add(StandardMaterial {
@@ -200,7 +231,19 @@ fn setup(
         })
         .collect();
 
-    commands.insert_resource(FruitAssets { mesh, materials });
+    // Bombs reuse the same mesh in a dark, unmistakable material.
+    let bomb_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.08, 0.08, 0.10),
+        perceptual_roughness: 0.3,
+        metallic: 0.8,
+        ..default()
+    });
+
+    commands.insert_resource(FruitAssets {
+        mesh,
+        materials: fruit_materials,
+        bomb_material,
+    });
 
     // Static camera looking straight down the -Z axis at the play plane.
     commands.spawn((
@@ -244,6 +287,47 @@ fn update_score_text(score: Res<Score>, mut q_text: Query<&mut Text, With<ScoreT
 
     for mut text in q_text.iter_mut() {
         **text = score_label(score.0);
+    }
+}
+
+/// Text shown by the health HUD: one heart per remaining health point.
+fn health_label(health: &Health) -> String {
+    let hearts = health.current.ceil().max(0.0) as usize;
+    format!("Health: {}", "<3 ".repeat(hearts).trim_end())
+}
+
+/// Refresh the health HUD text when the player's health changes.
+fn update_health_text(
+    q_player: Query<&Health, (With<Player>, Changed<Health>)>,
+    mut q_text: Query<&mut Text, With<HealthText>>,
+) {
+    let Ok(health) = q_player.single() else {
+        return;
+    };
+
+    for mut text in q_text.iter_mut() {
+        **text = health_label(health);
+    }
+}
+
+/// Spawn the player entity that owns the run's health, scoped to `Playing`.
+fn spawn_player(mut commands: Commands) {
+    commands.spawn((
+        Name::new("Player"),
+        Player,
+        Health::new(PLAYER_HEALTH),
+        DespawnOnExit(GameState::Playing),
+    ));
+}
+
+/// When the player's health hits zero (a sliced bomb), end the run.
+fn on_player_died(
+    add: On<Add, HealthZeroMarker>,
+    q_player: Query<(), With<Player>>,
+    mut next: ResMut<NextState<GameState>>,
+) {
+    if q_player.contains(add.entity) {
+        next.set(GameState::GameOver);
     }
 }
 
@@ -309,7 +393,7 @@ fn start_game(
     trail.previous = None;
 }
 
-/// Spawn the in-game HUD (score text), scoped to the `Playing` state.
+/// Spawn the in-game HUD (score + health), scoped to the `Playing` state.
 fn spawn_hud(mut commands: Commands) {
     commands.spawn((
         Name::new("Score HUD"),
@@ -325,6 +409,24 @@ fn spawn_hud(mut commands: Commands) {
             position_type: PositionType::Absolute,
             top: Val::Px(16.0),
             left: Val::Px(16.0),
+            ..default()
+        },
+    ));
+
+    commands.spawn((
+        Name::new("Health HUD"),
+        HealthText,
+        DespawnOnExit(GameState::Playing),
+        Text::new(health_label(&Health::new(PLAYER_HEALTH))),
+        TextFont {
+            font_size: 40.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.9, 0.25, 0.25)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(16.0),
+            right: Val::Px(16.0),
             ..default()
         },
     ));
@@ -359,8 +461,8 @@ fn gameover_click(mouse: Res<ButtonInput<MouseButton>>, mut next: ResMut<NextSta
     }
 }
 
-/// Launch a fresh fruit from below the view on a repeating timer.
-fn spawn_fruit(
+/// Launch a fresh fruit or bomb from below the view on a repeating timer.
+fn spawn_projectile(
     mut commands: Commands,
     time: Res<Time>,
     mut timer: ResMut<SpawnTimer>,
@@ -373,38 +475,47 @@ fn spawn_fruit(
     let mut rng = rand::rng();
 
     // Spawn somewhere along the bottom and aim up-and-inward so the arc peaks
-    // in view. Fruit near the edges gets nudged back toward the center.
+    // in view. Objects near the edges get nudged back toward the center.
     let x = rng.random_range(-6.0..6.0);
     let vx = rng.random_range(-2.5..2.5) - x * 0.25;
     let vy = rng.random_range(17.0..21.0);
 
-    let material = assets.materials[rng.random_range(0..assets.materials.len())].clone();
+    let is_bomb = rng.random_bool(BOMB_CHANCE);
+    let material = if is_bomb {
+        assets.bomb_material.clone()
+    } else {
+        assets.materials[rng.random_range(0..assets.materials.len())].clone()
+    };
 
-    commands.spawn((
-        Name::new("Fruit"),
-        Fruit {
+    let mut object = commands.spawn((
+        Name::new(if is_bomb { "Bomb" } else { "Fruit" }),
+        Sliceable {
             radius: FRUIT_RADIUS,
         },
         DespawnOnExit(GameState::Playing),
         Mesh3d(assets.mesh.clone()),
         MeshMaterial3d(material),
         Transform::from_xyz(x, SPAWN_Y, PLAY_Z),
-        FruitMotion {
+        Projectile {
             velocity: Vec3::new(vx, vy, 0.0),
         },
     ));
+
+    if is_bomb {
+        object.insert(Bomb);
+    }
 }
 
-/// Advance fruit along their arc under gravity, tumble them, and despawn any
-/// that fall past the bottom (a miss).
-fn move_fruit(
+/// Advance projectiles along their arc under gravity, tumble them, and despawn
+/// any that fall past the bottom (a miss; harmless for both fruit and bombs).
+fn move_projectiles(
     mut commands: Commands,
     time: Res<Time>,
-    mut q_fruit: Query<(Entity, &mut Transform, &mut FruitMotion)>,
+    mut q_projectiles: Query<(Entity, &mut Transform, &mut Projectile)>,
 ) {
     let dt = time.delta_secs();
 
-    for (entity, mut transform, mut motion) in q_fruit.iter_mut() {
+    for (entity, mut transform, mut motion) in q_projectiles.iter_mut() {
         motion.velocity.y -= GRAVITY * dt;
         transform.translation += motion.velocity * dt;
         transform.rotate_local_x(dt * 1.5);
@@ -416,21 +527,22 @@ fn move_fruit(
     }
 }
 
-/// Slice any fruit the swipe segment passes through this frame.
+/// Slice any object (fruit or bomb) the swipe segment passes through this frame.
 ///
 /// Cursor tracking and slicing live in one system on purpose: the swipe is the
 /// segment from last frame's cursor to this frame's, so the read (previous),
 /// the test, and the store (current) must happen in a fixed order. Splitting
 /// them into two `Update` systems that share `CursorTrail` would let the store
 /// race ahead of the read and collapse the segment to a point.
-fn slice_fruit(
+fn slice_objects(
     mut commands: Commands,
     window: Single<&Window>,
     camera: Single<(&Camera, &GlobalTransform)>,
+    player: Single<Entity, With<Player>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut trail: ResMut<CursorTrail>,
     mut score: ResMut<Score>,
-    q_fruit: Query<(Entity, &Transform, &Fruit)>,
+    q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>)>,
 ) {
     // Releasing the button ends the swipe, so the next press starts a fresh
     // segment instead of jumping across the screen from a stale point.
@@ -449,22 +561,35 @@ fn slice_fruit(
     let previous = trail.previous.unwrap_or(current);
     trail.previous = Some(current);
 
-    for (entity, transform, fruit) in q_fruit.iter() {
-        if segment_hits_circle(
+    for (entity, transform, sliceable, is_bomb) in q_sliceable.iter() {
+        if !segment_hits_circle(
             previous.truncate(),
             current.truncate(),
             transform.translation.truncate(),
-            fruit.radius,
+            sliceable.radius,
         ) {
-            // Drop the Fruit marker so it cannot be sliced twice while its
-            // fragments are being generated, then trigger the explosion.
-            commands
-                .entity(entity)
-                .remove::<Fruit>()
-                .remove::<FruitMotion>()
-                .insert(ExplodeMesh {
-                    fragment_count: FRAGMENT_COUNT,
-                });
+            continue;
+        }
+
+        // Drop the Sliceable marker so the same object cannot be sliced twice
+        // while its fragments are being generated, then trigger the explosion.
+        commands
+            .entity(entity)
+            .remove::<Sliceable>()
+            .remove::<Projectile>()
+            .insert(ExplodeMesh {
+                fragment_count: FRAGMENT_COUNT,
+            });
+
+        if is_bomb {
+            // Slicing a bomb is an instant loss: deal lethal damage to the
+            // player, which trips HealthZeroMarker -> GameOver.
+            commands.trigger(HealthApplyDamage {
+                entity: *player,
+                source: Some(entity),
+                amount: PLAYER_HEALTH,
+            });
+        } else {
             **score += 1;
         }
     }
