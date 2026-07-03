@@ -12,9 +12,13 @@
 //! ## Usage
 //!
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::prelude::*;
+//! # fn demo(mut commands: Commands) {
 //! commands.spawn((
 //!     DespawnEntity, // entity will be despawned immediately
 //! ));
+//! # }
 //! ```
 
 use bevy::prelude::*;

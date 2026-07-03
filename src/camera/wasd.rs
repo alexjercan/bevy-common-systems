@@ -15,15 +15,21 @@
 //! To use the WASD camera:
 //!
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::prelude::*;
+//! # fn setup(mut commands: Commands) {
 //! commands.spawn((
 //!     Camera3d::default(),
 //!     WASDCamera::default(),
 //! ));
+//! # }
 //!
 //! // In your input system:
+//! # fn input_system(input: &mut WASDCameraInput, mouse_delta: Vec2, movement_axis: Vec2, vertical_axis: f32) {
 //! input.pan = mouse_delta;
 //! input.wasd = movement_axis;
 //! input.vertical = vertical_axis;
+//! # }
 //! ```
 //!
 //! The plugin will handle smoothing and transform updates automatically.

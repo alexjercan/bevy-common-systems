@@ -9,7 +9,7 @@
 //! This allows you to import everything you need with a single line:
 //!
 //! ```rust
-//! use bevy_common_systems::heleprs::prelude::*;
+//! use bevy_common_systems::helpers::prelude::*;
 //! ```
 
 pub mod despawn;

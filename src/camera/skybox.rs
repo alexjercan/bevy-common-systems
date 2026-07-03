@@ -6,19 +6,21 @@
 //! The cubemap image must contain 6 square images stacked vertically in a
 //! single file. The layout should look like this:
 //!
-//!     +----------------+
-//!     |     face 0     |
-//!     +----------------+
-//!     |     face 1     |
-//!     +----------------+
-//!     |     face 2     |
-//!     +----------------+
-//!     |     face 3     |
-//!     +----------------+
-//!     |     face 4     |
-//!     +----------------+
-//!     |     face 5     |
-//!     +----------------+
+//! ```text
+//! +----------------+
+//! |     face 0     |
+//! +----------------+
+//! |     face 1     |
+//! +----------------+
+//! |     face 2     |
+//! +----------------+
+//! |     face 3     |
+//! +----------------+
+//! |     face 4     |
+//! +----------------+
+//! |     face 5     |
+//! +----------------+
+//! ```
 //!
 //! The image must have a height that is exactly 6 times its width. The plugin
 //! will reinterpret this stacked image as a 6 layer 2D texture array and then
@@ -28,6 +30,9 @@
 //! To use the skybox:
 //!
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::prelude::*;
+//! # fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 //! commands.spawn((
 //!     Camera3d::default(),
 //!     SkyboxConfig {
@@ -35,6 +40,7 @@
 //!         brightness: 1000.0,
 //!     }
 //! ));
+//! # }
 //! ```
 //!
 //! The plugin will automatically configure the skybox when the component

@@ -9,16 +9,20 @@
 //!
 //! Usage:
 //! ```rust
+//! # use bevy::prelude::*;
+//! # use bevy_common_systems::prelude::*;
+//! # fn demo(mut commands: Commands, entity: Entity, player_entity: Entity) {
 //! commands.spawn((
 //!     Health::new(100.0),
 //! ));
 //!
 //! // Apply damage from some system
 //! commands.trigger(HealthApplyDamage {
-//!     target: entity,
+//!     entity,
 //!     source: Some(player_entity),
 //!     amount: 25.0,
 //! });
+//! # }
 //! ```
 
 use bevy::prelude::*;
