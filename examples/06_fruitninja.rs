@@ -187,6 +187,7 @@ fn main() {
             resolve_slice_pop,
             move_fragments,
             update_score_text,
+            update_combo_text,
             draw_blade_trail,
             animate_floating_text,
             fade_red_flash,
@@ -389,6 +390,10 @@ fn resolve_slice_pop(
 /// Marker for the on-screen score HUD text.
 #[derive(Component)]
 struct ScoreText;
+
+/// Marker for the live combo HUD text.
+#[derive(Component)]
+struct ComboText;
 
 /// A short-lived UI text that rises and fades out (a "+N" or combo popup).
 #[derive(Component)]
@@ -810,6 +815,41 @@ fn spawn_hud(mut commands: Commands) {
             ..default()
         },
     ));
+
+    commands.spawn((
+        Name::new("Combo HUD"),
+        ComboText,
+        DespawnOnExit(GameState::Playing),
+        Text::new(""),
+        TextFont {
+            font_size: 34.0,
+            ..default()
+        },
+        TextColor(Color::srgba(1.0, 0.55, 0.1, 0.0)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(60.0),
+            left: Val::Px(16.0),
+            ..default()
+        },
+    ));
+}
+
+/// Show the live combo count while a combo is running, fading with its window.
+fn update_combo_text(
+    combo: Res<Combo>,
+    mut q_text: Query<(&mut Text, &mut TextColor), With<ComboText>>,
+) {
+    for (mut text, mut color) in q_text.iter_mut() {
+        if combo.count >= 2 {
+            **text = format!("Combo x{}", combo.count);
+            // Fade with the remaining window so it visibly cools down.
+            let alpha = (combo.timer / COMBO_WINDOW).clamp(0.2, 1.0);
+            color.0 = Color::srgba(1.0, 0.55, 0.1, alpha);
+        } else {
+            text.clear();
+        }
+    }
 }
 
 /// Give up the current run with Escape (a stand-in lose trigger until bombs
