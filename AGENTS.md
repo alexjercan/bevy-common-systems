@@ -69,7 +69,8 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     destruction effects.
 - `meth/` - math helpers (the name is an intentional pun, do not "fix" it)
   - `lerp` - `LerpSnap` trait: exponential lerp with snap-to-target for
-    `f32` and `Vec3`; used by every smoothing system in the crate.
+    `f32` and `Vec3`; used by the chase camera and the sphere orbit
+    systems for smoothing.
   - `sphere` - spherical coordinate conversions and `slerp`.
 - `modding/`
   - `events` - a generic, serde-friendly event bus aimed at modding and
@@ -104,9 +105,11 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
 The modules are deliberately uniform. Follow these patterns when adding or
 changing code; consistency is the crate's main defense against bloat.
 
-- One concern per module, one plugin per concern, named `*Plugin`. Systems
-  that need ordering hooks get a public `SystemSet` enum named `*Systems`
-  (a few older ones use `*PluginSystems`).
+- One concern per module. Modules that add runtime behavior ship one
+  plugin per concern, named `*Plugin`; pure utility modules (meth,
+  mesh/builder) export plain types and functions instead. Systems that
+  need ordering hooks get a public `SystemSet` enum named `*Systems`
+  (a few use `*PluginSystems`).
 - Config / Input / Output / State component split:
   - a public config component named after the feature (`WASDCamera`,
     `ChaseCamera`, `PDController`, `SphereOrbit`, ...);
@@ -115,16 +118,19 @@ changing code; consistency is the crate's main defense against bloat.
     code reads;
   - private `*State` components the plugin manages internally - keep them
     out of the prelude.
-- Every module has a `pub mod prelude` re-exporting its public API. Parent
-  modules aggregate child preludes; `crate::prelude` aggregates everything.
-  Users import `use bevy_common_systems::prelude::*;`.
+- Modules expose their public API through preludes: most files define
+  `pub mod prelude`, parent modules aggregate child preludes (a few leaf
+  files are re-exported directly by their parent), and `crate::prelude`
+  aggregates everything. Users import
+  `use bevy_common_systems::prelude::*;`.
 - Reactive setup via observers: plugins register `add_observer` for
   `On<Add, X>` / `On<Insert, X>` to attach internal components, instead of
   startup systems. `#[require(...)]` is used where a component only makes
   sense with companions.
 - Derive `Reflect` on components (plus `Deref`/`DerefMut` for newtypes).
-- Module-level `//!` doc comment with a short usage snippet at the top of
-  every file; doc comments on every public item.
+- Most files carry a module-level `//!` doc comment with a short usage
+  snippet, and public items carry doc comments; match that standard in
+  new code even though a few existing files fall short.
 - Logging: `debug!("XPlugin: build")` in `Plugin::build`, `trace!` in
   systems and observers.
 - Formatting is enforced by rustfmt (`imports_granularity = "Crate"`,
