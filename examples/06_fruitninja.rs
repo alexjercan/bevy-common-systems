@@ -113,9 +113,9 @@ fn main() {
     app.add_systems(
         Update,
         (
-            spawn_fruit,
+            spawn_projectile,
             move_projectiles,
-            slice_fruit,
+            slice_objects,
             move_fragments,
             update_score_text,
             update_health_text,
@@ -462,7 +462,7 @@ fn gameover_click(mouse: Res<ButtonInput<MouseButton>>, mut next: ResMut<NextSta
 }
 
 /// Launch a fresh fruit or bomb from below the view on a repeating timer.
-fn spawn_fruit(
+fn spawn_projectile(
     mut commands: Commands,
     time: Res<Time>,
     mut timer: ResMut<SpawnTimer>,
@@ -527,14 +527,14 @@ fn move_projectiles(
     }
 }
 
-/// Slice any fruit the swipe segment passes through this frame.
+/// Slice any object (fruit or bomb) the swipe segment passes through this frame.
 ///
 /// Cursor tracking and slicing live in one system on purpose: the swipe is the
 /// segment from last frame's cursor to this frame's, so the read (previous),
 /// the test, and the store (current) must happen in a fixed order. Splitting
 /// them into two `Update` systems that share `CursorTrail` would let the store
 /// race ahead of the read and collapse the segment to a point.
-fn slice_fruit(
+fn slice_objects(
     mut commands: Commands,
     window: Single<&Window>,
     camera: Single<(&Camera, &GlobalTransform)>,

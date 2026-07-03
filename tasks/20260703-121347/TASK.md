@@ -64,3 +64,16 @@ demonstrates the crate's health system end to end.
   in `slice_fruit` is looked up via a `Single<Entity, With<Player>>` or a
   stored resource.
 - No new dependencies.
+
+## Close-out
+
+Added bombs (dark octahedra, ~20% of launches) via a shared
+`Sliceable { radius }` + `Projectile { velocity }` model with a `Bomb` marker;
+`spawn_projectile`/`move_projectiles`/`slice_objects` replace the fruit-only
+names. Slicing a bomb triggers a lethal `HealthApplyDamage` on the run's
+`Player` (`Health::new(1.0)`, spawned per run, state-scoped); `HealthPlugin`
+adds `HealthZeroMarker`, and `on_player_died` (`On<Add, HealthZeroMarker>`
+filtered to the player) sets `GameState::GameOver`. HUD gained a health line.
+AGENTS.md + module doc updated. Review: 1 round APPROVE; R1.1 naming NIT fixed
+in-round, R1.2 (bomb burst cleared on loss) accepted. Verified on real GPU:
+Playing -> sliced bomb -> GameOver, no panic.
