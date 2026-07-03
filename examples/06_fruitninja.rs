@@ -10,8 +10,6 @@
 //! `ExplodeMeshPlugin` (the slice effect), `TempEntityPlugin` (fragment
 //! cleanup) and `StatusBarPlugin` (the score / FPS overlay).
 
-use std::sync::Arc;
-
 use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_common_systems::prelude::*;
@@ -88,14 +86,20 @@ fn main() {
     app.add_systems(Startup, setup);
     app.add_systems(
         Update,
-        (spawn_fruit, move_fruit, slice_fruit, move_fragments),
+        (
+            spawn_fruit,
+            move_fruit,
+            slice_fruit,
+            move_fragments,
+            update_score_text,
+        ),
     );
     app.add_observer(on_fragments_spawned);
 
     app.run();
 }
 
-/// Running number of fruits sliced. Shown in the status bar.
+/// Running number of fruits sliced. Shown in the score HUD.
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
 
@@ -110,6 +114,10 @@ struct CursorTrail {
     /// Cursor world position on the play plane last frame, if it was on screen.
     previous: Option<Vec3>,
 }
+
+/// Marker for the on-screen score HUD text.
+#[derive(Component)]
+struct ScoreText;
 
 /// A slice-able fruit flying through the scene.
 #[derive(Component)]
@@ -183,20 +191,27 @@ fn setup(
         GlobalTransform::default(),
     ));
 
-    // Status bar: score plus FPS.
-    commands.spawn((status_bar(StatusBarRootConfig::default()),));
-
-    commands.spawn(status_bar_item(StatusBarItemConfig {
-        icon: None,
-        value_fn: |world: &World| {
-            world
-                .get_resource::<Score>()
-                .map(|score| Arc::new(score.0) as Arc<dyn StatusValue>)
+    // On-screen score HUD: a large text element in the top-left corner. The
+    // status bar below carries FPS only, so the score has a single home.
+    commands.spawn((
+        Name::new("Score HUD"),
+        ScoreText,
+        Text::new(score_label(0)),
+        TextFont {
+            font_size: 40.0,
+            ..default()
         },
-        color_fn: |_| Some(Color::srgb(0.95, 0.85, 0.25)),
-        prefix: "score ".to_string(),
-        suffix: "".to_string(),
-    }));
+        TextColor(Color::srgb(0.95, 0.85, 0.25)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(16.0),
+            left: Val::Px(16.0),
+            ..default()
+        },
+    ));
+
+    // Status bar: FPS only (the score now lives in the HUD above).
+    commands.spawn((status_bar(StatusBarRootConfig::default()),));
 
     commands.spawn((status_bar_item(StatusBarItemConfig {
         icon: None,
@@ -205,6 +220,22 @@ fn setup(
         prefix: "".to_string(),
         suffix: "fps".to_string(),
     }),));
+}
+
+/// Text shown by the score HUD for a given score.
+fn score_label(score: usize) -> String {
+    format!("Score: {score}")
+}
+
+/// Refresh the score HUD text whenever the score changes.
+fn update_score_text(score: Res<Score>, mut q_text: Query<&mut Text, With<ScoreText>>) {
+    if !score.is_changed() {
+        return;
+    }
+
+    for mut text in q_text.iter_mut() {
+        **text = score_label(score.0);
+    }
 }
 
 /// Launch a fresh fruit from below the view on a repeating timer.
