@@ -1,6 +1,6 @@
 # Ship game audio assets into the wasm web build so sounds load
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: feature,web,wasm,audio
 
