@@ -3,9 +3,12 @@
 //! Boot into a main menu, click to play. Octahedron "fruits" are launched up in
 //! a parabolic arc from below the view; hold the Left Mouse Button and swipe the
 //! cursor across one to slice it into flying fragments (via `ExplodeMeshPlugin`)
-//! and score a point. Dark "bombs" are mixed in: slicing a bomb deals lethal
-//! damage to the player through the crate's health system and ends the run at
-//! the game-over screen. Fruit you miss just falls off the bottom.
+//! and score a point. A bright blade trail follows the swipe, and each slice
+//! pops a rising "+N". Slicing several fruit in one continuous swipe builds a
+//! combo: the Nth fruit is worth N points and a "COMBO xN" banner flashes. Dark
+//! "bombs" are mixed in: slicing a bomb deals lethal damage to the player
+//! through the crate's health system and ends the run at the game-over screen.
+//! Fruit you miss just falls off the bottom.
 //!
 //! Everything here is plain shapes and hand-rolled kinematics: no assets, no
 //! physics engine. It reuses the crate's `TriangleMeshBuilder` (meshes),
@@ -108,6 +111,7 @@ fn main() {
     )));
     app.init_resource::<CursorTrail>();
     app.init_resource::<BladeTrail>();
+    app.init_resource::<Combo>();
 
     // Persistent scene: camera, light and the FPS status bar live for the whole
     // run, independent of game state.
@@ -177,6 +181,20 @@ struct CursorTrail {
 #[derive(Resource, Default)]
 struct BladeTrail {
     points: VecDeque<Vec3>,
+}
+
+/// Number of fruits sliced so far in the current continuous swipe. Each fruit
+/// scores its combo index (1, 2, 3, ...); releasing the button resets it.
+#[derive(Resource, Default)]
+struct Combo {
+    count: usize,
+}
+
+/// Advance the combo for one more sliced fruit and return the points it earns:
+/// the new combo count, so the k-th fruit in a swipe is worth k points.
+fn advance_combo(combo: &mut Combo) -> usize {
+    combo.count += 1;
+    combo.count
 }
 
 /// Marker for the on-screen score HUD text.
@@ -455,6 +473,7 @@ fn start_game(
     mut timer: ResMut<SpawnTimer>,
     mut trail: ResMut<CursorTrail>,
     mut blade: ResMut<BladeTrail>,
+    mut combo: ResMut<Combo>,
 ) {
     score.0 = 0;
     timer.reset();
@@ -462,6 +481,7 @@ fn start_game(
     // Clear any trail left over from a swipe that ended the previous run so the
     // new run does not flash a stale blade.
     blade.points.clear();
+    combo.count = 0;
 }
 
 /// Spawn the in-game HUD (score), scoped to the `Playing` state.
@@ -595,15 +615,17 @@ fn slice_objects(
     mouse: Res<ButtonInput<MouseButton>>,
     mut trail: ResMut<CursorTrail>,
     mut blade: ResMut<BladeTrail>,
+    mut combo: ResMut<Combo>,
     mut score: ResMut<Score>,
     q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>)>,
 ) {
     // Releasing the button ends the swipe, so the next press starts a fresh
-    // segment instead of jumping across the screen from a stale point, and the
-    // blade trail is cleared so it does not linger.
+    // segment instead of jumping across the screen from a stale point, the
+    // blade trail is cleared so it does not linger, and the combo resets.
     if !mouse.pressed(MouseButton::Left) {
         trail.previous = None;
         blade.points.clear();
+        combo.count = 0;
         return;
     }
 
@@ -653,19 +675,35 @@ fn slice_objects(
                 amount: PLAYER_HEALTH,
             });
         } else {
-            **score += 1;
+            // Each fruit in one continuous swipe is worth one more point than
+            // the last (1, 2, 3, ...); the button release resets the combo.
+            let points = advance_combo(&mut combo);
+            **score += points;
 
-            // Pop a rising "+1" at the fruit's screen position for feedback.
             if let Ok(viewport_pos) =
                 camera.world_to_viewport(camera_transform, transform.translation)
             {
+                // The "+N" grows a little with the combo for extra punch.
+                let size = (30.0 + (points as f32 - 1.0) * 5.0).min(60.0);
                 spawn_floating_text(
                     &mut commands,
                     viewport_pos,
-                    "+1",
-                    30.0,
+                    format!("+{points}"),
+                    size,
                     Color::srgb(0.95, 0.85, 0.25),
                 );
+
+                // A multi-fruit swipe reads as special: a flashy combo banner
+                // just above the slice.
+                if combo.count >= 2 {
+                    spawn_floating_text(
+                        &mut commands,
+                        viewport_pos - Vec2::Y * 44.0,
+                        format!("COMBO x{}", combo.count),
+                        48.0,
+                        Color::srgb(1.0, 0.55, 0.1),
+                    );
+                }
             }
         }
     }
@@ -850,5 +888,25 @@ mod tests {
             Vec2::ZERO,
             1.0
         ));
+    }
+
+    #[test]
+    fn combo_escalates_within_a_swipe() {
+        // The k-th fruit in one swipe earns k points: 1, 2, 3, ...
+        let mut combo = Combo::default();
+        assert_eq!(advance_combo(&mut combo), 1);
+        assert_eq!(advance_combo(&mut combo), 2);
+        assert_eq!(advance_combo(&mut combo), 3);
+        assert_eq!(combo.count, 3);
+    }
+
+    #[test]
+    fn combo_resets_between_swipes() {
+        // Releasing the button (count = 0) starts the next swipe fresh at +1.
+        let mut combo = Combo::default();
+        advance_combo(&mut combo);
+        advance_combo(&mut combo);
+        combo.count = 0; // release
+        assert_eq!(advance_combo(&mut combo), 1);
     }
 }
