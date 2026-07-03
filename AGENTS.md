@@ -216,9 +216,11 @@ Examples:
 - `04_status_item` - status bar UI with FPS and custom shell-command items.
 - `05_explode` - the mesh slicer end to end: press Space to slice a mesh
   into `ExplodeFragments` that fly apart and auto-despawn.
-- `06_fruitninja` - a fruit-ninja style game from plain shapes: octahedron
-  fruit arc up from below, hold Left Mouse Button and swipe to slice them
-  into exploding fragments; score shown in the status bar.
+- `06_fruitninja` - a fruit-ninja style game from plain shapes: boot into a
+  main menu, then octahedron fruit arc up from below; hold Left Mouse Button
+  and swipe to slice them into exploding fragments for score. Dark bombs are
+  mixed in -- slicing one deals lethal damage via `HealthPlugin` and ends the
+  run at a game-over screen. Uses Bevy states for menu/playing/game-over.
 
 ## Workflow
 

@@ -19,28 +19,28 @@ demonstrates the crate's health system end to end.
 
 ## Steps
 
-- [ ] Add `HealthPlugin` to the app. On `OnEnter(GameState::Playing)`, spawn a
+- [x] Add `HealthPlugin` to the app. On `OnEnter(GameState::Playing)`, spawn a
       `Player` entity carrying `Health::new(1.0)` (state-scoped to `Playing`).
-- [ ] Add a `Bomb` component and a distinct look: reuse the octahedron mesh but
+- [x] Add a `Bomb` component and a distinct look: reuse the octahedron mesh but
       a dark material (near-black / dark red), or build a small cube via
       `TriangleMeshBuilder`; keep it centered on the origin so it can still be
       sliced/exploded. Give bombs a slightly different scale or color so they
       are unmistakable.
-- [ ] In `spawn_fruit` (or a shared spawner), spawn a bomb instead of a fruit
+- [x] In `spawn_fruit` (or a shared spawner), spawn a bomb instead of a fruit
       with some probability (e.g. ~20%). Bombs arc and tumble like fruit and
       are despawned when missed (no penalty).
-- [ ] In `slice_fruit`, detect slicing a `Bomb` the same way as a fruit
+- [x] In `slice_fruit`, detect slicing a `Bomb` the same way as a fruit
       (segment vs radius). On a bomb hit: trigger
       `HealthApplyDamage { entity: player, source: None, amount: 1.0 }`
       (lethal) instead of scoring. Still explode the bomb mesh for feedback.
-- [ ] Observe `On<Add, HealthZeroMarker>` (on the player): transition
+- [x] Observe `On<Add, HealthZeroMarker>` (on the player): transition
       `GameState` to `GameOver`. This is the real lose trigger; keep or remove
       the temporary `Escape` stand-in from the menu task (keep as "give up").
-- [ ] HUD: show the player's health next to the score (e.g. a heart icon or
+- [x] HUD: show the player's health next to the score (e.g. a heart icon or
       "HP: 1"), updated from the `Health` component. State-scoped to `Playing`.
-- [ ] Update AGENTS.md example description for `06_fruitninja` to mention
+- [x] Update AGENTS.md example description for `06_fruitninja` to mention
       bombs / health / menu.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, and a real boot: slice fruit to
       score, slice a bomb to trigger game over. Add a headless test if a pure
       helper emerges (e.g. bomb-vs-fruit spawn selection).
