@@ -289,4 +289,61 @@ mod test {
 
         assert!(explode_mesh(&mesh, 4, MAX_ITERATIONS).is_none());
     }
+
+    /// Drive the full `ExplodeMeshPlugin` observer path in a headless app -
+    /// the same interaction `examples/05_explode.rs` triggers - without a
+    /// window or renderer. This is the integration test the graphical example
+    /// cannot be for CI.
+    #[test]
+    fn test_explode_mesh_plugin_produces_fragments() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Mesh>();
+        app.init_asset::<StandardMaterial>();
+        app.add_plugins(ExplodeMeshPlugin);
+
+        let mesh = app
+            .world_mut()
+            .resource_mut::<Assets<Mesh>>()
+            .add(TriangleMeshBuilder::new_octahedron(2).build());
+        let material = app
+            .world_mut()
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(StandardMaterial::default());
+
+        // Same component shape the example's target uses; ExplodeMesh triggers
+        // the observer, which slices and inserts ExplodeFragments.
+        let entity = app
+            .world_mut()
+            .spawn((
+                Mesh3d(mesh),
+                MeshMaterial3d(material),
+                ExplodeMesh { fragment_count: 8 },
+            ))
+            .id();
+
+        app.update();
+
+        let fragments = app
+            .world()
+            .entity(entity)
+            .get::<ExplodeFragments>()
+            .expect("ExplodeFragments should be inserted by the plugin");
+
+        assert!(
+            fragments.len() >= 2,
+            "expected fragments, got {}",
+            fragments.len()
+        );
+
+        // Every fragment must have a real mesh handle and a valid direction.
+        let meshes = app.world().resource::<Assets<Mesh>>();
+        for fragment in fragments.iter() {
+            let mesh = meshes
+                .get(&fragment.mesh)
+                .expect("fragment mesh handle must resolve");
+            assert_mesh_finite(mesh);
+            assert!(fragment.direction.is_finite());
+        }
+    }
 }
