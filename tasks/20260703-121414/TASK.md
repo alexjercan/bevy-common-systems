@@ -1,6 +1,6 @@
 # Fruit ninja: on-screen score UI
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: feature,example
 
@@ -32,3 +32,10 @@ The score updates live as fruit is sliced.
 - This task is deliberately independent and ships first; the menu task will
   later make this HUD state-scoped so it only shows while playing.
 - No new dependencies.
+
+## Close-out
+
+Shipped the score HUD (`ScoreText` + `update_score_text` + `score_label`),
+dropped the status-bar score item (FPS kept), removed the now-unused `Arc`
+import. Review: 1 round, APPROVE with one NIT (stale `Score` doc) fixed in the
+same round. Verified via real-GPU auto-slice boot (HUD counted up, no panic).

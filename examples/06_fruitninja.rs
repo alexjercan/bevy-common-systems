@@ -99,7 +99,7 @@ fn main() {
     app.run();
 }
 
-/// Running number of fruits sliced. Shown in the status bar.
+/// Running number of fruits sliced. Shown in the score HUD.
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
 
