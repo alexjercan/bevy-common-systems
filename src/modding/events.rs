@@ -29,6 +29,11 @@ pub trait EventWorld: Resource + Send + Sync {
 /// A trait representing a kind of game event.
 ///
 /// Each event kind defines its data type (`Info`) and a unique name.
+///
+/// Usually derived with `#[derive(EventKind)]`. Without attributes the
+/// derive defaults `Info` to `()` (no payload) and the name to the
+/// lowercased struct name; override them with `#[event_info(MyPayload)]`
+/// and `#[event_name("my_name")]`.
 pub trait EventKind: Clone + Send + Sync + 'static {
     /// The type of event data associated with this event kind.
     type Info: serde::Serialize + Default + Clone + std::fmt::Debug + Send + Sync + 'static;
