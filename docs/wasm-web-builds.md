@@ -91,8 +91,44 @@ than sounds; `06_fruitninja` copies only `assets/sounds` because that is the
 sole thing it loads (it is otherwise fully procedural).
 
 Web audio additionally needs a user gesture before it will play; the showcase
-satisfies this via the in-canvas click that starts a run. See the autoplay note
-in `assets/sounds/README.md`.
+satisfies this via the in-canvas click that starts a run. See "Audio and the
+autoplay policy" below.
+
+### Audio and the autoplay policy
+
+Browsers block Web Audio until the user interacts with the page: an
+`AudioContext` created before any user gesture starts in the `suspended` state.
+Bevy creates its audio context eagerly at startup (before any gesture), so it
+comes up suspended. Chrome and Firefox then auto-resume it once two things are
+true -- the user has interacted with the document, and a source node's
+`start()` has been called (which rodio/cpal do on every sound) -- so no
+explicit `resume()` call is needed.
+
+For the showcase this is satisfied for free: `06_fruitninja` plays its first
+sound (`menu_select`) on the in-canvas click that starts a run, which is a real
+user gesture inside the iframe's own document, so the context resumes on that
+click and every later sound is audible.
+
+Two things make this work, both already in place:
+
+- The gesture must happen inside the iframe's document. Clicking a gallery card
+  in the parent page only sets the iframe `src`; it does not unlock the child's
+  audio. The in-canvas start click does.
+- The game iframe carries `allow="autoplay; fullscreen; gamepad"`
+  (`web/src/index.html`), which delegates autoplay to the frame -- relevant if
+  a game is ever served cross-origin (same-origin frames allow it by default).
+
+A game that needs sound *before* any user gesture (menu music on load, say)
+cannot rely on this -- the context stays suspended until the first interaction.
+Bevy does not expose its `AudioContext`, so the practical options are to gate
+the first sound behind a click/keypress (as fruitninja's menu does) or to
+resume the context from JS in the host HTML on a canvas `pointerdown`.
+
+Known quirk: bevyengine/bevy#15273 (0.14 era) reports a Bevy app embedded in an
+iframe occasionally dropping the very first sound -- a loading/timing issue, not
+the autoplay policy. If a sound rarely fails to fire on the first click, that is
+the likely cause, and a JS `resume()` shim on the canvas gesture is the cheap
+insurance.
 
 ### trunk must run from the repo root
 

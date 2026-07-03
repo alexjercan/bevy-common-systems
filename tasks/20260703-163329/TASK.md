@@ -1,6 +1,6 @@
 # Verify web audio playback and handle the browser autoplay policy
 
-- STATUS: OPEN
+- STATUS: IN_PROGRESS
 - PRIORITY: 70
 - TAGS: web,wasm,audio,verify
 
@@ -27,14 +27,14 @@ wired into the fruitninja example.
 
 ## Steps
 
-- [ ] Research the exact autoplay behavior for Bevy 0.19 audio on
+- [x] Research the exact autoplay behavior for Bevy 0.19 audio on
       `wasm32-unknown-unknown`: does rodio/cpal create the `AudioContext`
       suspended, and do current Chrome/Firefox auto-resume a suspended context
       on any same-document user gesture (the in-canvas start click)? Cite
       sources (MDN autoplay policy, cpal/rodio wasm backend, any Bevy issue).
       Record the finding in the Outcome. Do NOT invent behavior -- if it cannot
       be established from sources, say so and rely on the manual check below.
-- [ ] Manual browser check (needs a graphical session -- the user's machine).
+- [x] Manual browser check (needs a graphical session -- the user's machine).
       Serve the built site (`web/build/games/06_fruitninja/` via a static
       server, or the full `npm run` gallery) and open the game in a browser:
       confirm (a) the sound files are fetched with HTTP 200 in the network tab
@@ -42,7 +42,7 @@ wired into the fruitninja example.
       audible starting from the menu start click. If this step cannot be run
       autonomously, state clearly in the Outcome that it needs the user, and
       hand off the exact commands/URLs to run rather than claiming success.
-- [ ] Decision point based on the above:
+- [x] Decision point based on the above:
       - If sound is audible after the start click: no code change. Document the
         gesture requirement (below) and close.
       - If the first sound is dropped (context stays suspended): add a minimal,
@@ -54,12 +54,12 @@ wired into the fruitninja example.
         conventions (`*Plugin`, `debug!("...Plugin: build")`, prelude export,
         `//!` module doc with a usage snippet) and make it a genuine no-op on
         non-wasm targets.
-- [ ] Document the autoplay/gesture requirement in `docs/wasm-web-builds.md`
+- [x] Document the autoplay/gesture requirement in `docs/wasm-web-builds.md`
       (and cross-link from `assets/sounds/README.md` if useful): explain that
       web audio needs a user gesture, that the showcase satisfies it via the
       in-canvas start click, and how a game that plays sound before any gesture
       would need an explicit unlock.
-- [ ] If any Rust code was added: keep CI green -- `cargo build`,
+- [x] If any Rust code was added: keep CI green -- `cargo build`,
       `cargo clippy --all-targets`, `cargo clippy --all-targets --features
       debug`, `cargo fmt --check`, `cargo test`, `cargo test --features debug`,
       `./scripts/check-ascii.sh` -- and rebuild the wasm via
@@ -86,4 +86,74 @@ wired into the fruitninja example.
 
 ## Outcome
 
-(to be filled in by /work)
+Decision: **no code change.** The autoplay policy is already handled by the
+existing setup; adding a Rust unlock would be both unnecessary and not cleanly
+possible (Bevy does not expose its `AudioContext`). This task is research +
+docs + verification.
+
+Research (grounded, sources cited below):
+- An `AudioContext` created before any user gesture starts `suspended`. Bevy
+  (bevy_audio -> rodio -> cpal web backend) creates its context eagerly at
+  startup, so it comes up suspended.
+- Chrome/Firefox auto-resume a suspended context once (a) the user has
+  interacted with the document and (b) a source node's `start()` is called --
+  which rodio/cpal do on every sound (cpal PR #774 also calls `resume()` on
+  `play()` and read-discards frames while blocked). No explicit `resume()` from
+  app code is required.
+- User activation is per-document: a gesture in the parent page that only sets
+  the iframe `src` does not unlock the child's audio; the gesture must occur
+  inside the iframe. `06_fruitninja`'s first sound (`menu_select`) fires on the
+  in-canvas Left-click that starts a run (`menu_click`, examples/06_fruitninja.rs
+  ~L849-858) -- a real gesture inside the iframe document -- so the context
+  resumes on that click and later sounds are audible.
+- The game iframe already carries `allow="autoplay; fullscreen; gamepad"`
+  (`web/src/index.html`), so cross-origin autoplay delegation is covered too;
+  nothing to add there.
+- Soft spot: bevyengine/bevy#15273 (0.14 era) reports a Bevy-in-iframe app
+  occasionally dropping the very first sound -- a loading/timing quirk, not the
+  autoplay policy. No 0.18/0.19-specific autoplay regression found. If a first
+  click ever fails to sound, a JS `resume()` shim on the canvas gesture is the
+  documented cheap insurance.
+
+Verification:
+- Automated (done here): served the real `web/dist/` over `python3 -m
+  http.server` and curl'd every asset. `index.html` -> 200, the `.wasm` -> 200
+  `application/wasm`, and all eight `assets/sounds/*.wav` -> 200 at the exact
+  path Bevy fetches (`/games/06_fruitninja/assets/sounds/<file>`). This confirms
+  the loading/network half end to end (closing task 20260703-163328 through a
+  real HTTP server, not just a file listing).
+- Manual/aural (needs the user's graphical session -- NOT done autonomously,
+  this box is headless with no audio device): open the game in Chrome/Firefox
+  and confirm SFX are audible from the menu start click onward. Exact steps:
+  ```sh
+  nix develop
+  cd web && npm install            # first time only
+  npm run build                    # builds games (trunk) + gallery (webpack)
+  npm run serve                    # http://localhost:8080
+  # open http://localhost:8080, click a game card, then click in the canvas to
+  # start -- you should hear menu_select on that click, then slice/combo/bomb/
+  # etc. during play. (Or open web/dist/ with any static server.)
+  ```
+  The evidence above makes audible playback the expected outcome; this step is
+  the human confirmation.
+
+Docs: added an "Audio and the autoplay policy" subsection to
+`docs/wasm-web-builds.md` (suspended-context behavior, the auto-resume
+conditions, the in-iframe gesture requirement, the existing `allow="autoplay"`,
+what a pre-gesture-sound game would need, and the #15273 quirk). Repointed the
+Assets-section autoplay pointer at this new subsection. The
+`assets/sounds/README.md` "Web (wasm) builds" note (added with task
+20260703-163328) already covers the gesture at a high level.
+
+No Rust changed, so the Rust CI matrix is unaffected; `cargo fmt --check` and
+`./scripts/check-ascii.sh` pass and the edited doc is plain ASCII.
+
+Sources: MDN Autoplay guide and Web Audio best-practices; Chrome
+web-audio-autoplay / autoplay blog posts; cpal `src/host/webaudio/mod.rs` and
+PR #774; bevyengine/bevy#15273; NiklasEi/bevy_kira_audio#83, #4;
+bevy-cheatbook audio page.
+
+Difficulties: the only genuine limit is that this environment is headless with
+no audio device, so the aural confirmation is handed to the user. The
+network-path verification and the grounded research together make a strong,
+honest case that it works; I did not claim to have heard it.
