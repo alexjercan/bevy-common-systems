@@ -75,6 +75,10 @@ const ORB_POINTS: usize = 10;
 /// back up to this count.
 const ORB_COUNT: usize = 5;
 
+/// Minimum angular gap (radians) between a fresh spawn and the marker, so a
+/// hazard or orb never materializes on top of the player. About 34 degrees.
+const MIN_SPAWN_SEPARATION: f32 = 0.6;
+
 /// Hazard count ramps from `HAZARD_START` up to `HAZARD_MAX`, one extra hazard
 /// per level, so the planet gets more crowded the longer you last.
 const HAZARD_START: usize = 3;
@@ -474,13 +478,15 @@ fn step_runner_frame(
 /// rotation use, so the camera sits behind-and-above the marker and looks the
 /// way it is going.
 fn frame_rotation(up: Vec3, forward: Vec3) -> Quat {
-    let up = up.normalize();
-    let forward = forward.normalize();
+    // Callers keep the frame orthonormal, but fall back defensively so a
+    // degenerate (zero or parallel) input can never produce a NaN quaternion.
+    let up = up.normalize_or(Vec3::Y);
+    let forward = forward.normalize_or(Vec3::NEG_Z);
     // right = forward x up gives a right-handed basis with local +Z = -forward
     // (so local -Z faces forward). Rebuilding "back" from right x up keeps the
     // basis exactly orthonormal even if up / forward drifted slightly.
-    let right = forward.cross(up).normalize();
-    let back = right.cross(up).normalize();
+    let right = forward.cross(up).try_normalize().unwrap_or(Vec3::X);
+    let back = right.cross(up).normalize_or(Vec3::Z);
     Quat::from_mat3(&Mat3::from_cols(right, up, back))
 }
 
@@ -488,6 +494,15 @@ fn frame_rotation(up: Vec3, forward: Vec3) -> Quat {
 /// test between their centers against the sum of their radii.
 fn spheres_overlap(a: Vec3, b: Vec3, radius_sum: f32) -> bool {
     a.distance_squared(b) <= radius_sum * radius_sum
+}
+
+/// A fresh spawn's surface direction is "clear" of the marker when it sits at
+/// least `MIN_SPAWN_SEPARATION` radians away from the marker's direction, so
+/// nothing ever materializes on top of the player and deals unavoidable damage.
+/// Both arguments are unit directions; a larger dot product means a smaller
+/// angle, so clear means the dot is below `cos(MIN_SPAWN_SEPARATION)`.
+fn spawn_is_clear(candidate_dir: Vec3, runner_dir: Vec3) -> bool {
+    candidate_dir.dot(runner_dir) <= MIN_SPAWN_SEPARATION.cos()
 }
 
 /// Difficulty level for a given elapsed run time (1-based), one level per
@@ -753,10 +768,14 @@ fn drive_chase_camera(
 
 // --- Wandering objects ----------------------------------------------------
 
-/// Spawn one wandering thing (hazard or orb) at a random surface angle. Both use
-/// `RandomSphereOrbit`, which drives their motion entirely on its own.
+/// Spawn one wandering thing (hazard or orb) at a random surface angle clear of
+/// the marker. Both use `RandomSphereOrbit`, which drives their motion entirely
+/// on its own. `runner_dir` is the marker's current surface direction; the
+/// random angle is resampled a few times so the spawn does not land on the
+/// player (see `spawn_is_clear`).
 fn spawn_wanderer(
     commands: &mut Commands,
+    runner_dir: Vec3,
     mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
     collision_radius: f32,
@@ -765,8 +784,24 @@ fn spawn_wanderer(
     is_hazard: bool,
 ) {
     let mut rng = rand::rng();
-    let theta = rng.random_range(0.0..std::f32::consts::TAU);
-    let phi = rng.random_range(-std::f32::consts::FRAC_PI_2..std::f32::consts::FRAC_PI_2);
+    let random_angles = |rng: &mut rand::rngs::ThreadRng| {
+        (
+            rng.random_range(0.0..std::f32::consts::TAU),
+            rng.random_range(-std::f32::consts::FRAC_PI_2..std::f32::consts::FRAC_PI_2),
+        )
+    };
+
+    // Resample until the candidate direction is clear of the marker, capped so a
+    // pathological run can never loop forever; the last sample is used if none
+    // of the tries were clear (extremely unlikely with this small exclusion).
+    let (mut theta, mut phi) = random_angles(&mut rng);
+    for _ in 0..8 {
+        // A unit direction for the candidate angle -- exercises `meth` directly.
+        if spawn_is_clear(spherical_to_cartesian(1.0, theta, phi), runner_dir) {
+            break;
+        }
+        (theta, phi) = random_angles(&mut rng);
+    }
     let radius = PLANET_RADIUS + lift;
 
     let mut entity = commands.spawn((
@@ -797,15 +832,19 @@ fn maintain_objects(
     mut commands: Commands,
     assets: Res<OrbitAssets>,
     level: Res<Level>,
+    q_runner: Query<&Runner>,
     q_hazards: Query<(), With<Hazard>>,
     q_orbs: Query<(), With<Orb>>,
 ) {
     let speed = wander_speed_for(level.0);
+    // The marker's current surface direction, so fresh spawns keep clear of it.
+    let runner_dir = q_runner.single().map(|runner| runner.up).unwrap_or(Vec3::Z);
 
     let hazard_target = hazard_target_for(level.0);
     for _ in q_hazards.iter().count()..hazard_target {
         spawn_wanderer(
             &mut commands,
+            runner_dir,
             assets.hazard_mesh.clone(),
             assets.hazard_material.clone(),
             HAZARD_RADIUS,
@@ -818,6 +857,7 @@ fn maintain_objects(
     for _ in q_orbs.iter().count()..ORB_COUNT {
         spawn_wanderer(
             &mut commands,
+            runner_dir,
             assets.orb_mesh.clone(),
             assets.orb_material.clone(),
             ORB_RADIUS,
@@ -1193,6 +1233,23 @@ mod tests {
     fn overlap_when_close_and_not_when_far() {
         assert!(spheres_overlap(Vec3::ZERO, Vec3::new(0.9, 0.0, 0.0), 1.0));
         assert!(!spheres_overlap(Vec3::ZERO, Vec3::new(1.1, 0.0, 0.0), 1.0));
+    }
+
+    #[test]
+    fn spawn_is_clear_rejects_near_the_marker() {
+        // Build candidates by rotating the marker direction by a known angle, so
+        // the test is independent of the spherical-angle convention.
+        let runner = Vec3::Z;
+        // Same direction as the marker: not clear.
+        assert!(!spawn_is_clear(runner, runner));
+        // A hair off (well inside the exclusion angle): still not clear.
+        let near = Quat::from_axis_angle(Vec3::X, MIN_SPAWN_SEPARATION * 0.5) * runner;
+        assert!(!spawn_is_clear(near, runner));
+        // Comfortably past the exclusion angle: clear.
+        let far = Quat::from_axis_angle(Vec3::X, MIN_SPAWN_SEPARATION * 2.0) * runner;
+        assert!(spawn_is_clear(far, runner));
+        // The opposite pole is always clear.
+        assert!(spawn_is_clear(-runner, runner));
     }
 
     #[test]
