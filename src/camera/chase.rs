@@ -62,10 +62,10 @@ pub mod prelude {
 /// target using a separate focus offset for improved visual clarity.
 ///
 /// The final camera transform is computed by combining:
-/// - `ChaseCameraInput.anchor_pos`  – where the target currently is
-/// - `ChaseCameraInput.anchor_rot`  – the rotation the camera should orbit around
-/// - `offset`                       – relative position behind or above the target
-/// - `focus_offset`                 – point in front of the target to look toward
+/// - `ChaseCameraInput.anchor_pos`  - where the target currently is
+/// - `ChaseCameraInput.anchor_rot`  - the rotation the camera should orbit around
+/// - `offset`                       - relative position behind or above the target
+/// - `focus_offset`                 - point in front of the target to look toward
 ///
 /// The motion is smoothed using a time-based lerp controlled by `smoothing`.
 #[derive(Component, Debug, Reflect)]
@@ -104,7 +104,7 @@ impl Default for ChaseCamera {
 /// camera's offset frame should be oriented**.
 #[derive(Component, Default, Debug, Reflect)]
 pub struct ChaseCameraInput {
-    /// The rotation representing the target’s forward/up frame.
+    /// The rotation representing the target's forward/up frame.
     /// The camera offset and look-at computations are performed in this space.
     pub anchor_rot: Quat,
 
