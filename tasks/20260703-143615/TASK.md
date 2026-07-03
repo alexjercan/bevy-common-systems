@@ -1,6 +1,6 @@
 # Fruit ninja: keep the losing scene visible behind game over
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: feature,example
 
@@ -15,22 +15,22 @@ exit from `Playing`.
 
 ## Steps
 
-- [ ] In `spawn_projectile`, change the fruit/bomb entity's
+- [x] In `spawn_projectile`, change the fruit/bomb entity's
       `DespawnOnExit(GameState::Playing)` to `DespawnOnExit(GameState::GameOver)`
       so it persists through the game-over screen and is cleared when leaving it
       (back to the menu).
-- [ ] In `on_fragments_spawned`, change the fragment entity's
+- [x] In `on_fragments_spawned`, change the fragment entity's
       `DespawnOnExit(GameState::Playing)` to `DespawnOnExit(GameState::GameOver)`
       for the same reason (bomb/fruit fragments stay visible on the death
       screen).
-- [ ] Leave the HUD (score/combo), player, red flash and floating popups on
+- [x] Leave the HUD (score/combo), player, red flash and floating popups on
       `DespawnOnExit(GameState::Playing)` so they clear on game over -- the
       overlay itself shows the final score.
-- [ ] Confirm the flow clears correctly: `Playing -> GameOver` keeps entities
+- [x] Confirm the flow clears correctly: `Playing -> GameOver` keeps entities
       (frozen), `GameOver -> Menu` despawns them (menu is clean), a new
       `Playing` starts empty. This relies on `Playing` only ever exiting to
       `GameOver` (bomb death or Escape give-up), which is the current graph.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, and a real boot: reach game over and
       confirm the frozen scene shows behind the overlay, then that returning to
       the menu and starting again is clean (throwaway auto-driver that slices a
@@ -48,3 +48,11 @@ exit from `Playing`.
 - Movement (`move_projectiles`, `move_fragments`) is `Playing`-only, so the
   scene is a frozen snapshot on game over -- the desired "see where you lost".
 - No new dependencies.
+
+## Close-out
+
+Rescoped fruit/bomb (spawn_projectile) and fragments (on_fragments_spawned) from
+DespawnOnExit(Playing) to DespawnOnExit(GameOver). HUD/player/flash/popups still
+clear on Playing exit; the transparent centered overlay shows the frozen scene
+through it (movement is Playing-only, so it freezes). Verified: GameOver keeps
+the scene (3 entities), Menu clears it (0), new run starts fresh (0).

@@ -979,7 +979,9 @@ fn spawn_projectile(
         Sliceable {
             radius: FRUIT_RADIUS * scale,
         },
-        DespawnOnExit(GameState::Playing),
+        // Cleared when leaving the game-over screen, not on losing, so the
+        // frozen scene stays visible behind the game-over overlay.
+        DespawnOnExit(GameState::GameOver),
         Mesh3d(assets.mesh.clone()),
         MeshMaterial3d(material),
         Transform::from_xyz(x, SPAWN_Y, PLAY_Z).with_scale(Vec3::splat(scale)),
@@ -1269,7 +1271,8 @@ fn on_fragments_spawned(
     for fragment in fragments.iter() {
         commands.spawn((
             Name::new("Fragment"),
-            DespawnOnExit(GameState::Playing),
+            // Persist onto the game-over screen with the fruit (see spawn).
+            DespawnOnExit(GameState::GameOver),
             Mesh3d(fragment.mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_translation(origin).with_scale(scale),
