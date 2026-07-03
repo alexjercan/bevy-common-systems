@@ -7,7 +7,7 @@ use clap::Parser;
 #[command(name = "05_explode")]
 #[command(version = "1.0.0")]
 #[command(
-    about = "Slice a mesh into fragments with the explode plugin. Press Space to explode.",
+    about = "Slice a mesh into fragments with the explode plugin. Press Left Mouse Button to explode.",
     long_about = None
 )]
 struct Cli;
@@ -41,13 +41,13 @@ fn main() {
     app.add_plugins(TempEntityPlugin);
 
     app.add_systems(Startup, setup);
-    app.add_systems(Update, (explode_on_space, move_fragments));
+    app.add_systems(Update, (explode_on_lmb, move_fragments));
     app.add_observer(on_fragments_spawned);
 
     app.run();
 }
 
-/// Marker for the current intact target that Space will explode.
+/// Marker for the current intact target that Left Mouse Button will explode.
 #[derive(Component)]
 struct Target;
 
@@ -117,13 +117,13 @@ fn spawn_target(commands: &mut Commands, mesh: &Handle<Mesh>, material: &Handle<
     ));
 }
 
-/// On Space, explode the current target by inserting `ExplodeMesh`.
-fn explode_on_space(
+/// On Left Mouse Button, explode the current target by inserting `ExplodeMesh`.
+fn explode_on_lmb(
     mut commands: Commands,
-    keyboard: Res<ButtonInput<KeyCode>>,
+    input: Res<ButtonInput<MouseButton>>,
     q_target: Query<Entity, With<Target>>,
 ) {
-    if !keyboard.just_pressed(KeyCode::Space) {
+    if !input.just_pressed(MouseButton::Left) {
         return;
     }
 
