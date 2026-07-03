@@ -70,6 +70,13 @@ pub struct OnUpdateEventInfo {
     value: f32,
 }
 
+// Attribute-less derive: exercises the default `event_name` (the lowercased
+// struct name, "ontick") and the default `Info` type (`()`, meaning no
+// payload), so a regression in the macro's generated defaults fails to
+// compile here.
+#[derive(Debug, Clone, EventKind)]
+pub struct OnTick;
+
 #[derive(Debug, Clone)]
 struct IncrementCounterAction;
 
@@ -107,10 +114,18 @@ fn setup_handler(mut commands: Commands) {
             .with_filter(MinValueFilter { min_value: 0.5 })
             .with_action(IncrementCounterAction),
     ));
+
+    // Handler for the attribute-less OnTick event. Its default payload is `()`
+    // (no data) and it has no filter, so it fires every tick.
+    commands.spawn((
+        Name::new("OnTick Handler"),
+        EventHandler::<CustomEventWorld>::new::<OnTick>().with_action(IncrementCounterAction),
+    ));
 }
 
 fn update_system(mut commands: Commands) {
     commands.fire::<OnUpdateEvent>(OnUpdateEventInfo {
         value: rand::random(),
     });
+    commands.fire::<OnTick>(());
 }

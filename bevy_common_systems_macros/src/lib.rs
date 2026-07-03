@@ -9,7 +9,12 @@ pub fn derive_event_kind(input: TokenStream) -> TokenStream {
     let name_str = name.to_string().to_lowercase();
 
     let mut event_name = quote! { #name_str };
-    let mut event_info = quote! { modding::events::game_event::GameEventInfo };
+    // Default payload type for an event with no `#[event_info(...)]`: the unit
+    // type, meaning "no data". It satisfies the `EventKind::Info` bounds
+    // (Serialize + Default + Clone + Debug) and needs no imports at the derive
+    // site. The previous default named a type that neither existed at that path
+    // nor implemented Serialize, so the attribute-less derive never compiled.
+    let mut event_info = quote! { () };
 
     for attr in &input.attrs {
         if attr.path().is_ident("event_name") {
