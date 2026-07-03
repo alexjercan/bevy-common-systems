@@ -185,6 +185,14 @@ struct Planet;
 #[derive(Component)]
 struct Thruster;
 
+/// The ship's speed captured each `FixedUpdate` tick, before avian's
+/// `FixedPostUpdate` solver runs. On the frame the ship touches down the solver
+/// has already killed most of the impact velocity, so judging the landing by the
+/// live `LinearVelocity` would under-report the impact (a hard crash could even
+/// read as a soft landing). `resolve_landing` uses this pre-impact value instead.
+#[derive(Component, Default)]
+struct ApproachSpeed(f32);
+
 /// A crash fragment moving under its own simple integrator (decoupled from the
 /// physics world, like `05_explode`).
 #[derive(Component)]
@@ -285,6 +293,7 @@ fn main() {
         (
             set_attitude_target.before(PDControllerSystems::Sync),
             apply_ship_forces.after(PDControllerSystems::Sync),
+            track_approach_speed,
         )
             .run_if(in_state(GameState::Playing)),
     );
@@ -371,8 +380,8 @@ fn setup(
         Transform::from_xyz(0.0, PLANET_BASE_RADIUS + START_ALTITUDE, -20.0)
             .looking_at(Vec3::Y * PLANET_BASE_RADIUS, Vec3::Y),
         ChaseCamera {
-            offset: Vec3::new(0.0, 7.0, -16.0),
-            focus_offset: Vec3::new(0.0, -1.0, 6.0),
+            offset: Vec3::new(0.0, 5.0, -15.0),
+            focus_offset: Vec3::new(0.0, -3.0, 5.0),
             smoothing: 0.12,
         },
         SkyboxConfig {
@@ -606,10 +615,13 @@ fn start_run(
             Collider::cuboid(1.6, 1.1, 1.6),
             LinearDamping(0.15),
             AngularDamping(3.0),
-            // Force channels we overwrite every FixedUpdate.
-            ConstantLinearAcceleration::default(),
-            ConstantLocalLinearAcceleration::default(),
-            ConstantTorque::default(),
+            // Force channels we overwrite every FixedUpdate (nested to keep the
+            // spawn tuple under Bevy's bundle arity limit).
+            (
+                ConstantLinearAcceleration::default(),
+                ConstantLocalLinearAcceleration::default(),
+                ConstantTorque::default(),
+            ),
             // Attitude control.
             PDController {
                 frequency: PD_FREQUENCY,
@@ -618,6 +630,7 @@ fn start_run(
             },
             // Landing / crash detection.
             CollisionEventsEnabled,
+            ApproachSpeed::default(),
         ))
         .id();
     // The controller reads the body it is attached to.
@@ -650,7 +663,7 @@ fn start_run(
                 emissive: LinearRgba::rgb(8.0, 3.0, 0.4),
                 ..default()
             })),
-            Transform::from_xyz(0.0, -0.7, 0.0).with_scale(Vec3::splat(0.001)),
+            Transform::from_xyz(0.0, -0.9, 0.0).with_scale(Vec3::splat(0.001)),
         ));
     });
 }
@@ -759,6 +772,15 @@ fn apply_ship_forces(
     spin.0 = torque.0;
 }
 
+/// Record the ship's speed each `FixedUpdate` tick. This runs before avian's
+/// `FixedPostUpdate` solver, so on the touchdown frame it holds the speed the
+/// ship was actually travelling at just before contact - see [`ApproachSpeed`].
+fn track_approach_speed(mut q_ship: Query<(&LinearVelocity, &mut ApproachSpeed), With<Ship>>) {
+    if let Ok((velocity, mut approach)) = q_ship.single_mut() {
+        approach.0 = velocity.0.length();
+    }
+}
+
 // --- Playing: presentation -------------------------------------------------
 
 fn update_telemetry(
@@ -787,7 +809,7 @@ fn update_thruster_flame(
     // A little flicker so the flame is not a static blob.
     let flicker = 1.0 + 0.15 * (time.elapsed_secs() * 30.0).sin();
     let target = if firing {
-        Vec3::new(0.6, 1.4 * flicker, 0.6)
+        Vec3::new(0.7, 2.2 * flicker, 0.7)
     } else {
         Vec3::splat(0.001)
     };
@@ -828,14 +850,14 @@ fn drive_chase_camera(
 
 fn resolve_landing(
     mut collisions: MessageReader<CollisionStart>,
-    q_ship: Query<(Entity, &Transform, &LinearVelocity), With<Ship>>,
+    q_ship: Query<(Entity, &Transform, &ApproachSpeed), With<Ship>>,
     fuel: Res<Fuel>,
     sfx: Res<SfxAssets>,
     mut outcome: ResMut<Outcome>,
     mut next: ResMut<NextState<GameState>>,
     mut commands: Commands,
 ) {
-    let Ok((ship, transform, velocity)) = q_ship.single() else {
+    let Ok((ship, transform, approach)) = q_ship.single() else {
         return;
     };
 
@@ -848,7 +870,9 @@ fn resolve_landing(
         return;
     }
 
-    let speed = velocity.0.length();
+    // Use the pre-impact speed, not the live velocity: by now the solver has
+    // already absorbed the collision, so the live value under-reports the hit.
+    let speed = approach.0;
     let up = transform.translation.normalize_or(Vec3::Y);
     let tilt = (transform.rotation * Vec3::Y).angle_between(up);
 

@@ -89,16 +89,30 @@ at runtime.
 
 ## Physics tuning notes / risk
 
-The task flagged this as higher physics-tuning risk, and that is where the
-uncertainty lives. The constants at the top of the file (gravity 5.5, thrust
-accel 13, PD frequency 2.2 / damping 1.0, landing limits 4.5 m/s and 0.35 rad)
-were chosen to be gentle and controllable, but they were tuned by reasoning, not
-by extensive play; expect to nudge them. Things a future session should verify
-by actually flying it:
+The task flagged this as higher physics-tuning risk. It has since been
+play-tested (`tasks/20260703-213510`) by running the example under a scripted
+autopilot that logged telemetry, and the physics constants held up:
 
-- Whether the PD `max_torque` clamp (4000) is high enough to right the ship
-  quickly without oscillating.
-- Whether the ship rests stably on the bumpy trimesh or jitters/slides (may want
-  a flatter landing pad, more angular damping, or a small friction tweak).
-- Whether high descent speeds tunnel through the thin trimesh (add `SweptCcd`
-  if so).
+- PD response is crisp: a commanded full lean rises to target in ~1 s with no
+  overshoot and returns to upright in ~0.6 s. The `max_torque` clamp (4000) is
+  never reached, so `frequency 2.2 / damping 1.0` was kept.
+- Gravity 5.5 vs thrust 13 gives a winnable bang-bang descent: from the start
+  altitude the autopilot lands at ~1-4 m/s with ~40% fuel to spare, so the fuel
+  budget (100 / burn 14) is comfortable, not starved.
+- High-speed impact does NOT tunnel: a free-fall crash (~14 m/s) is caught by
+  the trimesh and correctly classified, so no `SweptCcd` was needed.
+- The game ends on first contact, so long-term resting stability on the bumpy
+  trimesh is moot (there is no post-touchdown sim to jitter).
+
+Two things did change during tuning (see
+`docs/retros/20260703-213510-dropzone-tune.md`):
+
+- The chase camera was reframed (lower, pitched down) so the planet surface and
+  the ship's glowing thruster stay in view during the approach; before, the
+  camera looked out into empty space at altitude and the thruster was hidden
+  under the hull, so the `camera/post` bloom never showed.
+- Impact speed is now captured pre-solve (`ApproachSpeed`, updated in
+  `FixedUpdate` before avian's `FixedPostUpdate` solver). Reading the live
+  `LinearVelocity` in `resolve_landing` under-reported the hit because the
+  solver had already absorbed it - a hard crash could read below the 4.5 m/s
+  limit and be scored as a soft landing.
