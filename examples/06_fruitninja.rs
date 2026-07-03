@@ -320,6 +320,8 @@ struct Player;
 #[derive(Component)]
 struct Projectile {
     velocity: Vec3,
+    /// Per-object tumble rates (radians/sec) about the local X and Y axes.
+    spin: Vec2,
 }
 
 /// Velocity carried by a flying fragment of a sliced fruit.
@@ -745,17 +747,27 @@ fn spawn_projectile(
         assets.materials[rng.random_range(0..assets.materials.len())].clone()
     };
 
+    // Vary size (bombs stay in a tighter range so they read as bombs) and give
+    // each object its own tumble. Scale the hit radius to match the visible size.
+    let scale = if is_bomb {
+        rng.random_range(0.9..1.15)
+    } else {
+        rng.random_range(0.75..1.35)
+    };
+    let spin = Vec2::new(rng.random_range(-2.5..2.5), rng.random_range(-2.5..2.5));
+
     let mut object = commands.spawn((
         Name::new(if is_bomb { "Bomb" } else { "Fruit" }),
         Sliceable {
-            radius: FRUIT_RADIUS,
+            radius: FRUIT_RADIUS * scale,
         },
         DespawnOnExit(GameState::Playing),
         Mesh3d(assets.mesh.clone()),
         MeshMaterial3d(material),
-        Transform::from_xyz(x, SPAWN_Y, PLAY_Z),
+        Transform::from_xyz(x, SPAWN_Y, PLAY_Z).with_scale(Vec3::splat(scale)),
         Projectile {
             velocity: Vec3::new(vx, vy, 0.0),
+            spin,
         },
     ));
 
@@ -776,8 +788,8 @@ fn move_projectiles(
     for (entity, mut transform, mut motion) in q_projectiles.iter_mut() {
         motion.velocity.y -= GRAVITY * dt;
         transform.translation += motion.velocity * dt;
-        transform.rotate_local_x(dt * 1.5);
-        transform.rotate_local_y(dt * 2.0);
+        transform.rotate_local_x(dt * motion.spin.x);
+        transform.rotate_local_y(dt * motion.spin.y);
 
         if transform.translation.y < KILL_Y {
             commands.entity(entity).despawn();
@@ -951,6 +963,9 @@ fn on_fragments_spawned(
     };
 
     let origin = transform.translation;
+    // Match the fruit's size so a big fruit bursts into big fragments (the
+    // fragment meshes are sliced from the unit mesh, ignoring the shell scale).
+    let scale = transform.scale;
     // The sliced shell still carries its material, so fragments burst in the
     // same color as the fruit they came from.
     let material = material.0.clone();
@@ -961,7 +976,7 @@ fn on_fragments_spawned(
             DespawnOnExit(GameState::Playing),
             Mesh3d(fragment.mesh.clone()),
             MeshMaterial3d(material.clone()),
-            Transform::from_translation(origin),
+            Transform::from_translation(origin).with_scale(scale),
             FragmentMotion {
                 // Push outward along the slice direction, with a little lift.
                 velocity: fragment.direction * FRAGMENT_SPEED + Vec3::Y * 1.5,
