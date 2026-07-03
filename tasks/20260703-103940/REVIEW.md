@@ -40,6 +40,10 @@ One robustness finding on the guard, and one optional note:
         1) echo "check-ascii: no non-ASCII ..." ;;
         *) echo "check-ascii: grep failed (exit $status)" >&2; exit "$status" ;;
       esac
+  - Response: fixed in ebeddfe. Rewrote with the exact case-on-exit-code
+    structure suggested; verified all three branches (0 fails with listing,
+    1 passes, 2 on a missing root now aborts with exit 2 instead of
+    reporting success). shellcheck still clean.
 - [ ] R1.2 (NIT) .github/workflows/ci.yml:3-5 - `on: [push, pull_request]`
   with no branch filter double-runs for branches pushed inside this repo
   that also have an open PR (one `push` run, one `pull_request` run) - the
@@ -48,6 +52,14 @@ One robustness finding on the guard, and one optional note:
   scope `push` to `branches: [master]` so intra-repo PRs run once via the
   `pull_request` event and master still gets post-merge coverage. Leave as
   is if you prefer every push validated.
+  - Response: keeping `on: [push, pull_request]` as-is (pushing back). This
+    repo's workflow merges feature branches to master *locally*, often
+    without opening a PR (see the flow this session ran). Scoping push to
+    `branches: [master]` would leave those feature branches with no CI at
+    all - no PR to trigger `pull_request`, and push filtered out. Validating
+    every pushed branch is the intended behavior here; the double-run only
+    occurs in the rare push+open-PR overlap, which is an acceptable cost for
+    a solo-maintained repo. Documented rather than changed.
 
 R1.1 is a MINOR, so REQUEST_CHANGES: the guard should be trustworthy under
 refactors before it ships. R1.2 is discretionary.
