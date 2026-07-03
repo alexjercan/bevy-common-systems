@@ -27,6 +27,7 @@
 //!   `assets/sounds/README.md`). Collecting orbs in quick succession builds a
 //!   streak: each orb is worth more, the pickup blip climbs in pitch, a rising
 //!   `combo` chime layers in, and a "+N" popup plus a "STREAK xN" banner flash.
+//!   Taking a hazard hit breaks the streak, so a clean run is worth chasing.
 //!
 //! It follows the shape of `06_fruitninja`: Bevy states for menu / playing /
 //! game-over, a persistent camera and light, and an in-game HUD, plus the same

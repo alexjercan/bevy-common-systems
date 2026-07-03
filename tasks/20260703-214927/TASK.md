@@ -1,6 +1,6 @@
 # 07_orbit: hazard-hit impact feedback (camera shake + damage flash)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: feature,example
 
@@ -26,22 +26,22 @@ so hits read viscerally. No new crates, no new assets.
 
 ## Steps
 
-- [ ] Read fruitninja's `CameraShake`, `apply_camera_shake`, and the shake
+- [x] Read fruitninja's `CameraShake`, `apply_camera_shake`, and the shake
       constants (`SHAKE_DECAY`, trauma-to-offset curve); reuse the same shapes.
-- [ ] Read `src/camera/chase.rs` to confirm the public `ChaseCameraSystems`
+- [x] Read `src/camera/chase.rs` to confirm the public `ChaseCameraSystems`
       set name and that the shake system can run after it in `PostUpdate`.
-- [ ] Add a `CameraShake` resource + a pure trauma/decay helper with
+- [x] Add a `CameraShake` resource + a pure trauma/decay helper with
       `#[cfg(test)]` tests (decays to zero, clamps at max), per the testing
       convention.
-- [ ] Add trauma on hazard hit in `resolve_collisions`; add an
+- [x] Add trauma on hazard hit in `resolve_collisions`; add an
       `apply_camera_shake` system after the chase-camera sync that offsets
       `MainCamera`'s transform by the decaying shake, and settles it back
       exactly (no drift) when trauma is zero.
-- [ ] Add a damage-flash: a `DespawnOnExit(Playing)` full-screen node + a
+- [x] Add a damage-flash: a `DespawnOnExit(Playing)` full-screen node + a
       component the hit spikes, faded out each frame; keep it out of the way of
       the HUD (behind it, non-interactive).
-- [ ] Update the module `//!` doc to mention the impact feedback.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets`,
+- [x] Update the module `//!` doc to mention the impact feedback.
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets`,
       `cargo test --example 07_orbit`, `./scripts/check-ascii.sh`, and a manual
       `cargo run --example 07_orbit`.
 
