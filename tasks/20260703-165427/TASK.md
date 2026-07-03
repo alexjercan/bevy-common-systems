@@ -1,6 +1,6 @@
 # 07_orbit: surface-dodge game on a sphere (Orbit Runner)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 55
 - TAGS: feature,example
 

@@ -24,6 +24,15 @@ export const GAMES: Game[] = [
     accent: '#f2d94e',
   },
   {
+    id: '07_orbit',
+    title: 'Orbit Runner',
+    blurb:
+      'Ride a marker around a planet, sweep up the glowing orbs, and dodge the red hazards as it gets crowded.',
+    controls:
+      'Steer with A/D or the arrow keys, or hold the mouse / a finger to one side. Collect orbs, avoid the red hazards.',
+    accent: '#5cc8ff',
+  },
+  {
     id: '08_dropzone',
     title: 'Drop Zone',
     blurb:
