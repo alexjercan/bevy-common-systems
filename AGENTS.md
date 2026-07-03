@@ -256,3 +256,13 @@ Examples:
 - `helpers/wasd` and `camera/wasd` are two halves of one feature: the
   camera math is input-agnostic on purpose, so games can swap the binding
   layer without touching camera behavior.
+- Verifying builds: never judge a build/command by a piped `| tail`'s exit
+  code -- the pipe reports `tail`'s status, so a failed `cargo build | tail`
+  looks like it passed. Redirect to a file and check `$?` when pass/fail
+  matters; use `| tail` only for interactive peeking.
+- Web/wasm builds: `trunk` must run from the repo root (it fails with
+  `Unable to find any Trunk configuration` from a subdir like `web/`), and
+  `rand` on wasm needs the getrandom `wasm_js` backend. Both are handled in
+  `web/scripts/build-games.sh` and `.cargo/config.toml`; see
+  `docs/wasm-web-builds.md`. Verify web tooling through the real entry point
+  (`npm run build`), not a hand-run of the underlying tool.

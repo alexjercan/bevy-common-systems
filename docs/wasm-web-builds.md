@@ -51,6 +51,16 @@ Adding a game later is a two-line change: a `web/games/<name>/index.html` (copy
 06_fruitninja's) and one entry in the `games` array in
 `web/scripts/build-games.sh`.
 
+### trunk must run from the repo root
+
+`trunk` resolves its target and the cargo project relative to the current
+directory, and fails with `Unable to find any Trunk configuration` when run from
+a subdirectory like `web/` -- even if you pass a correct absolute path to the
+`index.html`. `build-games.sh` therefore `cd`s to the repo root before invoking
+trunk, so it works no matter where it is launched from (in particular
+`npm run build:games`, which npm runs from `web/`). Keep that `cd` if you edit
+the script.
+
 ## Notes
 
 - Bevy creates its own canvas on wasm; the page CSS stretches it to fill the
