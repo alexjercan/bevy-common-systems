@@ -66,7 +66,7 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     slicing, normals/UVs, conversion to and from `Mesh`.
   - `explode` - `ExplodeMeshPlugin`: insert `ExplodeMesh` to slice an
     entity's mesh (and its children) into `ExplodeFragments` for
-    destruction effects.
+    destruction effects (demoed by `examples/05_explode`).
 - `meth/` - math helpers (the name is an intentional pun, do not "fix" it)
   - `lerp` - `LerpSnap` trait: exponential lerp with snap-to-target for
     `f32` and `Vec3`; used by the chase camera and the sphere orbit
@@ -214,6 +214,8 @@ Examples:
 - `03_modding` - the `modding` event bus end to end, including
   `#[derive(EventKind)]`; the event logic prints to the console.
 - `04_status_item` - status bar UI with FPS and custom shell-command items.
+- `05_explode` - the mesh slicer end to end: press Space to slice a mesh
+  into `ExplodeFragments` that fly apart and auto-despawn.
 
 ## Workflow
 
