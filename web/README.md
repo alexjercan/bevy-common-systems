@@ -41,6 +41,11 @@ is `workflow_dispatch` only (manual), so it never deploys on its own.
 1. Add a trunk source `web/games/<name>/index.html` (copy `06_fruitninja`'s).
 2. Add the example to the `games` array in `web/scripts/build-games.sh`.
 3. Add a `Game` entry to `web/src/games.ts`.
+4. If the game loads assets (sounds, textures, fonts), add a
+   `data-trunk rel="copy-dir"` link to its `index.html` so the files ship into
+   the build -- trunk copies nothing by default and the fetches would 404
+   (`06_fruitninja` copies `assets/sounds` for its SFX). See
+   `docs/wasm-web-builds.md`.
 
 See `docs/wasm-web-builds.md` for the wasm build details (including the
-`getrandom` gotcha).
+`getrandom` gotcha and how assets are staged).

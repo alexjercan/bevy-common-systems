@@ -13,6 +13,22 @@
       this link just points trunk at the crate root.
     -->
     <link data-trunk rel="rust" href="../../../Cargo.toml" data-wasm-opt="z" />
+    <!--
+      The game loads its sound effects with `asset_server.load("sounds/*.wav")`,
+      which on wasm fetches `<public-url>assets/sounds/*.wav` at runtime. Trunk
+      copies nothing by default, so stage the crate's `assets/sounds/` into the
+      dist under `assets/sounds/` (data-target-path is relative to the dist
+      dir; href is relative to this index.html -- `../../../` is the repo root).
+      Without this the fetches 404 and every sound is silent. Any future game
+      that loads assets needs the matching copy directive here. See
+      docs/wasm-web-builds.md.
+    -->
+    <link
+      data-trunk
+      rel="copy-dir"
+      href="../../../assets/sounds"
+      data-target-path="assets/sounds"
+    />
     <style>
       html,
       body {
