@@ -290,6 +290,14 @@ Examples:
   `TextLayout` and `AmbientLight` up front avoids a batch of compile errors
   (this has bitten two cycles now: `docs/retros/20260703-150200-bevy-019-migration.md`
   and `docs/retros/20260703-165432-dropzone-example.md`).
+- Running examples: the examples open a window and are the de facto integration
+  tests, so a new or changed example is not "done" until it has actually been
+  run once - `cargo build` only proves it compiles, not that it boots. Even a
+  headless/background session often has a display (`echo $DISPLAY`); if so, run
+  `cargo run --example NN_name` under a `timeout` and confirm it reaches the
+  render loop (a `bevy_render::view::window` swap-chain log line means startup
+  finished). Not doing this shipped a startup hang in 08_dropzone
+  (`docs/retros/20260703-165432-dropzone-example.md`).
 - Verifying builds: never judge a build/command by a piped `| tail`'s exit
   code -- the pipe reports `tail`'s status, so a failed `cargo build | tail`
   looks like it passed. Redirect to a file and check `$?` when pass/fail
