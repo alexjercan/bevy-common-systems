@@ -121,13 +121,15 @@ impl Plugin for SfxPlugin {
 /// finishes, so callers never have to clean it up.
 fn on_play_sfx(event: On<PlaySfx>, mut commands: Commands, master: Res<SfxMasterVolume>) {
     let volume = (event.volume * master.0).max(0.0);
-    trace!("on_play_sfx: volume {volume}, speed {}", event.speed);
+    // Guard the speed: rodio does not accept a non-positive playback rate.
+    let speed = event.speed.max(f32::MIN_POSITIVE);
+    trace!("on_play_sfx: volume {volume}, speed {speed}");
 
     commands.spawn((
         Name::new("Sfx"),
         AudioPlayer(event.handle.clone()),
         PlaybackSettings::DESPAWN
             .with_volume(Volume::Linear(volume))
-            .with_speed(event.speed),
+            .with_speed(speed),
     ));
 }

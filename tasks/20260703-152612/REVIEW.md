@@ -29,7 +29,9 @@ Assessment against AGENTS.md conventions and the bevy 0.19 audio API:
 
 No BLOCKER/MAJOR/MINOR findings.
 
-- [ ] R1.1 (NIT) src/audio/mod.rs:135 - `speed` is passed through unclamped; a
+- [x] R1.1 (NIT) src/audio/mod.rs:135 - `speed` is passed through unclamped; a
   zero or negative `speed` would reach rodio. Not a defect (it is caller-driven
   and the module documents 1.0 as normal), but a `.max(0.0)` or a doc note that
   speed must be positive would harden it. Take it or leave it.
+  - Response: fixed - clamp `speed` to `f32::MIN_POSITIVE` in `on_play_sfx`
+    before `with_speed`, so a non-positive rate never reaches rodio.
