@@ -40,7 +40,7 @@ Judged against the Goal and Steps:
 
 Findings:
 
-- [ ] R1.1 (MINOR) tasks/20260703-163329 - the Goal asks for "concrete evidence
+- [x] R1.1 (MINOR) tasks/20260703-163329 - the Goal asks for "concrete evidence
   about whether SFX are audible." What exists is strong *indirect* evidence
   (HTTP 200 fetches + grounded auto-resume research), not a human "I heard it"
   confirmation, which this headless environment cannot produce. This is within
@@ -53,3 +53,9 @@ Findings:
 No BLOCKER/MAJOR findings. The branch does everything achievable without a
 graphical session, the decision to add no code is justified and documented, and
 the residual aural check is honestly deferred. Approved.
+
+## Round 2
+
+- VERDICT: APPROVE
+
+User confirmed audio is audible in the browser build ("audio is fine in browser"). R1.1 resolved -- the aural check is done, the goal is fully closed. No further findings.
