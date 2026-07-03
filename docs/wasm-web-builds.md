@@ -130,6 +130,20 @@ silent buffer is inaudible), so desktop audio is unchanged. Any future web
 game with sound should copy this shim (or a shared version of it) into its
 `index.html`.
 
+**iOS ringer channel (WebKit bug 237322).** Resuming the context is necessary
+but not sufficient on iOS. WebKit routes Web Audio output to the *ringer*
+channel, which the iPhone's physical Ring/Silent switch mutes even at full
+media volume -- so after the resume the tab shows a "playing audio" indicator
+but stays silent when the switch is on Silent. The tell is exactly that: audio
+indicator present, no sound. HTML5 `<audio>` elements play on the *media*
+channel (which ignores the switch), and while one is playing iOS promotes the
+whole session -- Web Audio included -- to media. So on iOS the shim also starts
+a continuous looping, inaudible `<audio>` (a tiny base64 silent-WAV data URI)
+on the first gesture, and pauses it while the tab is hidden. This is gated to
+iOS (UA + `maxTouchPoints`, to catch iPadOS-as-Mac) so desktop browsers do not
+grow a spurious "now playing" widget. Task 20260703-212303; refs
+`swevans/unmute`, `feross/unmute-ios-audio`.
+
 Two more things must also hold, both already in place:
 
 - The gesture must happen inside the iframe's document. Clicking a gallery card
