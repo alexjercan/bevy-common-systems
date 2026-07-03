@@ -1,6 +1,6 @@
 # Fruit ninja: golden bonus fruit
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 72
 - TAGS: feature,example
 
@@ -11,19 +11,19 @@ and have it extend the combo time window so it helps you keep a combo going.
 
 ## Steps
 
-- [ ] Add a `gold_material` (bright gold, a little emissive/metallic) to
+- [x] Add a `gold_material` (bright gold, a little emissive/metallic) to
       `FruitAssets`, built in `setup`.
-- [ ] Add a `Golden` marker component. In `spawn_projectile`, with a small
+- [x] Add a `Golden` marker component. In `spawn_projectile`, with a small
       chance (independent of the bomb roll, e.g. ~8%) spawn a golden fruit: the
       gold material, the `Golden` marker, optionally a slightly larger scale.
       Ensure a projectile is not both bomb and golden.
-- [ ] In `slice_objects`, when a sliced fruit is `Golden`, award a flat bonus
+- [x] In `slice_objects`, when a sliced fruit is `Golden`, award a flat bonus
       (`GOLDEN_POINTS = 5`) in addition to / instead of the combo point, and
       spawn a distinct gold "+5" popup (bigger, gold color).
-- [ ] Extend the combo window: on slicing a golden fruit, refresh the combo
+- [x] Extend the combo window: on slicing a golden fruit, refresh the combo
       timer by a larger amount (`COMBO_WINDOW_GOLDEN`, e.g. 2.5s) so golden
       fruit buys extra combo time.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, real boot (auto-slice a golden fruit;
       confirm +5 popup and extended timer, no panic).
 
@@ -40,3 +40,11 @@ and have it extend the combo time window so it helps you keep a combo going.
 - `on_fragments_spawned` already reuses the sliced shell's material, so a golden
   fruit bursts gold automatically.
 - No new dependencies.
+
+## Close-out
+
+Golden bonus fruit (~8% of non-bomb launches): gold emissive material +
+`Golden` marker. Slicing one awards a flat +5 (gold "+5" popup), pops+bursts
+like fruit, and stretches the combo window to COMBO_WINDOW_GOLDEN (2.5s) via
+timer.max, WITHOUT advancing the combo count (bonus, not part of escalation).
+Verified: sliced golden -> +5, timer 2.5.

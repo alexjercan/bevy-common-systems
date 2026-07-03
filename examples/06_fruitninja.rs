@@ -100,6 +100,13 @@ const SLICE_POP_SCALE: f32 = 1.45;
 /// combo survives slow swipes / separate strokes as long as hits stay inside it.
 const COMBO_WINDOW: f32 = 1.2;
 
+/// Chance a (non-bomb) launch is a golden bonus fruit.
+const GOLDEN_CHANCE: f64 = 0.08;
+
+/// Flat points a golden fruit is worth, and the longer combo window it grants.
+const GOLDEN_POINTS: usize = 5;
+const COMBO_WINDOW_GOLDEN: f32 = 2.5;
+
 /// How long a floating "+N" popup lives before it despawns, in seconds.
 const POPUP_LIFETIME: f32 = 0.8;
 
@@ -384,6 +391,11 @@ struct Sliceable {
 #[derive(Component)]
 struct Bomb;
 
+/// Marker for a golden bonus fruit: worth a flat `GOLDEN_POINTS` and grants
+/// extra combo time.
+#[derive(Component)]
+struct Golden;
+
 /// Marker for the player entity that owns the run's `Health`.
 #[derive(Component)]
 struct Player;
@@ -408,6 +420,7 @@ struct FruitAssets {
     mesh: Handle<Mesh>,
     materials: Vec<Handle<StandardMaterial>>,
     bomb_material: Handle<StandardMaterial>,
+    gold_material: Handle<StandardMaterial>,
 }
 
 fn setup(
@@ -446,10 +459,20 @@ fn setup(
         ..default()
     });
 
+    // Golden bonus fruit: bright, emissive gold so it stands out.
+    let gold_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(1.0, 0.82, 0.15),
+        emissive: LinearRgba::rgb(0.6, 0.45, 0.05),
+        metallic: 0.9,
+        perceptual_roughness: 0.25,
+        ..default()
+    });
+
     commands.insert_resource(FruitAssets {
         mesh,
         materials: fruit_materials,
         bomb_material,
+        gold_material,
     });
 
     // Static camera looking straight down the -Z axis at the play plane.
@@ -848,8 +871,12 @@ fn spawn_projectile(
     let vy = rng.random_range(17.0..21.0);
 
     let is_bomb = rng.random_bool(bomb_chance_for(elapsed.0));
+    // A non-bomb launch is occasionally a golden bonus fruit.
+    let is_golden = !is_bomb && rng.random_bool(GOLDEN_CHANCE);
     let material = if is_bomb {
         assets.bomb_material.clone()
+    } else if is_golden {
+        assets.gold_material.clone()
     } else {
         assets.materials[rng.random_range(0..assets.materials.len())].clone()
     };
@@ -880,6 +907,8 @@ fn spawn_projectile(
 
     if is_bomb {
         object.insert(Bomb);
+    } else if is_golden {
+        object.insert(Golden);
     }
 }
 
@@ -923,7 +952,7 @@ fn slice_objects(
     mut combo: ResMut<Combo>,
     mut shake: ResMut<CameraShake>,
     mut score: ResMut<Score>,
-    q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>)>,
+    q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>, Has<Golden>)>,
 ) {
     // Releasing the button ends the swipe, so the next press starts a fresh
     // segment instead of jumping across the screen from a stale point, and the
@@ -964,7 +993,7 @@ fn slice_objects(
         return;
     }
 
-    for (entity, transform, sliceable, is_bomb) in q_sliceable.iter() {
+    for (entity, transform, sliceable, is_bomb, is_golden) in q_sliceable.iter() {
         if !segment_hits_circle(
             previous.truncate(),
             current.truncate(),
@@ -999,35 +1028,53 @@ fn slice_objects(
                 timer: SLICE_POP_TIME,
                 base_scale: transform.scale,
             });
-            // Each fruit in one continuous swipe is worth one more point than
-            // the last (1, 2, 3, ...); the button release resets the combo.
-            let points = advance_combo(&mut combo);
-            **score += points;
             shake.trauma = (shake.trauma + SLICE_TRAUMA).min(1.0);
 
-            if let Ok(viewport_pos) =
-                camera.world_to_viewport(camera_transform, transform.translation)
-            {
-                // The "+N" grows a little with the combo for extra punch.
-                let size = (30.0 + (points as f32 - 1.0) * 5.0).min(60.0);
-                spawn_floating_text(
-                    &mut commands,
-                    viewport_pos,
-                    format!("+{points}"),
-                    size,
-                    Color::srgb(0.95, 0.85, 0.25),
-                );
+            let viewport_pos = camera
+                .world_to_viewport(camera_transform, transform.translation)
+                .ok();
 
-                // A multi-fruit swipe reads as special: a flashy combo banner
-                // just above the slice.
-                if combo.count >= 2 {
+            if is_golden {
+                // Golden fruit: flat bonus, and it buys extra combo time by
+                // stretching the window, without advancing the combo count.
+                **score += GOLDEN_POINTS;
+                combo.timer = combo.timer.max(COMBO_WINDOW_GOLDEN);
+                if let Some(viewport_pos) = viewport_pos {
                     spawn_floating_text(
                         &mut commands,
-                        viewport_pos - Vec2::Y * 44.0,
-                        format!("COMBO x{}", combo.count),
+                        viewport_pos,
+                        format!("+{GOLDEN_POINTS}"),
                         48.0,
-                        Color::srgb(1.0, 0.55, 0.1),
+                        Color::srgb(1.0, 0.85, 0.2),
                     );
+                }
+            } else {
+                // Each fruit in the combo is worth one more point than the last
+                // (1, 2, 3, ...); the combo window keeps the chain alive.
+                let points = advance_combo(&mut combo);
+                **score += points;
+
+                if let Some(viewport_pos) = viewport_pos {
+                    // The "+N" grows a little with the combo for extra punch.
+                    let size = (30.0 + (points as f32 - 1.0) * 5.0).min(60.0);
+                    spawn_floating_text(
+                        &mut commands,
+                        viewport_pos,
+                        format!("+{points}"),
+                        size,
+                        Color::srgb(0.95, 0.85, 0.25),
+                    );
+
+                    // A multi-fruit combo reads as special: a flashy banner.
+                    if combo.count >= 2 {
+                        spawn_floating_text(
+                            &mut commands,
+                            viewport_pos - Vec2::Y * 44.0,
+                            format!("COMBO x{}", combo.count),
+                            48.0,
+                            Color::srgb(1.0, 0.55, 0.1),
+                        );
+                    }
                 }
             }
         }
