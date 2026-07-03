@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>bevy_common_systems - game showcase</title>
+    <meta
+      name="description"
+      content="Playable WebAssembly builds of the bevy_common_systems example games."
+    />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>bevy_common_systems</h1>
+      <p>Playable WebAssembly builds of the example games.</p>
+    </header>
+
+    <main>
+      <ul id="game-grid" class="game-grid" aria-label="Games"></ul>
+    </main>
+
+    <!-- Full-screen overlay that hosts the selected game in an iframe. -->
+    <div id="game-overlay" class="game-overlay" hidden>
+      <div class="game-overlay__bar">
+        <span id="game-overlay-title" class="game-overlay__title"></span>
+        <span id="game-overlay-controls" class="game-overlay__controls"></span>
+        <button id="game-overlay-close" class="game-overlay__close" aria-label="Close game">
+          &times;
+        </button>
+      </div>
+      <iframe
+        id="game-frame"
+        class="game-overlay__frame"
+        title="Game"
+        allow="autoplay; fullscreen; gamepad"
+      ></iframe>
+    </div>
+
+    <footer class="site-footer">
+      Built with <a href="https://bevyengine.org">Bevy</a> and
+      <a href="https://trunkrs.dev">Trunk</a>.
+    </footer>
+  </body>
+</html>
