@@ -76,6 +76,8 @@ fn main() {
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
 
+    app.init_state::<GameState>();
+
     app.init_resource::<Score>();
     app.insert_resource(SpawnTimer(Timer::from_seconds(
         SPAWN_INTERVAL,
@@ -83,7 +85,16 @@ fn main() {
     )));
     app.init_resource::<CursorTrail>();
 
+    // Persistent scene: camera, light and the FPS status bar live for the whole
+    // run, independent of game state.
     app.add_systems(Startup, setup);
+
+    // Main menu.
+    app.add_systems(OnEnter(GameState::Menu), spawn_menu);
+    app.add_systems(Update, menu_click.run_if(in_state(GameState::Menu)));
+
+    // Playing: reset the run, show the HUD, then run the gameplay loop.
+    app.add_systems(OnEnter(GameState::Playing), (start_game, spawn_hud));
     app.add_systems(
         Update,
         (
@@ -92,11 +103,27 @@ fn main() {
             slice_fruit,
             move_fragments,
             update_score_text,
-        ),
+            giveup_on_escape,
+        )
+            .run_if(in_state(GameState::Playing)),
     );
+
+    // Game over screen.
+    app.add_systems(OnEnter(GameState::GameOver), spawn_game_over);
+    app.add_systems(Update, gameover_click.run_if(in_state(GameState::GameOver)));
+
     app.add_observer(on_fragments_spawned);
 
     app.run();
+}
+
+/// Top-level game flow: the menu, the playable run, and the game-over screen.
+#[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
+enum GameState {
+    #[default]
+    Menu,
+    Playing,
+    GameOver,
 }
 
 /// Running number of fruits sliced. Shown in the score HUD.
@@ -191,26 +218,8 @@ fn setup(
         GlobalTransform::default(),
     ));
 
-    // On-screen score HUD: a large text element in the top-left corner. The
-    // status bar below carries FPS only, so the score has a single home.
-    commands.spawn((
-        Name::new("Score HUD"),
-        ScoreText,
-        Text::new(score_label(0)),
-        TextFont {
-            font_size: 40.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.95, 0.85, 0.25)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(16.0),
-            left: Val::Px(16.0),
-            ..default()
-        },
-    ));
-
-    // Status bar: FPS only (the score now lives in the HUD above).
+    // Status bar: FPS only (the score lives in the in-game HUD, spawned per
+    // run in `spawn_hud`).
     commands.spawn((status_bar(StatusBarRootConfig::default()),));
 
     commands.spawn((status_bar_item(StatusBarItemConfig {
@@ -235,6 +244,118 @@ fn update_score_text(score: Res<Score>, mut q_text: Query<&mut Text, With<ScoreT
 
     for mut text in q_text.iter_mut() {
         **text = score_label(score.0);
+    }
+}
+
+/// A full-screen, centered UI column used by the menu and game-over screens.
+fn centered_screen() -> Node {
+    Node {
+        position_type: PositionType::Absolute,
+        width: Val::Percent(100.0),
+        height: Val::Percent(100.0),
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        justify_content: JustifyContent::Center,
+        row_gap: Val::Px(16.0),
+        ..default()
+    }
+}
+
+/// One line of menu / game-over text at the given size and color.
+fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle {
+    (
+        Text::new(text.into()),
+        TextFont {
+            font_size: size,
+            ..default()
+        },
+        TextColor(color),
+    )
+}
+
+/// Spawn the main menu (title + prompt), scoped to the `Menu` state.
+fn spawn_menu(mut commands: Commands) {
+    commands.spawn((
+        Name::new("Main Menu"),
+        DespawnOnExit(GameState::Menu),
+        centered_screen(),
+        children![
+            screen_text("FRUIT NINJA", 72.0, Color::srgb(0.95, 0.85, 0.25)),
+            screen_text("Click to play", 32.0, Color::WHITE),
+            screen_text(
+                "swipe to slice - avoid the bombs - Esc to give up",
+                20.0,
+                Color::srgb(0.7, 0.7, 0.7),
+            ),
+        ],
+    ));
+}
+
+/// Start the game on a click from the menu.
+fn menu_click(mouse: Res<ButtonInput<MouseButton>>, mut next: ResMut<NextState<GameState>>) {
+    if mouse.just_pressed(MouseButton::Left) {
+        next.set(GameState::Playing);
+    }
+}
+
+/// Reset per-run state when a new game starts.
+fn start_game(
+    mut score: ResMut<Score>,
+    mut timer: ResMut<SpawnTimer>,
+    mut trail: ResMut<CursorTrail>,
+) {
+    score.0 = 0;
+    timer.reset();
+    trail.previous = None;
+}
+
+/// Spawn the in-game HUD (score text), scoped to the `Playing` state.
+fn spawn_hud(mut commands: Commands) {
+    commands.spawn((
+        Name::new("Score HUD"),
+        ScoreText,
+        DespawnOnExit(GameState::Playing),
+        Text::new(score_label(0)),
+        TextFont {
+            font_size: 40.0,
+            ..default()
+        },
+        TextColor(Color::srgb(0.95, 0.85, 0.25)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(16.0),
+            left: Val::Px(16.0),
+            ..default()
+        },
+    ));
+}
+
+/// Give up the current run with Escape (a stand-in lose trigger until bombs
+/// provide the real one).
+fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
+    if keys.just_pressed(KeyCode::Escape) {
+        next.set(GameState::GameOver);
+    }
+}
+
+/// Spawn the game-over screen with the final score, scoped to `GameOver`.
+fn spawn_game_over(mut commands: Commands, score: Res<Score>) {
+    commands.spawn((
+        Name::new("Game Over"),
+        DespawnOnExit(GameState::GameOver),
+        centered_screen(),
+        children![
+            screen_text("GAME OVER", 72.0, Color::srgb(0.9, 0.25, 0.25)),
+            screen_text(score_label(score.0), 40.0, Color::srgb(0.95, 0.85, 0.25)),
+            screen_text("Click to return to menu", 28.0, Color::WHITE),
+        ],
+    ));
+}
+
+/// Return to the menu on a click from the game-over screen.
+fn gameover_click(mouse: Res<ButtonInput<MouseButton>>, mut next: ResMut<NextState<GameState>>) {
+    if mouse.just_pressed(MouseButton::Left) {
+        next.set(GameState::Menu);
     }
 }
 
@@ -264,6 +385,7 @@ fn spawn_fruit(
         Fruit {
             radius: FRUIT_RADIUS,
         },
+        DespawnOnExit(GameState::Playing),
         Mesh3d(assets.mesh.clone()),
         MeshMaterial3d(material),
         Transform::from_xyz(x, SPAWN_Y, PLAY_Z),
@@ -372,6 +494,7 @@ fn on_fragments_spawned(
     for fragment in fragments.iter() {
         commands.spawn((
             Name::new("Fragment"),
+            DespawnOnExit(GameState::Playing),
             Mesh3d(fragment.mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_translation(origin),
