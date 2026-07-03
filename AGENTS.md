@@ -246,6 +246,20 @@ Examples:
   a wasm/trunk showcase build. Exercises the whole `transform/*` orbit family,
   `camera/chase` and `meth` under gameplay; grows out of `01_sphere`. See
   `docs/2026-07-03-orbit-runner.md`.
+- `08_dropzone` - a lunar-lander game and the headline demo of
+  `PDControllerPlugin`. A noise-displaced planet (the `02_planet` recipe) sits
+  at the origin with radial gravity; you fly a lander down onto it. Space/Up
+  thrusts along the ship's local up, W/S and A/D lean the target attitude, and
+  the PD controller torques the avian3d rigid body toward that attitude (this
+  is the crate's first real physics sim, not just the debug renderer). Touch
+  down slow and upright to score; hit too hard or too tilted and the hull
+  breaks apart via `mesh/explode`. Pulls in `camera/skybox` (a procedurally
+  generated starfield, no asset file), `camera/post` bloom on the thruster
+  flame, `camera/chase`, `ui/status` gauges (altitude/speed/fuel) and `audio`.
+  The planet's avian trimesh collider is built inline from
+  `TriangleMeshBuilder::vertices_and_indices()`. Follows the `06_fruitninja`
+  shape (states, sounds, wasm). See `docs/2026-07-03-dropzone-example.md`;
+  the flight constants are tuned by reasoning and may need play-testing.
 
 ## Workflow
 
