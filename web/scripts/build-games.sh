@@ -25,6 +25,7 @@ out_root="${OUT_ROOT:-$repo_root/web/build/games}"
 # One entry per showcased game: "<example-name> <html-dir>".
 games=(
   "06_fruitninja web/games/06_fruitninja"
+  "08_dropzone web/games/08_dropzone"
 )
 
 for entry in "${games[@]}"; do
