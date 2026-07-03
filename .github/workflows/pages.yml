@@ -1,0 +1,49 @@
+name: Deploy web showcase to GitHub Pages
+
+# Manual only, so it never deploys on its own. Run it from the Actions tab when
+# you want to publish.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Build the site
+        env:
+          # Repo name as the Pages subpath, e.g. "/bevy-common-systems/".
+          PUBLIC_PATH: /${{ github.event.repository.name }}/
+        run: |
+          nix develop --command bash -c '
+            cd web
+            npm ci
+            npm run build
+          '
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
