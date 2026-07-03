@@ -1,8 +1,9 @@
 //! A tiny "fruit ninja" style game built entirely from procedural shapes.
 //!
-//! Boot into a main menu, click to play. Octahedron "fruits" are launched up in
-//! a parabolic arc from below the view; hold the Left Mouse Button and swipe the
-//! cursor across one to slice it into flying fragments (via `ExplodeMeshPlugin`)
+//! Boot into a main menu, tap or click to play. Octahedron "fruits" are launched
+//! up in a parabolic arc from below the view; hold the Left Mouse Button (or a
+//! finger on a touchscreen) and swipe across one to slice it into flying
+//! fragments (via `ExplodeMeshPlugin`)
 //! and score a point. A bright blade trail follows the swipe, and each slice
 //! pops a rising "+N". Slicing several fruit in one continuous swipe builds a
 //! combo: the Nth fruit is worth N points and a "COMBO xN" banner flashes. The
@@ -22,12 +23,20 @@
 //! cleanup), `HealthPlugin` (the lose condition), `SfxPlugin` (the sound
 //! effects) and `StatusBarPlugin` (the FPS overlay); the menu / states use
 //! Bevy's own state machine.
+//!
+//! Input is unified across mouse and touch through a small `Pointer` layer: the
+//! press/hold is a single `bevy_enhanced_input` action bound to both the left
+//! mouse button and a touch `Binding::Custom` (fed from Bevy's `Touches` each
+//! frame), while the on-screen position is read directly from the cursor or the
+//! active touch. So the same code path drives the game from a mouse or a finger,
+//! which is what makes the wasm/mobile showcase build playable.
 
 use std::collections::VecDeque;
 
 use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_common_systems::prelude::*;
+use bevy_enhanced_input::prelude::*;
 use clap::Parser;
 use rand::Rng;
 
@@ -35,7 +44,7 @@ use rand::Rng;
 #[command(name = "06_fruitninja")]
 #[command(version = "1.0.0")]
 #[command(
-    about = "Slice launched shapes with the mouse. Hold Left Mouse Button and swipe across a fruit to slice it.",
+    about = "Slice launched shapes with the mouse or a touchscreen. Hold Left Mouse Button (or a finger) and swipe across a fruit to slice it.",
     long_about = None
 )]
 struct Cli;
@@ -169,6 +178,29 @@ fn main() {
     // triggers `PlaySfx` on events; this plugin spawns the players.
     app.add_plugins(SfxPlugin);
 
+    // Unified mouse + touch input. `bevy_enhanced_input` drives the press/hold
+    // as one action (bound to the left mouse button and a touch `Binding::Custom`
+    // in `setup`); `stage_pointer_input` feeds the touch value and the on-screen
+    // position each frame. Guarded in case a future dependency already adds it.
+    if !app.is_plugin_added::<EnhancedInputPlugin>() {
+        app.add_plugins(EnhancedInputPlugin);
+    }
+    app.add_input_context::<PointerInput>();
+    app.init_resource::<Pointer>();
+    app.add_observer(on_pointer_press_start);
+    app.add_observer(on_pointer_press_complete);
+    // Stage touch state and the pointer position after Bevy has read raw input
+    // and before enhanced_input evaluates the action for this frame.
+    app.add_systems(
+        PreUpdate,
+        stage_pointer_input
+            .after(bevy::input::InputSystems)
+            .before(EnhancedInputSystems::Prepare),
+    );
+    // `just_pressed` is set by the press observer and holds for exactly one
+    // frame; clearing it at the end of the frame keeps it edge-triggered.
+    app.add_systems(Last, clear_pointer_just_pressed);
+
     app.init_state::<GameState>();
 
     app.init_resource::<Score>();
@@ -246,6 +278,72 @@ enum GameState {
     Menu,
     Playing,
     GameOver,
+}
+
+/// The current pointer state, unified across mouse and touch. Every input-facing
+/// system reads this instead of the raw `ButtonInput<MouseButton>` /
+/// `cursor_position()` so a finger and a mouse drive the game identically.
+#[derive(Resource, Default)]
+struct Pointer {
+    /// On-screen position (logical window pixels) of the active pointer this
+    /// frame, if any. An active touch takes priority over the mouse cursor.
+    screen_pos: Option<Vec2>,
+    /// Whether the pointer is currently down (mouse button held or a finger on
+    /// the screen). Driven by the `PointerPress` enhanced_input action.
+    pressed: bool,
+    /// True only on the frame the press began (a click or a tap), for the
+    /// menu / game-over "advance on tap" checks.
+    just_pressed: bool,
+}
+
+/// Input-context marker for the pointer's enhanced_input action.
+#[derive(Component, Debug, Clone)]
+struct PointerInput;
+
+/// The `Binding::Custom` id that carries the touch-pressed state into
+/// enhanced_input. Registered once in `setup`.
+#[derive(Resource)]
+struct TouchInputId(CustomInput);
+
+/// The press/hold action. Bound to the left mouse button and the touch custom
+/// input, so either device actuates it.
+#[derive(InputAction)]
+#[action_output(bool)]
+struct PointerPress;
+
+/// Feed touch state into enhanced_input and resolve the pointer position.
+///
+/// Runs in `PreUpdate` after Bevy reads raw input and before enhanced_input
+/// evaluates the action, per the `CustomInputs` docs. On desktop `Touches` is
+/// always empty, so the custom input stays `false` and the position falls back
+/// to the mouse cursor -- behavior is then identical to the mouse-only game.
+fn stage_pointer_input(
+    touch_id: Res<TouchInputId>,
+    touches: Res<Touches>,
+    window: Single<&Window>,
+    mut custom_inputs: ResMut<CustomInputs>,
+    mut pointer: ResMut<Pointer>,
+) {
+    let touch_pos = touches.iter().next().map(|touch| touch.position());
+    custom_inputs.insert(touch_id.0, ActionValue::Bool(touch_pos.is_some()));
+    // An active touch wins over the mouse cursor so a finger drives aiming.
+    pointer.screen_pos = active_pointer_pos(touch_pos, window.cursor_position());
+}
+
+/// Mark the pointer as pressed on the press edge (click or tap begins).
+fn on_pointer_press_start(_: On<Start<PointerPress>>, mut pointer: ResMut<Pointer>) {
+    pointer.pressed = true;
+    pointer.just_pressed = true;
+}
+
+/// Clear the pressed state when the button / finger is released.
+fn on_pointer_press_complete(_: On<Complete<PointerPress>>, mut pointer: ResMut<Pointer>) {
+    pointer.pressed = false;
+}
+
+/// Reset the one-frame `just_pressed` edge at the end of every frame.
+fn clear_pointer_just_pressed(mut pointer: ResMut<Pointer>) {
+    pointer.just_pressed = false;
 }
 
 /// Running number of fruits sliced. Shown in the score HUD.
@@ -515,7 +613,29 @@ fn setup(
     asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut custom_inputs: ResMut<CustomInputs>,
 ) {
+    // Register the touch custom input and spawn the pointer action here, in one
+    // place, so the id is in scope for both the `Binding::Custom` below and the
+    // `TouchInputId` resource `stage_pointer_input` reads -- no cross-system
+    // ordering to get wrong. The single `PointerPress` action is actuated by the
+    // left mouse button or the touch input, so mouse and finger share one press.
+    let touch_id = custom_inputs.register_input();
+    commands.insert_resource(TouchInputId(touch_id));
+    commands.spawn((
+        Name::new("Pointer Input"),
+        PointerInput,
+        actions!(
+            PointerInput[
+                (
+                    Name::new("Input: Pointer Press"),
+                    Action::<PointerPress>::new(),
+                    bindings![MouseButton::Left, Binding::Custom(touch_id)],
+                ),
+            ]
+        ),
+    ));
+
     // Load one sound per gameplay event. Paths are relative to `assets/`.
     commands.insert_resource(SfxAssets {
         menu_select: asset_server.load("sounds/menu_select.wav"),
@@ -822,7 +942,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
                 screen_text("FRUIT NINJA", 72.0, Color::srgb(0.95, 0.85, 0.25)),
                 MenuTitle,
             ),
-            screen_text("Click to play", 32.0, Color::WHITE),
+            screen_text("Tap or click to play", 32.0, Color::WHITE),
             screen_text(
                 format!("Best: {}", high.0),
                 24.0,
@@ -848,11 +968,11 @@ fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<Men
 
 fn menu_click(
     mut commands: Commands,
-    mouse: Res<ButtonInput<MouseButton>>,
+    pointer: Res<Pointer>,
     sfx: Res<SfxAssets>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    if mouse.just_pressed(MouseButton::Left) {
+    if pointer.just_pressed {
         commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
         next.set(GameState::Playing);
     }
@@ -977,7 +1097,11 @@ fn spawn_game_over(
                     Color::srgb(0.7, 0.7, 0.7),
                 ));
             }
-            parent.spawn(screen_text("Click to return to menu", 28.0, Color::WHITE));
+            parent.spawn(screen_text(
+                "Tap or click to return to menu",
+                28.0,
+                Color::WHITE,
+            ));
         });
 }
 
@@ -998,9 +1122,9 @@ fn record_high_score(
     high.0 = high.0.max(score.0);
 }
 
-/// Return to the menu on a click from the game-over screen.
-fn gameover_click(mouse: Res<ButtonInput<MouseButton>>, mut next: ResMut<NextState<GameState>>) {
-    if mouse.just_pressed(MouseButton::Left) {
+/// Return to the menu on a tap / click from the game-over screen.
+fn gameover_click(pointer: Res<Pointer>, mut next: ResMut<NextState<GameState>>) {
+    if pointer.just_pressed {
         next.set(GameState::Menu);
     }
 }
@@ -1110,10 +1234,9 @@ fn move_projectiles(
 fn slice_objects(
     mut commands: Commands,
     time: Res<Time>,
-    window: Single<&Window>,
     camera: Single<(&Camera, &GlobalTransform)>,
     player: Single<Entity, With<Player>>,
-    mouse: Res<ButtonInput<MouseButton>>,
+    pointer: Res<Pointer>,
     mut trail: ResMut<CursorTrail>,
     mut blade: ResMut<BladeTrail>,
     mut combo: ResMut<Combo>,
@@ -1126,14 +1249,17 @@ fn slice_objects(
     // segment instead of jumping across the screen from a stale point, and the
     // blade trail is cleared so it does not linger. The combo is NOT reset here:
     // it lives on its own window (see `tick_combo`) so it can span strokes.
-    if !mouse.pressed(MouseButton::Left) {
+    if !pointer.pressed {
         trail.previous = None;
         blade.points.clear();
         return;
     }
 
     let (camera, camera_transform) = *camera;
-    let Some(current) = cursor_on_play_plane(&window, camera, camera_transform) else {
+    let Some(screen_pos) = pointer.screen_pos else {
+        return;
+    };
+    let Some(current) = pointer_on_play_plane(screen_pos, camera, camera_transform) else {
         return;
     };
 
@@ -1274,17 +1400,19 @@ fn slice_objects(
 /// Draw a small ring where the cursor meets the play plane, so aiming reads
 /// clearly even when not swiping. Brighter/larger while the button is held.
 fn draw_cursor_indicator(
-    window: Single<&Window>,
     camera: Single<(&Camera, &GlobalTransform)>,
-    mouse: Res<ButtonInput<MouseButton>>,
+    pointer: Res<Pointer>,
     mut gizmos: Gizmos,
 ) {
     let (camera, camera_transform) = *camera;
-    let Some(pos) = cursor_on_play_plane(&window, camera, camera_transform) else {
+    let Some(screen_pos) = pointer.screen_pos else {
+        return;
+    };
+    let Some(pos) = pointer_on_play_plane(screen_pos, camera, camera_transform) else {
         return;
     };
 
-    let held = mouse.pressed(MouseButton::Left);
+    let held = pointer.pressed;
     let radius = if held { 0.5 } else { 0.35 };
     let color = if held {
         Color::srgba(0.9, 0.98, 1.0, 0.9)
@@ -1398,16 +1526,25 @@ fn move_fragments(time: Res<Time>, mut q_fragments: Query<(&mut Transform, &mut 
     }
 }
 
-/// World position where the cursor ray meets the play plane, if the cursor is
-/// on screen and its ray actually crosses the plane.
-fn cursor_on_play_plane(
-    window: &Window,
+/// Pick the active pointer's screen position: an active touch wins over the
+/// mouse cursor, so a finger drives aiming when one is down and the cursor is
+/// the fallback (the desktop case, where there is never a touch).
+fn active_pointer_pos(touch_pos: Option<Vec2>, cursor_pos: Option<Vec2>) -> Option<Vec2> {
+    touch_pos.or(cursor_pos)
+}
+
+/// World position where the pointer ray meets the play plane, if the given
+/// screen position projects onto the plane. Shared by mouse and touch: the
+/// caller resolves the screen position (see `active_pointer_pos`), this only
+/// does the camera projection.
+fn pointer_on_play_plane(
+    screen_pos: Vec2,
     camera: &Camera,
     camera_transform: &GlobalTransform,
 ) -> Option<Vec3> {
-    let cursor = window.cursor_position()?;
-
-    let ray = camera.viewport_to_world(camera_transform, cursor).ok()?;
+    let ray = camera
+        .viewport_to_world(camera_transform, screen_pos)
+        .ok()?;
     let plane = InfinitePlane3d::new(Vec3::Z);
     let distance = ray.intersect_plane(Vec3::new(0.0, 0.0, PLAY_Z), plane)?;
 
@@ -1443,6 +1580,26 @@ fn swipe_is_active(previous: Vec3, current: Vec3, dt: f32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn touch_wins_over_cursor() {
+        // With both present, the active touch drives aiming.
+        let touch = Vec2::new(10.0, 20.0);
+        let cursor = Vec2::new(30.0, 40.0);
+        assert_eq!(active_pointer_pos(Some(touch), Some(cursor)), Some(touch));
+    }
+
+    #[test]
+    fn cursor_is_used_without_touch() {
+        // The desktop case: no touch, so the mouse cursor position is used.
+        let cursor = Vec2::new(30.0, 40.0);
+        assert_eq!(active_pointer_pos(None, Some(cursor)), Some(cursor));
+    }
+
+    #[test]
+    fn no_pointer_when_neither_present() {
+        assert_eq!(active_pointer_pos(None, None), None);
+    }
 
     #[test]
     fn point_inside_circle_hits() {
