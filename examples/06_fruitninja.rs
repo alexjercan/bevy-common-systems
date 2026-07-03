@@ -137,6 +137,8 @@ fn main() {
     app.init_state::<GameState>();
 
     app.init_resource::<Score>();
+    app.init_resource::<HighScore>();
+    app.init_resource::<NewBest>();
     app.insert_resource(SpawnTimer(Timer::from_seconds(
         SPAWN_INTERVAL,
         TimerMode::Repeating,
@@ -184,7 +186,10 @@ fn main() {
     app.add_systems(Update, apply_camera_shake);
 
     // Game over screen.
-    app.add_systems(OnEnter(GameState::GameOver), spawn_game_over);
+    app.add_systems(
+        OnEnter(GameState::GameOver),
+        (record_high_score, spawn_game_over).chain(),
+    );
     app.add_systems(Update, gameover_click.run_if(in_state(GameState::GameOver)));
 
     app.add_observer(on_fragments_spawned);
@@ -205,6 +210,14 @@ enum GameState {
 /// Running number of fruits sliced. Shown in the score HUD.
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
+
+/// Best score across runs this session (not reset per run).
+#[derive(Resource, Default)]
+struct HighScore(usize);
+
+/// Whether the most recent run set a new high score (for the game-over screen).
+#[derive(Resource, Default)]
+struct NewBest(bool);
 
 /// Ticks between fruit launches.
 #[derive(Resource, Deref, DerefMut)]
@@ -654,7 +667,7 @@ fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle 
 }
 
 /// Spawn the main menu (title + prompt), scoped to the `Menu` state.
-fn spawn_menu(mut commands: Commands) {
+fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
     commands.spawn((
         Name::new("Main Menu"),
         DespawnOnExit(GameState::Menu),
@@ -662,6 +675,11 @@ fn spawn_menu(mut commands: Commands) {
         children![
             screen_text("FRUIT NINJA", 72.0, Color::srgb(0.95, 0.85, 0.25)),
             screen_text("Click to play", 32.0, Color::WHITE),
+            screen_text(
+                format!("Best: {}", high.0),
+                24.0,
+                Color::srgb(0.95, 0.85, 0.25),
+            ),
             screen_text(
                 "swipe to slice - avoid the bombs - Esc to give up",
                 20.0,
@@ -732,17 +750,46 @@ fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<
 }
 
 /// Spawn the game-over screen with the final score, scoped to `GameOver`.
-fn spawn_game_over(mut commands: Commands, score: Res<Score>) {
-    commands.spawn((
-        Name::new("Game Over"),
-        DespawnOnExit(GameState::GameOver),
-        centered_screen(),
-        children![
-            screen_text("GAME OVER", 72.0, Color::srgb(0.9, 0.25, 0.25)),
-            screen_text(score_label(score.0), 40.0, Color::srgb(0.95, 0.85, 0.25)),
-            screen_text("Click to return to menu", 28.0, Color::WHITE),
-        ],
-    ));
+fn spawn_game_over(
+    mut commands: Commands,
+    score: Res<Score>,
+    high: Res<HighScore>,
+    new_best: Res<NewBest>,
+) {
+    commands
+        .spawn((
+            Name::new("Game Over"),
+            DespawnOnExit(GameState::GameOver),
+            centered_screen(),
+        ))
+        .with_children(|parent| {
+            parent.spawn(screen_text("GAME OVER", 72.0, Color::srgb(0.9, 0.25, 0.25)));
+            parent.spawn(screen_text(
+                score_label(score.0),
+                40.0,
+                Color::srgb(0.95, 0.85, 0.25),
+            ));
+            if new_best.0 {
+                parent.spawn(screen_text("New best!", 32.0, Color::srgb(0.4, 0.95, 0.5)));
+            } else {
+                parent.spawn(screen_text(
+                    format!("Best: {}", high.0),
+                    28.0,
+                    Color::srgb(0.7, 0.7, 0.7),
+                ));
+            }
+            parent.spawn(screen_text("Click to return to menu", 28.0, Color::WHITE));
+        });
+}
+
+/// Record the run's score into the session high score, flagging a new best.
+fn record_high_score(
+    score: Res<Score>,
+    mut high: ResMut<HighScore>,
+    mut new_best: ResMut<NewBest>,
+) {
+    new_best.0 = score.0 > high.0;
+    high.0 = high.0.max(score.0);
 }
 
 /// Return to the menu on a click from the game-over screen.
