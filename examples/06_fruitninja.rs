@@ -975,17 +975,35 @@ fn draw_blade_trail(blade: Res<BladeTrail>, mut gizmos: Gizmos) {
     // Lift the trail slightly toward the camera so it draws in front of fruit.
     let lift = Vec3::Z * 0.5;
 
+    // Half-width of the blade at the head, in world units; tapers to 0 at tail.
+    const BLADE_WIDTH: f32 = 0.22;
+
     for (i, (a, b)) in blade
         .points
         .iter()
         .zip(blade.points.iter().skip(1))
         .enumerate()
     {
-        // t ramps 0 -> 1 from tail to head; alpha follows so the blade looks
-        // like it is trailing the cursor.
+        // t ramps 0 -> 1 from tail to head; alpha and width follow so the blade
+        // looks like a bright edge trailing to a thin tail.
         let t = (i + 1) as f32 / (count - 1) as f32;
-        let color = Color::srgba(0.7, 0.95, 1.0, t);
-        gizmos.line(*a + lift, *b + lift, color);
+        let a = *a + lift;
+        let b = *b + lift;
+
+        // Perpendicular to the segment on the play plane, scaled by the taper.
+        let dir = b - a;
+        let perp = if dir.length_squared() > f32::EPSILON {
+            Vec3::new(-dir.y, dir.x, 0.0).normalize() * BLADE_WIDTH * t
+        } else {
+            Vec3::ZERO
+        };
+
+        // Cyan edges flanking a hot white core, all fading toward the tail.
+        let edge = Color::srgba(0.4, 0.85, 1.0, t * 0.6);
+        let core = Color::srgba(0.9, 0.98, 1.0, t);
+        gizmos.line(a + perp, b + perp, edge);
+        gizmos.line(a - perp, b - perp, edge);
+        gizmos.line(a, b, core);
     }
 }
 
