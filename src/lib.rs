@@ -2,6 +2,7 @@
 //!
 //! Fully copy-pastable crate for common gameplay components and systems.
 
+pub mod audio;
 pub mod camera;
 #[cfg(feature = "debug")]
 pub mod debug;
@@ -22,8 +23,8 @@ pub mod prelude {
     #[cfg(feature = "debug")]
     pub use crate::debug::prelude::*;
     pub use crate::{
-        camera::prelude::*, health::prelude::*, helpers::prelude::*, mesh::prelude::*,
-        meth::prelude::*, modding, modding::prelude::*, physics::prelude::*, transform::prelude::*,
-        ui::prelude::*,
+        audio::prelude::*, camera::prelude::*, health::prelude::*, helpers::prelude::*,
+        mesh::prelude::*, meth::prelude::*, modding, modding::prelude::*, physics::prelude::*,
+        transform::prelude::*, ui::prelude::*,
     };
 }
