@@ -49,8 +49,13 @@ const SPAWN_Y: f32 = -10.0;
 /// radius, so this doubles as the slice hit radius.
 const FRUIT_RADIUS: f32 = 1.0;
 
-/// Seconds between fruit launches.
+/// Seconds between launches at the start of a run, and the floor it ramps down
+/// to as the run goes on.
 const SPAWN_INTERVAL: f32 = 0.9;
+const SPAWN_INTERVAL_FLOOR: f32 = 0.35;
+
+/// Seconds of play over which difficulty ramps from start to floor/cap.
+const DIFFICULTY_RAMP_SECS: f32 = 60.0;
 
 /// Fragments requested per slice.
 const FRAGMENT_COUNT: usize = 10;
@@ -91,8 +96,10 @@ const POPUP_LIFETIME: f32 = 0.8;
 /// How fast a floating popup rises up the screen, in pixels per second.
 const POPUP_RISE_SPEED: f32 = 70.0;
 
-/// Chance that a launched object is a bomb rather than a fruit.
-const BOMB_CHANCE: f64 = 0.2;
+/// Chance a launched object is a bomb: starts at `BOMB_CHANCE_START` and ramps
+/// up to `BOMB_CHANCE_CAP` over `DIFFICULTY_RAMP_SECS`.
+const BOMB_CHANCE_START: f64 = 0.2;
+const BOMB_CHANCE_CAP: f64 = 0.35;
 
 /// Player health at the start of a run. Slicing a bomb deals lethal damage,
 /// so this is effectively a single life; it is still a real `Health` value so
@@ -135,6 +142,7 @@ fn main() {
     app.init_resource::<Combo>();
     app.init_resource::<CameraShake>();
     app.init_resource::<DyingTimer>();
+    app.init_resource::<Elapsed>();
 
     // Persistent scene: camera, light and the FPS status bar live for the whole
     // run, independent of game state.
@@ -152,6 +160,7 @@ fn main() {
     app.add_systems(
         Update,
         (
+            tick_elapsed,
             spawn_projectile,
             move_projectiles,
             slice_objects,
@@ -223,6 +232,32 @@ struct Combo {
 fn advance_combo(combo: &mut Combo) -> usize {
     combo.count += 1;
     combo.count
+}
+
+/// Seconds elapsed in the current run, driving the difficulty ramp.
+#[derive(Resource, Default)]
+struct Elapsed(f32);
+
+/// Normalized difficulty progress in 0..1 for a given elapsed run time.
+fn ramp_t(elapsed: f32) -> f32 {
+    (elapsed / DIFFICULTY_RAMP_SECS).clamp(0.0, 1.0)
+}
+
+/// Spawn interval (seconds) for a given elapsed run time: eases from
+/// `SPAWN_INTERVAL` down to `SPAWN_INTERVAL_FLOOR`.
+fn spawn_interval_for(elapsed: f32) -> f32 {
+    SPAWN_INTERVAL + (SPAWN_INTERVAL_FLOOR - SPAWN_INTERVAL) * ramp_t(elapsed)
+}
+
+/// Bomb chance for a given elapsed run time: eases from `BOMB_CHANCE_START` up
+/// to `BOMB_CHANCE_CAP`.
+fn bomb_chance_for(elapsed: f32) -> f64 {
+    BOMB_CHANCE_START + (BOMB_CHANCE_CAP - BOMB_CHANCE_START) * ramp_t(elapsed) as f64
+}
+
+/// Advance the run clock each frame while playing.
+fn tick_elapsed(time: Res<Time>, mut elapsed: ResMut<Elapsed>) {
+    elapsed.0 += time.delta_secs();
 }
 
 /// Camera shake energy; decays to 0, offsetting the camera while positive.
@@ -613,6 +648,7 @@ fn start_game(
     mut combo: ResMut<Combo>,
     mut shake: ResMut<CameraShake>,
     mut dying: ResMut<DyingTimer>,
+    mut elapsed: ResMut<Elapsed>,
 ) {
     score.0 = 0;
     timer.reset();
@@ -623,6 +659,8 @@ fn start_game(
     combo.count = 0;
     shake.trauma = 0.0;
     dying.remaining = None;
+    elapsed.0 = 0.0;
+    timer.set_duration(std::time::Duration::from_secs_f32(SPAWN_INTERVAL));
 }
 
 /// Spawn the in-game HUD (score), scoped to the `Playing` state.
@@ -680,11 +718,17 @@ fn spawn_projectile(
     mut commands: Commands,
     time: Res<Time>,
     mut timer: ResMut<SpawnTimer>,
+    elapsed: Res<Elapsed>,
     assets: Res<FruitAssets>,
 ) {
     if !timer.tick(time.delta()).just_finished() {
         return;
     }
+
+    // Ramp the next interval down as the run goes on, so launches speed up.
+    timer.set_duration(std::time::Duration::from_secs_f32(spawn_interval_for(
+        elapsed.0,
+    )));
 
     let mut rng = rand::rng();
 
@@ -694,7 +738,7 @@ fn spawn_projectile(
     let vx = rng.random_range(-2.5..2.5) - x * 0.25;
     let vy = rng.random_range(17.0..21.0);
 
-    let is_bomb = rng.random_bool(BOMB_CHANCE);
+    let is_bomb = rng.random_bool(bomb_chance_for(elapsed.0));
     let material = if is_bomb {
         assets.bomb_material.clone()
     } else {
@@ -1098,5 +1142,28 @@ mod tests {
     fn zero_dt_is_not_a_swipe() {
         // Guards the division; a zero-length frame is never an active swipe.
         assert!(!swipe_is_active(Vec3::ZERO, Vec3::new(1.0, 0.0, 0.0), 0.0));
+    }
+
+    #[test]
+    fn difficulty_ramp_endpoints() {
+        // At t=0 the game is at the easy start values.
+        assert!((spawn_interval_for(0.0) - SPAWN_INTERVAL).abs() < 1e-6);
+        assert!((bomb_chance_for(0.0) - BOMB_CHANCE_START).abs() < 1e-6);
+
+        // At/after the ramp duration it is clamped to the hard floor/cap.
+        assert!(
+            (spawn_interval_for(DIFFICULTY_RAMP_SECS * 2.0) - SPAWN_INTERVAL_FLOOR).abs() < 1e-6
+        );
+        assert!((bomb_chance_for(DIFFICULTY_RAMP_SECS * 2.0) - BOMB_CHANCE_CAP).abs() < 1e-6);
+    }
+
+    #[test]
+    fn difficulty_ramp_is_monotonic_midway() {
+        // Halfway through, spawn interval is shorter and bombs more likely.
+        let mid = DIFFICULTY_RAMP_SECS / 2.0;
+        assert!(spawn_interval_for(mid) < SPAWN_INTERVAL);
+        assert!(spawn_interval_for(mid) > SPAWN_INTERVAL_FLOOR);
+        assert!(bomb_chance_for(mid) > BOMB_CHANCE_START);
+        assert!(bomb_chance_for(mid) < BOMB_CHANCE_CAP);
     }
 }
