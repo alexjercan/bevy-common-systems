@@ -1,6 +1,6 @@
 # Fruit ninja: thicker gradient blade trail
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 85
 - TAGS: feature,example
 
@@ -12,15 +12,15 @@ line.
 
 ## Steps
 
-- [ ] In `draw_blade_trail`, for each segment compute a perpendicular offset
+- [x] In `draw_blade_trail`, for each segment compute a perpendicular offset
       (perp of the segment direction on the play plane) and draw 2-3 parallel
       lines: a bright/white center plus fainter cyan lines offset by a small
       amount on each side, so the trail looks thicker.
-- [ ] Keep the existing tail->head alpha ramp; optionally shift color from cyan
+- [x] Keep the existing tail->head alpha ramp; optionally shift color from cyan
       at the tail to white at the head for a hotter leading edge.
-- [ ] Scale the offset width slightly by the alpha `t` so the trail tapers to a
+- [x] Scale the offset width slightly by the alpha `t` so the trail tapers to a
       point at the tail.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, and a real boot (seed the trail as in
       the blade-trail task's verification and confirm the multi-line draw runs
       without panic).
@@ -36,3 +36,9 @@ line.
   offset lines; keep the offset small (fractions of a world unit).
 - Purely cosmetic; no state changes, no new resource.
 - No new dependencies.
+
+## Close-out
+
+draw_blade_trail now draws 3 gizmo lines per segment: a hot white core flanked
+by cyan edges offset along the segment perpendicular, width tapering with the
+tail->head `t` (guarded against zero-length segments). Purely cosmetic.
