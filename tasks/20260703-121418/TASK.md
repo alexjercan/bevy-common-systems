@@ -1,6 +1,6 @@
 # Fruit ninja: main menu and game states
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: feature,example
 
@@ -56,3 +56,13 @@ playing.
   (bombs task). Here `Escape` is a stand-in trigger so the state machine is
   fully exercisable before bombs exist; keep it as a "give up" shortcut after.
 - No new dependencies.
+
+## Close-out
+
+Added `GameState { Menu, Playing, GameOver }` with click-to-play, state-scoped
+UI/gameplay cleanup via `DespawnOnExit(Playing)`, per-run reset in `start_game`,
+and an Escape give-up to a game-over screen (real lose trigger comes with
+bombs). Camera/light/FPS bar stay persistent. Review: 1 round APPROVE, 2 NITs
+left intentionally (menu's "avoid the bombs" becomes true next task; hold-click
+carry-over is negligible). Verified via a real-GPU state-cycling boot: fruit
+clean up on exit Playing, score resets on re-entry, no panic.
