@@ -1,6 +1,6 @@
 # Fruit ninja: high score across runs
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: feature,example
 
@@ -12,15 +12,15 @@ beats it. Adds replay pull.
 
 ## Steps
 
-- [ ] Add a `HighScore(usize)` resource (`init_resource`), persisting for the
+- [x] Add a `HighScore(usize)` resource (`init_resource`), persisting for the
       whole app run (not state-scoped).
-- [ ] On entering `GameOver` (or in `on_player_died` / the game-over spawn),
+- [x] On entering `GameOver` (or in `on_player_died` / the game-over spawn),
       update `HighScore` to `max(HighScore, Score)` and remember whether this
       run set a new best.
-- [ ] `spawn_menu`: add a "Best: N" line reading `HighScore`.
-- [ ] `spawn_game_over`: show the final score and the high score, and a "New
+- [x] `spawn_menu`: add a "Best: N" line reading `HighScore`.
+- [x] `spawn_game_over`: show the final score and the high score, and a "New
       best!" line when the run beat the previous best.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets` (+ `--features
       debug`), `./scripts/check-ascii.sh`, real boot with no panic.
 
 ## Notes
@@ -33,3 +33,11 @@ beats it. Adds replay pull.
 - Compute the "new best" flag before overwriting `HighScore`, so the game-over
   screen can show it.
 - No new dependencies.
+
+## Close-out
+
+Added session `HighScore` + `NewBest` resources. `record_high_score` (chained
+before `spawn_game_over` on GameOver enter) flags a new best and updates the
+best. Menu shows "Best: N"; game-over shows "New best!" or "Best: N". High
+score is in-memory (session only); file persistence via std::fs left as an
+optional follow-up (no new deps), not done.
