@@ -33,11 +33,21 @@ Verified independently against master:
   `Value::Null`, giving `{ data: Some(Null) }` - sane "no payload"
   semantics for filters that inspect `info.data`.
 
-- [ ] R1.1 (NIT) src/modding/events.rs:32 - the `EventKind` trait doc does
+- [x] R1.1 (NIT) src/modding/events.rs:32 - the `EventKind` trait doc does
   not mention what the derive defaults to when `#[event_info(...)]` /
   `#[event_name(...)]` are omitted (`Info = ()`, name = lowercased struct
   name). The example now documents it inline, so this is discretionary;
   a one-line note on the trait or the derive would aid discoverability.
-  - Response:
+  - Response: fixed in 7d6fbde - added the defaults note to the EventKind
+    trait doc in src/modding/events.rs.
 
 No BLOCKER/MAJOR/MINOR findings; the NIT is optional. APPROVE.
+
+## Round 2
+
+- VERDICT: APPROVE
+
+Verified 7d6fbde: the `EventKind` trait doc now states the derive defaults
+(`Info = ()`, lowercased struct name) and how to override them. Doc change
+only; `cargo test --doc` and `cargo fmt --check` still pass. Finding R1.1
+resolved. No new findings.
