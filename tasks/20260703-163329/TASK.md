@@ -1,6 +1,6 @@
 # Verify web audio playback and handle the browser autoplay policy
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 70
 - TAGS: web,wasm,audio,verify
 
