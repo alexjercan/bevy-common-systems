@@ -377,53 +377,57 @@ struct BladeTrail {
 /// the window to keep it alive. Each slice scores its combo index (1, 2, 3, ...)
 /// and refreshes the window; when the window runs out the combo resets. Slicing
 /// still needs an active swipe, so the combo cannot be farmed by holding.
-#[derive(Resource, Default)]
+#[derive(Resource)]
 struct Combo {
-    count: usize,
-    timer: f32,
+    /// The decay bookkeeping (count + window) lives in the crate's `Streak`.
+    streak: Streak,
     /// Total points scored during the current combo, for the end-of-combo tally.
+    /// This is 06's own scoring rule, kept out of the shared `Streak`.
     points: usize,
 }
 
-/// Advance the combo for one more sliced fruit: bump the count, refresh the
-/// window, and return the points earned (the new count).
+impl Default for Combo {
+    fn default() -> Self {
+        Self {
+            streak: Streak::new(COMBO_WINDOW),
+            points: 0,
+        }
+    }
+}
+
+/// Advance the combo for one more sliced fruit: bump the streak, add the new
+/// count to the running tally, and return it (the points earned for this slice).
 fn advance_combo(combo: &mut Combo) -> usize {
-    combo.count += 1;
-    combo.timer = COMBO_WINDOW;
-    combo.points += combo.count;
-    combo.count
+    let count = combo.streak.hit();
+    combo.points += count;
+    count
 }
 
 /// Count the combo window down; when it runs out the combo ends: show a tally
-/// for a real (>= 2 hit) combo, then reset it.
+/// for a real (>= 2 hit) combo, then reset the tally.
 fn tick_combo(
     time: Res<Time>,
     mut commands: Commands,
     window: Single<&Window>,
     mut combo: ResMut<Combo>,
 ) {
-    if combo.count == 0 {
+    let Some(final_count) = combo.streak.tick(time.delta_secs()) else {
         return;
-    }
-    combo.timer -= time.delta_secs();
-    if combo.timer > 0.0 {
-        return;
-    }
+    };
 
-    if combo.count >= 2 {
+    if final_count >= 2 {
         // Centered-ish tally near the top of the screen.
         let pos = Vec2::new(window.width() * 0.5 - 110.0, window.height() * 0.3);
         commands
             .spawn(popup(
                 pos,
-                format!("COMBO x{} +{}", combo.count, combo.points),
+                format!("COMBO x{} +{}", final_count, combo.points),
                 52.0,
                 Color::srgb(1.0, 0.75, 0.2),
             ))
             .insert(DespawnOnExit(GameState::Playing));
     }
 
-    combo.count = 0;
     combo.points = 0;
 }
 
@@ -860,8 +864,7 @@ fn start_game(
     // Clear any trail left over from a swipe that ended the previous run so the
     // new run does not flash a stale blade.
     blade.points.clear();
-    combo.count = 0;
-    combo.timer = 0.0;
+    combo.streak.reset();
     combo.points = 0;
     // Snap any lingering shake back to zero so it does not bleed into the run.
     if let Ok(mut input) = q_shake.single_mut() {
@@ -917,10 +920,10 @@ fn update_combo_text(
     mut q_text: Query<(&mut Text, &mut TextColor), With<ComboText>>,
 ) {
     for (mut text, mut color) in q_text.iter_mut() {
-        if combo.count >= 2 {
-            **text = format!("Combo x{}", combo.count);
+        if combo.streak.count() >= 2 {
+            **text = format!("Combo x{}", combo.streak.count());
             // Fade with the remaining window so it visibly cools down.
-            let alpha = (combo.timer / COMBO_WINDOW).clamp(0.2, 1.0);
+            let alpha = combo.streak.remaining_frac().clamp(0.2, 1.0);
             color.0 = Color::srgba(1.0, 0.55, 0.1, alpha);
         } else {
             text.clear();
@@ -1205,10 +1208,10 @@ fn slice_objects(
                 // Only fold into the combo tally when a combo is actually
                 // running, otherwise `points` would leak (tick_combo only
                 // clears it when a counted combo ends).
-                if combo.count > 0 {
+                if combo.streak.is_active() {
                     combo.points += GOLDEN_POINTS;
                 }
-                combo.timer = combo.timer.max(COMBO_WINDOW_GOLDEN);
+                combo.streak.extend_to(COMBO_WINDOW_GOLDEN);
                 if let Some(viewport_pos) = viewport_pos {
                     commands
                         .spawn(popup(
@@ -1230,8 +1233,8 @@ fn slice_objects(
 
                 // A multi-fruit combo rings a chime that rises in pitch as the
                 // chain grows, so a long combo reads as escalating.
-                if combo.count >= 2 {
-                    let speed = (1.0 + (combo.count as f32 - 2.0) * 0.06).min(1.6);
+                if combo.streak.count() >= 2 {
+                    let speed = (1.0 + (combo.streak.count() as f32 - 2.0) * 0.06).min(1.6);
                     commands.trigger(
                         PlaySfx::new(sfx.combo.clone())
                             .with_volume(0.8)
@@ -1252,11 +1255,11 @@ fn slice_objects(
                         .insert(DespawnOnExit(GameState::Playing));
 
                     // A multi-fruit combo reads as special: a flashy banner.
-                    if combo.count >= 2 {
+                    if combo.streak.count() >= 2 {
                         commands
                             .spawn(popup(
                                 viewport_pos - Vec2::Y * 44.0,
-                                format!("COMBO x{}", combo.count),
+                                format!("COMBO x{}", combo.streak.count()),
                                 48.0,
                                 Color::srgb(1.0, 0.55, 0.1),
                             ))
@@ -1513,36 +1516,19 @@ mod tests {
 
     #[test]
     fn combo_escalates_within_a_swipe() {
-        // The k-th fruit in one swipe earns k points: 1, 2, 3, ...
+        // The k-th fruit in one swipe earns k points: 1, 2, 3, ... (the decay
+        // bookkeeping itself is tested on the crate's `Streak`).
         let mut combo = Combo::default();
         assert_eq!(advance_combo(&mut combo), 1);
         assert_eq!(advance_combo(&mut combo), 2);
         assert_eq!(advance_combo(&mut combo), 3);
-        assert_eq!(combo.count, 3);
-    }
-
-    #[test]
-    fn combo_resets_after_window_expires() {
-        // When the window runs out (count reset to 0), the chain starts fresh.
-        let mut combo = Combo::default();
-        advance_combo(&mut combo);
-        advance_combo(&mut combo);
-        combo.count = 0; // window expired (see tick_combo)
-        assert_eq!(advance_combo(&mut combo), 1);
-    }
-
-    #[test]
-    fn advancing_combo_refreshes_the_window() {
-        // Each slice refreshes the full window so the chain can continue.
-        let mut combo = Combo::default();
-        combo.timer = 0.1;
-        advance_combo(&mut combo);
-        assert!((combo.timer - COMBO_WINDOW).abs() < 1e-6);
+        assert_eq!(combo.streak.count(), 3);
     }
 
     #[test]
     fn combo_accumulates_tally_points() {
-        // A 3-hit combo tallies 1 + 2 + 3 = 6 points for the end summary.
+        // A 3-hit combo tallies 1 + 2 + 3 = 6 points for the end summary. A
+        // reset (a hit that broke the chain, or a new run) clears the tally.
         let mut combo = Combo::default();
         advance_combo(&mut combo);
         advance_combo(&mut combo);

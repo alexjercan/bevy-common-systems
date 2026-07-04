@@ -1,6 +1,6 @@
 # scoring: Score + Combo/Streak decay resource (Wave B)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 22
 - TAGS: spike,feature,scoring
 

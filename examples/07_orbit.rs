@@ -198,7 +198,7 @@ fn main() {
     app.init_resource::<Elapsed>();
     app.init_resource::<Level>();
     app.init_resource::<HitCooldown>();
-    app.init_resource::<Streak>();
+    app.insert_resource(Streak::new(STREAK_WINDOW));
 
     // Persistent scene: camera, light, planet and the FPS status bar live for
     // the whole run, independent of game state.
@@ -281,16 +281,6 @@ enum GameState {
 /// slowly. The displayed score folds in survival time too (see `score_value`).
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
-
-/// The current pickup streak: how many orbs have been collected in quick
-/// succession, and how long is left on the window to keep it alive. Each pickup
-/// bumps the count and refreshes the window; when the window lapses the streak
-/// resets. Modelled on `06_fruitninja`'s `Combo`.
-#[derive(Resource, Default)]
-struct Streak {
-    count: usize,
-    timer: f32,
-}
 
 /// Best score across runs this session (not reset per run).
 #[derive(Resource, Default)]
@@ -607,14 +597,6 @@ fn score_value(orb_points: usize, elapsed: f32) -> usize {
     orb_points + elapsed.max(0.0) as usize
 }
 
-/// Advance the streak for one more collected orb: bump the count, refresh the
-/// window, and return the new count (which scales the orb's value).
-fn advance_streak(streak: &mut Streak) -> usize {
-    streak.count += 1;
-    streak.timer = STREAK_WINDOW;
-    streak.count
-}
-
 /// Points a single orb is worth at a given streak length: the base `ORB_POINTS`
 /// scaled by the streak, so the 1st orb is worth `ORB_POINTS`, the 2nd twice
 /// that, and so on. A lone pickup (streak 1) is unchanged from before.
@@ -772,8 +754,7 @@ fn start_game(
     elapsed.0 = 0.0;
     level.0 = 1;
     cooldown.0 = 0.0;
-    streak.count = 0;
-    streak.timer = 0.0;
+    streak.reset();
     // Snap any lingering shake back to zero so it does not bleed into the run.
     if let Ok(mut input) = q_shake.single_mut() {
         input.reset = true;
@@ -1010,7 +991,7 @@ fn resolve_collisions(
 
             // Extend the streak and score the orb scaled by how long the chain
             // is, so quick collecting pays off.
-            let count = advance_streak(&mut streak);
+            let count = streak.hit();
             let points = orb_points_for(count);
             score.0 += points;
 
@@ -1070,8 +1051,7 @@ fn resolve_collisions(
         ) {
             cooldown.0 = HIT_COOLDOWN;
             // A hit also breaks the streak, jolts the camera and flashes red.
-            streak.count = 0;
-            streak.timer = 0.0;
+            streak.reset();
             if let Ok(mut input) = q_shake.single_mut() {
                 input.add_trauma += HAZARD_TRAUMA;
             }
@@ -1269,16 +1249,10 @@ fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<
 // --- Streak & floating popups ---------------------------------------------
 
 /// Count the streak window down; when it lapses the streak resets to zero so the
-/// next pickup starts a fresh chain.
+/// next pickup starts a fresh chain. 07 has no end-of-streak tally, so the
+/// `tick` return is ignored.
 fn tick_streak(time: Res<Time>, mut streak: ResMut<Streak>) {
-    if streak.count == 0 {
-        return;
-    }
-    streak.timer -= time.delta_secs();
-    if streak.timer <= 0.0 {
-        streak.count = 0;
-        streak.timer = 0.0;
-    }
+    streak.tick(time.delta_secs());
 }
 
 /// Flash a "STREAK xN" banner high on the screen. It rises and fades via the
@@ -1520,14 +1494,13 @@ mod tests {
 
     #[test]
     fn streak_advances_and_scores_more_each_orb() {
-        let mut streak = Streak::default();
-        // First orb: streak 1, worth the base value; window is armed.
-        assert_eq!(advance_streak(&mut streak), 1);
+        // The streak bookkeeping (count + window) is the crate's `Streak`; here we
+        // check this game's value rule scales with the count it returns.
+        let mut streak = Streak::new(STREAK_WINDOW);
+        assert_eq!(streak.hit(), 1);
         assert_eq!(orb_points_for(1), ORB_POINTS);
-        assert!((streak.timer - STREAK_WINDOW).abs() < 1e-6);
-        // Second and third orbs are worth progressively more.
-        assert_eq!(advance_streak(&mut streak), 2);
-        assert_eq!(advance_streak(&mut streak), 3);
+        assert_eq!(streak.hit(), 2);
+        assert_eq!(streak.hit(), 3);
         assert_eq!(orb_points_for(2), 2 * ORB_POINTS);
         assert!(orb_points_for(3) > orb_points_for(2));
         // A zero streak still values an orb at the base (never zero points).
