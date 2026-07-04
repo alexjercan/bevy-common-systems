@@ -1,6 +1,6 @@
 # spawn + time/cooldown: timed spawner and cooldown/i-frames (Wave 2)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 24
 - TAGS: spike,feature
 

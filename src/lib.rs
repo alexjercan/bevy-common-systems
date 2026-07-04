@@ -16,6 +16,7 @@ pub mod modding;
 pub mod persist;
 pub mod physics;
 pub mod scoring;
+pub mod time;
 pub mod transform;
 pub mod tween;
 pub mod ui;
@@ -31,6 +32,6 @@ pub mod prelude {
         audio::prelude::*, camera::prelude::*, feedback::prelude::*, health::prelude::*,
         helpers::prelude::*, input::prelude::*, mesh::prelude::*, meth::prelude::*, modding,
         modding::prelude::*, persist::prelude::*, physics::prelude::*, scoring::prelude::*,
-        transform::prelude::*, tween::prelude::*, ui::prelude::*,
+        time::prelude::*, transform::prelude::*, tween::prelude::*, ui::prelude::*,
     };
 }

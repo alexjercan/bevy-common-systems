@@ -366,10 +366,10 @@ struct Ship {
     heading: f32,
     /// Inertial velocity we integrate ourselves and push into `LinearVelocity`.
     velocity: Vec3,
-    /// Time until the next shot is allowed, seconds.
-    fire_cooldown: f32,
-    /// Remaining invulnerability after a hit, seconds (0 = vulnerable).
-    invuln: f32,
+    /// Gate on the next shot; `ready()` when a shot is allowed.
+    fire: Cooldown,
+    /// Post-hit invulnerability window; `ready()` means vulnerable again.
+    invuln: Cooldown,
 }
 
 /// Marker for the ship's visual cone child, rotated to show the heading.
@@ -734,8 +734,9 @@ fn spawn_ship(
             Ship {
                 heading: FRAC_PI_2,
                 velocity: Vec3::ZERO,
-                fire_cooldown: 0.0,
-                invuln: INVULN_TIME,
+                // Ready to fire immediately; spawns with i-frames already running.
+                fire: Cooldown::new(FIRE_COOLDOWN),
+                invuln: Cooldown::started(INVULN_TIME),
             },
             Health::new(PLAYER_HEALTH),
             Transform::from_xyz(0.0, 0.0, 0.0),
@@ -858,12 +859,8 @@ fn control_ship(
         return;
     };
 
-    if ship.invuln > 0.0 {
-        ship.invuln = (ship.invuln - dt).max(0.0);
-    }
-    if ship.fire_cooldown > 0.0 {
-        ship.fire_cooldown = (ship.fire_cooldown - dt).max(0.0);
-    }
+    ship.invuln.tick(dt);
+    ship.fire.tick(dt);
 
     // Where is the pointer on the play plane, if it is down?
     let (cam, cam_transform) = *camera;
@@ -951,10 +948,10 @@ fn fire_bullets(
         return;
     };
     let wants_fire = keys.pressed(KeyCode::Space) || pointer.pressed;
-    if !wants_fire || ship.fire_cooldown > 0.0 {
+    if !wants_fire || !ship.fire.ready() {
         return;
     }
-    ship.fire_cooldown = FIRE_COOLDOWN;
+    ship.fire.trigger();
 
     let forward = Vec3::new(ship.heading.cos(), ship.heading.sin(), 0.0);
     let muzzle = transform.translation + forward * (SHIP_RADIUS + BULLET_RADIUS + 0.4);
@@ -1180,8 +1177,8 @@ fn handle_collisions(
         // Ship vs asteroid.
         let ship_hit = (a == ship_entity && q_asteroid.contains(b))
             || (b == ship_entity && q_asteroid.contains(a));
-        if ship_hit && ship.invuln <= 0.0 {
-            ship.invuln = INVULN_TIME;
+        if ship_hit && ship.invuln.ready() {
+            ship.invuln.trigger();
             if let Some(input) = shake.as_mut() {
                 input.add_trauma += SHAKE_HIT;
             }
@@ -1291,7 +1288,7 @@ fn blink_invulnerable_ship(
     let Ok(ship) = q_ship.single() else {
         return;
     };
-    let visible = ship.invuln <= 0.0 || (time.elapsed_secs() * 18.0).sin() > 0.0;
+    let visible = ship.invuln.ready() || (time.elapsed_secs() * 18.0).sin() > 0.0;
     for mut visibility in q_model.iter_mut() {
         *visibility = if visible {
             Visibility::Inherited
