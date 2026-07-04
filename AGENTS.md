@@ -88,6 +88,10 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     extension. Event payloads travel as `serde_json::Value`, so events can
     cross a modding or scripting boundary; filters and actions themselves
     are Rust trait objects.
+  - `registry` - `EventHandlerRegistry<W>`: maps event / filter / action name
+    strings to registered constructors so `EventHandler`s can be authored in
+    JSON (`HandlerSpec`) and built at runtime, the data-driven counterpart to
+    the Rust `EventHandler` builder. Demoed by `examples/03_modding`.
 - `physics/`
   - `pd_controller` - `PDControllerPlugin`: computes the PD torque needed
     to rotate an avian3d rigid body (the `PDControllerTarget` entity)
@@ -213,14 +217,22 @@ exercised by the examples, which are the de facto integration tests. If
 you add a feature, test its pure logic in-module and wire the ECS side
 into an existing example or a new numbered one (`examples/NN_name.rs`,
 clap CLI header, `DefaultPlugins`, setup system), and make sure everything
-compiles via `cargo clippy --all-targets`.
+compiles via `cargo clippy --all-targets`. If a test comment (or a TASK.md
+note) claims the test exercises some behaviour, back that claim with an
+assertion in the same edit -- do not write the aspirational comment and test
+only the easy half. Reaching a `pub(super)` field or adding a small helper to
+actually drive the behaviour is cheaper than the review round that catches the
+gap (bit two consecutive cycles: `docs/retros/20260704-165400-overload-example.md`
+and `docs/retros/20260703-165439-modding-json-registry.md`).
 
 Examples:
 
 - `01_sphere` - octahedron sphere from `TriangleMeshBuilder` + WASD camera.
 - `02_planet` - the same mesh displaced with Fbm/Perlin noise: a planet.
 - `03_modding` - the `modding` event bus end to end, including
-  `#[derive(EventKind)]`; the event logic prints to the console.
+  `#[derive(EventKind)]`; its handlers are authored as an inlined JSON string
+  and built through the `EventHandlerRegistry`, and the event logic prints to
+  the console.
 - `04_status_item` - status bar UI with FPS and custom shell-command items.
 - `05_explode` - the mesh slicer end to end: press Space to slice a mesh
   into `ExplodeFragments` that fly apart and auto-despawn.
