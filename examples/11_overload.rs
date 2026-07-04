@@ -167,7 +167,9 @@ fn main() {
     app.insert_resource(ClearColor(Color::srgb(0.04, 0.05, 0.08)));
     app.init_resource::<ReactorState>();
     app.init_resource::<HighScore>();
-    app.init_resource::<TouchSeen>();
+    // The crate's touchpad plugin owns `TouchSeen` and reveals the vent pad on
+    // the first touch (and hides the keyboard legend it replaces).
+    app.add_plugins(TouchpadPlugin);
 
     app.init_state::<GameState>();
 
@@ -192,7 +194,6 @@ fn main() {
             simulate_gauges,
             vent_input,
             touch_vent_input,
-            update_touch_pad,
             apply_danger,
             mirror_health,
             update_alarm_banner,
@@ -296,13 +297,6 @@ impl ReactorState {
 #[derive(Resource, Default)]
 struct HighScore(f32);
 
-/// True once any touch has been seen this session. Gates the reveal of the
-/// on-screen vent pad so a PC/mouse session never shows it and a phone reveals it
-/// the instant a thumb lands -- runtime touch detection, no `#[cfg(wasm)]` (which
-/// would also fire on desktop browsers) or JS probe. Mirrors `08_dropzone`.
-#[derive(Resource, Default)]
-struct TouchSeen(bool);
-
 /// Handles for the one-shot sound effects, loaded once in `setup`.
 #[derive(Resource)]
 struct SfxAssets {
@@ -327,15 +321,6 @@ struct MenuTitle;
 /// Marker for the central alarm banner shown while a gauge is red.
 #[derive(Component)]
 struct AlarmBanner;
-
-/// Root of the on-screen touch vent pad; its visibility is gated on [`TouchSeen`].
-#[derive(Component)]
-struct TouchPad;
-
-/// Marker for the keyboard-legend line at the bottom of the HUD. Hidden once a
-/// touch is seen, since the vent pad then covers the same bottom strip.
-#[derive(Component)]
-struct HudLegend;
 
 // --- Status-bar readings -----------------------------------------------------
 
@@ -648,7 +633,7 @@ fn spawn_hud(mut commands: Commands) {
     // Hidden once a touch is seen (the vent pad covers the same strip).
     commands.spawn((
         Name::new("HUD legend"),
-        HudLegend,
+        HideOnTouch,
         DespawnOnExit(GameState::Playing),
         screen_text(
             "1 HEAT   2 PRES   3 FLUX   4 CHRG      keep them out of the red",
@@ -678,17 +663,17 @@ fn vent_button_tint(idx: usize) -> Color {
 
 /// Spawn the on-screen touch vent pad: a bottom strip of four labelled buttons,
 /// one per gauge, laid out over the same window fractions `vent_button_at`
-/// hit-tests. Spawned hidden and revealed by `update_touch_pad` once a touch is
-/// seen, so a PC session never shows it. The buttons are purely visual; the touch
-/// hit-test reads the raw `Touches` against the window, so nothing here needs to
-/// be queried back.
+/// hit-tests. Tagged `RevealOnTouch` so the crate's `TouchpadPlugin` keeps it
+/// hidden until the first touch, so a PC session never shows it. The buttons are
+/// purely visual; the touch hit-test reads the raw `Touches` against the window,
+/// so nothing here needs to be queried back.
 fn spawn_vent_pad(mut commands: Commands) {
     commands
         .spawn((
             Name::new("Vent Pad"),
-            TouchPad,
+            RevealOnTouch,
             DespawnOnExit(GameState::Playing),
-            // Hidden until the first touch reveals it (see `TouchSeen`).
+            // Hidden until the first touch reveals it (via `TouchpadPlugin`).
             Visibility::Hidden,
             Node {
                 position_type: PositionType::Absolute,
@@ -745,34 +730,6 @@ fn spawn_vent_pad(mut commands: Commands) {
         });
 }
 
-/// Mark the session as touch-driven on the first touch, then reveal the vent pad
-/// (and hide the keyboard legend it replaces). Runs only in Playing, where the pad
-/// exists; the menu and meltdown screens read `Touches` directly to navigate.
-fn update_touch_pad(
-    touches: Res<Touches>,
-    mut seen: ResMut<TouchSeen>,
-    mut q_pad: Query<&mut Visibility, (With<TouchPad>, Without<HudLegend>)>,
-    mut q_legend: Query<&mut Visibility, (With<HudLegend>, Without<TouchPad>)>,
-) {
-    if touches.any_just_pressed() {
-        seen.0 = true;
-    }
-    if let Ok(mut vis) = q_pad.single_mut() {
-        *vis = if seen.0 {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    if let Ok(mut vis) = q_legend.single_mut() {
-        *vis = if seen.0 {
-            Visibility::Hidden
-        } else {
-            Visibility::Inherited
-        };
-    }
-}
-
 // --- Simulation -------------------------------------------------------------
 
 /// Advance the survival clock and ramp difficulty on schedule.
@@ -813,25 +770,14 @@ fn apply_vent(gauges: &mut [f32; GAUGE_COUNT], i: usize) {
 }
 
 /// Map a touch point (window logical pixels) to the vent-button column it lands
-/// in, or `None` when it is above the bottom vent strip. The strip spans the full
-/// width in `GAUGE_COUNT` equal columns and the bottom `VENT_ZONE_H_FRAC` of the
-/// height; `spawn_vent_pad` renders the buttons over the same fractions, so this
-/// is the single source of truth for the touch hit-test. Pure so the mapping can
-/// be unit-tested without a window (touch positions share the window's logical
-/// pixel space, exactly as `08_dropzone`'s zone split relies on).
+/// in, or `None` when it is above the bottom vent strip. This pins the crate's
+/// `button_grid_at` to this game's pad: a full-width, `GAUGE_COUNT`-column strip
+/// over the bottom `VENT_ZONE_H_FRAC` of the height, the same fractions
+/// `spawn_vent_pad` renders the buttons over, so it stays the single source of
+/// truth for the touch hit-test.
 fn vent_button_at(point: Vec2, window: Vec2) -> Option<usize> {
-    if window.x <= 0.0 || window.y <= 0.0 {
-        return None;
-    }
-    // Only the bottom strip is live.
-    if point.y < window.y * (1.0 - VENT_ZONE_H_FRAC) {
-        return None;
-    }
-    if point.x < 0.0 || point.x >= window.x {
-        return None;
-    }
-    let col = (point.x / window.x * GAUGE_COUNT as f32) as usize;
-    Some(col.min(GAUGE_COUNT - 1))
+    let zone = Rect::new(0.0, 1.0 - VENT_ZONE_H_FRAC, 1.0, 1.0);
+    button_grid_at(point, window, GAUGE_COUNT, 1, zone)
 }
 
 /// Play the vent SFX for a just-vented gauge, pitched up a touch when the gauge is

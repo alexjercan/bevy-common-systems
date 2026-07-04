@@ -1,6 +1,6 @@
 # ui/touchpad: reveal-on-first-touch + hit-test primitives (Wave A)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 28
 - TAGS: spike,feature,ui,input
 

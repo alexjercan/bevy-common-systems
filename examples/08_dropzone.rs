@@ -324,12 +324,6 @@ struct TouchControl {
     steer_pos: Vec2,
 }
 
-/// Set true the first time any touch is seen, and never cleared. The virtual pad
-/// is only shown once this is set, so a keyboard/PC session never sees it while a
-/// phone reveals it the instant a thumb lands - no platform detection needed.
-#[derive(Resource, Default)]
-struct TouchSeen(bool);
-
 /// Remaining fuel for the current run.
 #[derive(Resource, Deref, DerefMut)]
 struct Fuel(f32);
@@ -487,11 +481,6 @@ struct Obstacle;
 #[derive(Component)]
 struct MainCamera;
 
-/// Root of the touch-HUD overlay; its visibility is gated on [`TouchSeen`] so the
-/// pad only appears once the device is actually touched.
-#[derive(Component)]
-struct TouchHud;
-
 /// Marker for the steer-stick ring node of the touch HUD (moves to the live
 /// origin while steering).
 #[derive(Component)]
@@ -590,7 +579,9 @@ fn main() {
     app.init_state::<GameState>();
     app.init_resource::<ShipInput>();
     app.init_resource::<TouchControl>();
-    app.init_resource::<TouchSeen>();
+    // The crate's touchpad plugin owns `TouchSeen` and reveals the touch HUD on
+    // the first touch.
+    app.add_plugins(TouchpadPlugin);
     app.init_resource::<Telemetry>();
     app.init_resource::<Outcome>();
     app.init_resource::<RunTimer>();
@@ -1404,19 +1395,15 @@ fn read_input(
 
 /// Map a steer-stick deflection (finger offset from the floating origin, logical
 /// px) to a lean target `(roll, pitch)` in radians, clamped to `MAX_LEAN`, with
-/// a dead zone. Screen +x (drag right) rolls right (like `D`), and screen +y
-/// (drag down, since UI y grows downward) pitches back (like `S`). The combined
-/// deflection *vector* is clamped to `MAX_LEAN`, so a diagonal drag tops out at
-/// `MAX_LEAN` total -- slightly less than the keyboard, which reaches `MAX_LEAN`
-/// on each axis independently (~1.41x on the diagonal). Pure, unit-tested below.
+/// a dead zone. The crate's `stick_deflection` does the dead-zone + unit-disc
+/// clamp; this applies this game's per-axis sign and `MAX_LEAN` scale. Screen +x
+/// (drag right) rolls right (like `D`), and screen +y (drag down, since UI y
+/// grows downward) pitches back (like `S`). The combined deflection *vector* is
+/// clamped to the unit disc, so a diagonal drag tops out at `MAX_LEAN` total --
+/// slightly less than the keyboard, which reaches `MAX_LEAN` on each axis
+/// independently (~1.41x on the diagonal).
 fn touch_lean(offset: Vec2, radius: f32, dead: f32) -> Vec2 {
-    let len = offset.length();
-    if len <= dead {
-        return Vec2::ZERO;
-    }
-    let dir = offset / len;
-    let mag = ((len - dead) / (radius - dead)).clamp(0.0, 1.0);
-    let deflect = dir * mag;
+    let deflect = stick_deflection(offset, radius, dead);
     // drag right (+x) -> roll like D (negative roll); drag down (+y) -> pitch
     // back like S (positive pitch).
     Vec2::new(-deflect.x * MAX_LEAN, deflect.y * MAX_LEAN)
@@ -1429,15 +1416,10 @@ fn update_touch_control(
     touches: Res<Touches>,
     windows: Query<&Window>,
     mut ctl: ResMut<TouchControl>,
-    mut seen: ResMut<TouchSeen>,
 ) {
     let Ok(window) = windows.single() else {
         return;
     };
-    // The first touch marks this as a touch device and reveals the pad.
-    if touches.any_just_pressed() {
-        seen.0 = true;
-    }
     let split_x = window.width() * THRUST_ZONE_FRAC;
     let in_thrust_zone = |t: &Touch| t.start_position().x < split_x;
 
@@ -1480,19 +1462,19 @@ fn update_touch_control(
 // --- Playing: touch HUD ----------------------------------------------------
 
 /// Spawn the on-screen virtual-pad overlay for the run: a faint left thrust zone
-/// and a right-side steer stick (ring + knob). Spawned hidden and revealed by
-/// `update_touch_hud` once a touch is seen ([`TouchSeen`]), so a PC session never
-/// shows it and a phone reveals it the instant a thumb lands -- no platform
-/// detection needed.
+/// and a right-side steer stick (ring + knob). Tagged `RevealOnTouch` so the
+/// crate's `TouchpadPlugin` keeps it hidden until the first touch, so a PC
+/// session never shows it and a phone reveals it the instant a thumb lands -- no
+/// platform detection needed.
 fn spawn_touch_hud(mut commands: Commands) {
     let ring_d = STEER_RADIUS_PX * 2.0;
     commands
         .spawn((
             Name::new("Touch HUD"),
-            TouchHud,
+            RevealOnTouch,
             DespawnOnExit(GameState::Playing),
-            // Hidden until the first touch reveals it (see `TouchSeen`), so a PC
-            // session never shows the pad.
+            // Hidden until the first touch reveals it (via `TouchpadPlugin`), so a
+            // PC session never shows the pad.
             Visibility::Hidden,
             Node {
                 position_type: PositionType::Absolute,
@@ -1565,20 +1547,12 @@ fn spawn_touch_hud(mut commands: Commands) {
 /// steer zone when idle) and the knob at the finger, hidden when not steering.
 fn update_touch_hud(
     ctl: Res<TouchControl>,
-    seen: Res<TouchSeen>,
     windows: Query<&Window>,
-    mut q_root: Query<&mut Visibility, (With<TouchHud>, Without<SteerKnobUi>)>,
     mut q_ring: Query<&mut Node, (With<SteerRingUi>, Without<SteerKnobUi>)>,
-    mut q_knob: Query<(&mut Node, &mut Visibility), (With<SteerKnobUi>, Without<TouchHud>)>,
+    mut q_knob: Query<(&mut Node, &mut Visibility), With<SteerKnobUi>>,
 ) {
-    // Reveal the whole overlay only once a touch has been seen.
-    if let Ok(mut vis) = q_root.single_mut() {
-        *vis = if seen.0 {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
+    // The overlay root's reveal is handled by the crate's `TouchpadPlugin` (via
+    // `RevealOnTouch`); this system only positions the steer ring and knob.
     let Ok(window) = windows.single() else {
         return;
     };
