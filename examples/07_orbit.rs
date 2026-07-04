@@ -181,6 +181,9 @@ fn main() {
     app.add_plugins(DirectionalSphereOrbitPlugin);
     app.add_plugins(SphereRandomOrbitPlugin);
     app.add_plugins(ChaseCameraPlugin);
+    // Trauma-driven camera shake; the camera carries a `CameraShake` and game
+    // code adds trauma through its `CameraShakeInput`.
+    app.add_plugins(CameraShakePlugin);
     app.add_plugins(HealthPlugin);
     app.add_plugins(SfxPlugin);
     app.add_plugins(StatusBarPlugin);
@@ -194,7 +197,6 @@ fn main() {
     app.init_resource::<Level>();
     app.init_resource::<HitCooldown>();
     app.init_resource::<Streak>();
-    app.init_resource::<CameraShake>();
     app.init_resource::<DamageFlash>();
 
     // Persistent scene: camera, light, planet and the FPS status bar live for
@@ -248,16 +250,6 @@ fn main() {
             .after(SphereRandomOrbitSystems::Sync)
             .before(ChaseCameraSystems::Sync)
             .run_if(in_state(GameState::Playing)),
-    );
-
-    // Camera shake jitters the camera *after* the chase camera has written its
-    // transform, so it layers on top instead of being overwritten. The chase
-    // sync resets the translation absolutely every frame, so the additive
-    // offset never accumulates. Left ungated by state so a fatal hit's shake
-    // plays out onto the game-over screen.
-    app.add_systems(
-        PostUpdate,
-        apply_camera_shake.after(ChaseCameraSystems::Sync),
     );
 
     // Game over screen.
@@ -329,13 +321,6 @@ impl Default for Level {
 /// and blinks while this is above zero.
 #[derive(Resource, Default)]
 struct HitCooldown(f32);
-
-/// Camera-shake energy (trauma, 0..1); decays to zero, jittering the camera
-/// while positive. A hazard hit tops it up. Modelled on `06_fruitninja`.
-#[derive(Resource, Default)]
-struct CameraShake {
-    trauma: f32,
-}
 
 /// Red damage-flash intensity (0..1); a hazard hit spikes it to 1 and it fades
 /// to zero, driving the alpha of the full-screen damage overlay.
@@ -502,6 +487,14 @@ fn setup(
             focus_offset: Vec3::new(0.0, 1.5, 16.0),
             smoothing: CAMERA_SMOOTHING,
         },
+        // Trauma-driven shake layered on top of the chase framing; game code
+        // adds trauma via `CameraShakeInput`. Offsets all three axes like the
+        // original hand-rolled shake did.
+        CameraShake {
+            decay: SHAKE_DECAY,
+            max_offset: Vec3::splat(SHAKE_MAX_OFFSET),
+            ..default()
+        },
         // A little ambient so the dark side of the planet is not pure black.
         // In Bevy 0.19 `AmbientLight` is a per-camera component, not a resource.
         AmbientLight {
@@ -655,16 +648,6 @@ fn pickup_pitch_for(streak_count: usize) -> f32 {
     (1.0 + streak_count.saturating_sub(1) as f32 * PICKUP_PITCH_STEP).min(PICKUP_PITCH_MAX)
 }
 
-/// Decay camera-shake trauma by one step, clamped at zero so it settles.
-fn decay_trauma(trauma: f32, dt: f32) -> f32 {
-    (trauma - SHAKE_DECAY * dt).max(0.0)
-}
-
-/// Add trauma from a hit, clamped to the 0..1 range so the shake has a ceiling.
-fn add_trauma(trauma: f32, amount: f32) -> f32 {
-    (trauma + amount).clamp(0.0, 1.0)
-}
-
 // --- Input ----------------------------------------------------------------
 
 /// Steering input in -1..1: negative steers left, positive right. Sums the
@@ -803,7 +786,7 @@ fn start_game(
     mut level: ResMut<Level>,
     mut cooldown: ResMut<HitCooldown>,
     mut streak: ResMut<Streak>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut flash: ResMut<DamageFlash>,
 ) {
     score.0 = 0;
@@ -812,7 +795,10 @@ fn start_game(
     cooldown.0 = 0.0;
     streak.count = 0;
     streak.timer = 0.0;
-    shake.trauma = 0.0;
+    // Snap any lingering shake back to zero so it does not bleed into the run.
+    if let Ok(mut input) = q_shake.single_mut() {
+        input.reset = true;
+    }
     flash.0 = 0.0;
 }
 
@@ -1019,7 +1005,7 @@ fn resolve_collisions(
     mut score: ResMut<Score>,
     mut cooldown: ResMut<HitCooldown>,
     mut streak: ResMut<Streak>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut flash: ResMut<DamageFlash>,
     q_runner: Query<(Entity, &Transform), With<Runner>>,
     q_hazards: Query<(Entity, &Transform), With<Hazard>>,
@@ -1105,7 +1091,9 @@ fn resolve_collisions(
             // A hit also breaks the streak, jolts the camera and flashes red.
             streak.count = 0;
             streak.timer = 0.0;
-            shake.trauma = add_trauma(shake.trauma, HAZARD_TRAUMA);
+            if let Ok(mut input) = q_shake.single_mut() {
+                input.add_trauma += HAZARD_TRAUMA;
+            }
             flash.0 = 1.0;
             commands.play_sfx(sfx.hurt.clone());
             commands.trigger(HealthApplyDamage {
@@ -1400,36 +1388,6 @@ fn animate_floating_text(
 
 // --- Impact feedback ------------------------------------------------------
 
-/// Jolt the camera by a decaying random offset while trauma is positive. Runs
-/// after the chase camera has written its transform, so the offset is additive
-/// on top of the chase result; the chase sync overwrites translation next frame,
-/// so the offset never accumulates.
-fn apply_camera_shake(
-    time: Res<Time>,
-    mut shake: ResMut<CameraShake>,
-    mut q_camera: Query<&mut Transform, With<MainCamera>>,
-) {
-    shake.trauma = decay_trauma(shake.trauma, time.delta_secs());
-
-    // Square the trauma so small residual energy fades to nothing quickly.
-    let amount = shake.trauma * shake.trauma;
-    if amount <= 0.0 {
-        return;
-    }
-
-    let Ok(mut transform) = q_camera.single_mut() else {
-        return;
-    };
-    let mut rng = rand::rng();
-    let offset = Vec3::new(
-        rng.random_range(-1.0..1.0),
-        rng.random_range(-1.0..1.0),
-        rng.random_range(-1.0..1.0),
-    ) * SHAKE_MAX_OFFSET
-        * amount;
-    transform.translation += offset;
-}
-
 /// Fade the red damage overlay each frame, driving its alpha from the decaying
 /// `DamageFlash` intensity a hit spiked.
 fn fade_damage_flash(
@@ -1670,22 +1628,5 @@ mod tests {
         assert!(pickup_pitch_for(3) > pickup_pitch_for(1));
         // ... but never past the cap.
         assert!((pickup_pitch_for(1000) - PICKUP_PITCH_MAX).abs() < 1e-6);
-    }
-
-    #[test]
-    fn trauma_decays_to_zero_and_clamps() {
-        // A hit adds trauma, clamped to at most 1.
-        assert!((add_trauma(0.0, HAZARD_TRAUMA) - HAZARD_TRAUMA).abs() < 1e-6);
-        assert!((add_trauma(0.8, 0.8) - 1.0).abs() < 1e-6);
-        // Trauma decays and never goes negative.
-        let once = decay_trauma(1.0, DT);
-        assert!(once < 1.0 && once > 0.0);
-        assert_eq!(decay_trauma(0.001, 10.0), 0.0);
-        // Enough steps drive any starting trauma to exactly zero.
-        let mut t = 1.0;
-        for _ in 0..1000 {
-            t = decay_trauma(t, DT);
-        }
-        assert_eq!(t, 0.0);
     }
 }

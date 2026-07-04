@@ -411,14 +411,6 @@ struct Wind {
     streak_timer: f32,
 }
 
-/// Camera-shake energy (trauma, 0..1); decays to zero, jittering the camera
-/// while positive. A touchdown (landing or crash) tops it up. Ported from
-/// `07_orbit`.
-#[derive(Resource, Default)]
-struct CameraShake {
-    trauma: f32,
-}
-
 /// Seconds elapsed in the current run, shown on the HUD and rewarded: a faster
 /// safe landing scores a small time bonus (see [`landing_score`]).
 #[derive(Resource, Default)]
@@ -601,6 +593,7 @@ fn main() {
     app.add_plugins(SkyboxPlugin);
     app.add_plugins(PostProcessingDefaultPlugin);
     app.add_plugins(ChaseCameraPlugin);
+    app.add_plugins(CameraShakePlugin);
     app.add_plugins(ExplodeMeshPlugin);
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
@@ -616,7 +609,6 @@ fn main() {
     app.init_resource::<TouchSeen>();
     app.init_resource::<Telemetry>();
     app.init_resource::<Outcome>();
-    app.init_resource::<CameraShake>();
     app.init_resource::<RunTimer>();
     app.init_resource::<FuelSpawner>();
     app.init_resource::<Wind>();
@@ -682,13 +674,6 @@ fn main() {
     app.add_systems(
         Update,
         (move_fragments, animate_floating_text, drive_chase_camera),
-    );
-    // The camera punch is additive on top of the chase camera's transform, so it
-    // must run after the chase sync (PostUpdate). The next chase sync overwrites
-    // translation, so the offset never accumulates.
-    app.add_systems(
-        PostUpdate,
-        apply_camera_shake.after(ChaseCameraSystems::Sync),
     );
     // Copy each asteroid's random-orbit position onto its Transform, after the
     // orbit driver has advanced it (same handoff as `07_orbit`).
@@ -835,6 +820,11 @@ fn setup(
             offset: Vec3::new(0.0, 5.0, -15.0),
             focus_offset: Vec3::new(0.0, -3.0, 5.0),
             smoothing: 0.12,
+        },
+        CameraShake {
+            decay: SHAKE_DECAY,
+            max_offset: Vec3::splat(SHAKE_MAX_OFFSET),
+            ..default()
         },
         SkyboxConfig {
             cubemap: starfield,
@@ -1111,7 +1101,7 @@ fn start_run(
     mut input: ResMut<ShipInput>,
     mut outcome: ResMut<Outcome>,
     mut timer: ResMut<RunTimer>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut spawner: ResMut<FuelSpawner>,
     mut touch: ResMut<TouchControl>,
     mut wind: ResMut<Wind>,
@@ -1123,7 +1113,9 @@ fn start_run(
     fuel.0 = START_FUEL;
     outcome.0 = None;
     timer.0 = 0.0;
-    shake.trauma = 0.0;
+    if let Ok(mut input) = q_shake.single_mut() {
+        input.reset = true;
+    }
     spawner.timer = 0.0;
     *input = ShipInput::default();
     *touch = TouchControl::default();
@@ -1971,7 +1963,7 @@ fn resolve_collisions(
     pad: Res<LandingPad>,
     timer: Res<RunTimer>,
     sfx: Res<SfxAssets>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut outcome: ResMut<Outcome>,
@@ -2042,7 +2034,9 @@ fn resolve_collisions(
                 tilt,
             });
             commands.play_sfx(sfx.land.clone());
-            shake.trauma = (shake.trauma + LAND_TRAUMA).min(1.0);
+            if let Ok(mut input) = q_shake.single_mut() {
+                input.add_trauma += LAND_TRAUMA;
+            }
             // Freeze the hull where it touched down so it stays visibly parked on
             // the pad through the result screen (it has no DespawnOnExit, so it
             // survives the state change; `cleanup_run_scene` clears it on leaving
@@ -2070,7 +2064,9 @@ fn resolve_collisions(
                 DespawnOnExit(GameState::Playing),
             ));
             commands.play_sfx(sfx.crash.clone());
-            shake.trauma = (shake.trauma + CRASH_TRAUMA).min(1.0);
+            if let Ok(mut input) = q_shake.single_mut() {
+                input.add_trauma += CRASH_TRAUMA;
+            }
         }
         next.set(GameState::Result);
     } else if obstacle_touch {
@@ -2083,7 +2079,9 @@ fn resolve_collisions(
             amount: impact_damage(speed),
         });
         commands.trigger(PlaySfx::new(sfx.crash.clone()).with_volume(0.6));
-        shake.trauma = (shake.trauma + LAND_TRAUMA).min(1.0);
+        if let Ok(mut input) = q_shake.single_mut() {
+            input.add_trauma += LAND_TRAUMA;
+        }
         spawn_dust(
             &mut commands,
             &mut meshes,
@@ -2139,7 +2137,7 @@ fn resolve_asteroid_hits(
     q_asteroids: Query<(Entity, &Transform), With<Asteroid>>,
     outcome: Res<Outcome>,
     sfx: Res<SfxAssets>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut commands: Commands,
 ) {
     if outcome.0.is_some() {
@@ -2171,7 +2169,9 @@ fn resolve_asteroid_hits(
             TempEntity(0.2),
         ));
         commands.trigger(PlaySfx::new(sfx.crash.clone()).with_volume(0.7));
-        shake.trauma = (shake.trauma + LAND_TRAUMA).min(1.0);
+        if let Ok(mut input) = q_shake.single_mut() {
+            input.add_trauma += LAND_TRAUMA;
+        }
     }
 }
 
@@ -2256,7 +2256,7 @@ fn on_ship_destroyed(
     q_ship: Query<(Entity, &Transform, &ApproachSpeed), With<Ship>>,
     state: Res<State<GameState>>,
     sfx: Res<SfxAssets>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut outcome: ResMut<Outcome>,
     mut next: ResMut<NextState<GameState>>,
     mut commands: Commands,
@@ -2286,7 +2286,9 @@ fn on_ship_destroyed(
         DespawnOnExit(GameState::Playing),
     ));
     commands.play_sfx(sfx.crash.clone());
-    shake.trauma = (shake.trauma + CRASH_TRAUMA).min(1.0);
+    if let Ok(mut input) = q_shake.single_mut() {
+        input.add_trauma += CRASH_TRAUMA;
+    }
     next.set(GameState::Result);
 }
 
@@ -2335,34 +2337,6 @@ fn cleanup_run_scene(mut commands: Commands, q_scene: Query<Entity, Or<(With<Shi
     for entity in q_scene.iter() {
         commands.entity(entity).despawn();
     }
-}
-
-/// Jolt the camera by a decaying random offset while trauma is positive. Runs
-/// after the chase camera writes its transform (PostUpdate), so the offset is
-/// additive; the next chase sync overwrites translation, so it never
-/// accumulates. Ported from `07_orbit`.
-fn apply_camera_shake(
-    time: Res<Time>,
-    mut shake: ResMut<CameraShake>,
-    mut q_camera: Query<&mut Transform, With<MainCamera>>,
-) {
-    shake.trauma = (shake.trauma - SHAKE_DECAY * time.delta_secs()).max(0.0);
-    // Square the trauma so small residual energy fades to nothing quickly.
-    let amount = shake.trauma * shake.trauma;
-    if amount <= 0.0 {
-        return;
-    }
-    let Ok(mut transform) = q_camera.single_mut() else {
-        return;
-    };
-    let mut rng = rand::rng();
-    let offset = Vec3::new(
-        rng.random_range(-1.0..1.0),
-        rng.random_range(-1.0..1.0),
-        rng.random_range(-1.0..1.0),
-    ) * SHAKE_MAX_OFFSET
-        * amount;
-    transform.translation += offset;
 }
 
 /// Turn each mesh slice into an independent flying fragment (see `05_explode`).

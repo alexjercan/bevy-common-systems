@@ -185,6 +185,7 @@ fn main() {
 
     app.add_plugins(ExplodeMeshPlugin);
     app.add_plugins(PostProcessingDefaultPlugin);
+    app.add_plugins(CameraShakePlugin);
     app.add_plugins(StatusBarPlugin);
     app.add_plugins(HealthPlugin);
     app.add_plugins(SfxPlugin);
@@ -196,7 +197,6 @@ fn main() {
     app.init_resource::<HighScore>();
     app.init_resource::<NewBest>();
     app.init_resource::<Wave>();
-    app.init_resource::<CameraShake>();
     app.init_resource::<DyingTimer>();
 
     // Persistent scene: camera, lights, arena walls, starfield, FPS overlay.
@@ -206,8 +206,15 @@ fn main() {
     // gameplay share one mouse+touch abstraction.
     app.add_systems(PreUpdate, update_pointer);
 
-    // Framing and shake settle the camera in any state.
-    app.add_systems(Update, (fit_camera, apply_camera_shake).chain());
+    // `fit_camera` writes the camera base every frame; it must run between the
+    // shake plugin's Restore and Apply phases (both in PostUpdate) so the shake
+    // offset rides on top of the fresh framing rather than accumulating.
+    app.add_systems(
+        PostUpdate,
+        fit_camera
+            .after(CameraShakeSystems::Restore)
+            .before(CameraShakeSystems::Apply),
+    );
     app.add_systems(Update, draw_starfield);
 
     // Main menu.
@@ -335,12 +342,6 @@ struct NewBest(bool);
 /// The current wave number (1-based). Higher waves spawn more, faster rocks.
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Wave(usize);
-
-/// Camera shake energy; decays to 0, offsetting the camera while positive.
-#[derive(Resource, Default)]
-struct CameraShake {
-    trauma: f32,
-}
 
 /// Countdown before the game-over screen after the ship is destroyed.
 #[derive(Resource, Default)]
@@ -523,6 +524,14 @@ fn setup(
         Camera3d::default(),
         Transform::from_xyz(0.0, 0.0, 40.0).looking_at(Vec3::ZERO, Vec3::Y),
         PostProcessingCamera,
+        // Impact shake on top of `fit_camera`'s base. The arena is centered on
+        // the origin so only x/y are offset; z stays 0 so `fit_camera` keeps
+        // ownership of the framing distance.
+        CameraShake {
+            decay: SHAKE_DECAY,
+            max_offset: Vec3::new(SHAKE_MAX_OFFSET, SHAKE_MAX_OFFSET, 0.0),
+            ..default()
+        },
         AmbientLight {
             color: Color::WHITE,
             brightness: 220.0,
@@ -604,8 +613,9 @@ fn spawn_walls(commands: &mut Commands) {
 
 /// Pull the camera back far enough to frame the whole arena at the current window
 /// aspect, so both the portrait mobile canvas and a landscape desktop window show
-/// the full field. The base Z is stored back into the transform; `apply_camera_shake`
-/// adds the shake offset on top.
+/// the full field. The base Z is stored back into the transform; the
+/// `CameraShakePlugin` adds the shake offset on top (Restore -> `fit_camera` ->
+/// Apply, all in `PostUpdate`).
 fn fit_camera(window: Single<&Window>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
     let Ok(mut transform) = q_cam.single_mut() else {
         return;
@@ -618,33 +628,6 @@ fn fit_camera(window: Single<&Window>, mut q_cam: Query<&mut Transform, With<Mai
     let dist_v = margin / half_fov.tan();
     let dist_h = margin / (half_fov.tan() * aspect);
     transform.translation.z = dist_v.max(dist_h);
-}
-
-/// Ease the camera trauma down and jitter the camera on top of its fitted base.
-fn apply_camera_shake(
-    time: Res<Time>,
-    mut shake: ResMut<CameraShake>,
-    mut q_camera: Query<&mut Transform, With<MainCamera>>,
-) {
-    let Ok(mut transform) = q_camera.single_mut() else {
-        return;
-    };
-    shake.trauma = (shake.trauma - SHAKE_DECAY * time.delta_secs()).max(0.0);
-    // Square the trauma so small residual energy fades to nothing quickly.
-    let amount = shake.trauma * shake.trauma;
-    // The arena is centered on the origin, so the camera's base x/y is zero;
-    // write the offset absolutely (not `+=`) so shakes never accumulate and the
-    // camera re-centers once trauma decays. `fit_camera` owns z.
-    let offset = if amount > 0.0 {
-        let mut rng = rand::rng();
-        Vec2::new(rng.random_range(-1.0..1.0), rng.random_range(-1.0..1.0))
-            * SHAKE_MAX_OFFSET
-            * amount
-    } else {
-        Vec2::ZERO
-    };
-    transform.translation.x = offset.x;
-    transform.translation.y = offset.y;
 }
 
 /// Draw the fixed starfield behind the arena.
@@ -746,12 +729,14 @@ fn menu_click(
 fn start_game(
     mut score: ResMut<Score>,
     mut wave: ResMut<Wave>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut dying: ResMut<DyingTimer>,
 ) {
     score.0 = 0;
     wave.0 = 1;
-    shake.trauma = 0.0;
+    if let Ok(mut input) = q_shake.single_mut() {
+        input.reset = true;
+    }
     dying.remaining = None;
 }
 
@@ -1157,8 +1142,8 @@ fn handle_collisions(
     q_bullet: Query<(), With<Bullet>>,
     q_asteroid: Query<(&Asteroid, Has<Exploding>)>,
     mut q_ship: Query<(Entity, &mut Ship)>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut score: ResMut<Score>,
-    mut shake: ResMut<CameraShake>,
     sfx: Res<SfxAssets>,
 ) {
     let mut handled_asteroids: HashSet<Entity> = HashSet::new();
@@ -1166,6 +1151,7 @@ fn handle_collisions(
     let Ok((ship_entity, mut ship)) = q_ship.single_mut() else {
         return;
     };
+    let mut shake = q_shake.single_mut().ok();
 
     for event in events.read() {
         let (a, b) = (event.collider1, event.collider2);
@@ -1195,7 +1181,9 @@ fn handle_collisions(
             if rock.generation >= MAX_SPLIT_GEN {
                 // Smallest shard: destroy it outright, no new bodies.
                 commands.entity(asteroid).despawn();
-                shake.trauma = (shake.trauma + SHAKE_SPLIT * 0.5).min(1.0);
+                if let Some(input) = shake.as_mut() {
+                    input.add_trauma += SHAKE_SPLIT * 0.5;
+                }
                 commands.trigger(
                     PlaySfx::new(sfx.explode.clone())
                         .with_volume(0.5)
@@ -1209,7 +1197,9 @@ fn handle_collisions(
                         fragment_count: FRAGMENTS_PER_SPLIT,
                     },
                 ));
-                shake.trauma = (shake.trauma + SHAKE_SPLIT).min(1.0);
+                if let Some(input) = shake.as_mut() {
+                    input.add_trauma += SHAKE_SPLIT;
+                }
                 let speed = 1.0 + rock.generation as f32 * 0.35;
                 commands.trigger(
                     PlaySfx::new(sfx.explode.clone())
@@ -1225,7 +1215,9 @@ fn handle_collisions(
             || (b == ship_entity && q_asteroid.contains(a));
         if ship_hit && ship.invuln <= 0.0 {
             ship.invuln = INVULN_TIME;
-            shake.trauma = (shake.trauma + SHAKE_HIT).min(1.0);
+            if let Some(input) = shake.as_mut() {
+                input.add_trauma += SHAKE_HIT;
+            }
             commands.play_sfx(sfx.hurt.clone());
             commands.trigger(HealthApplyDamage {
                 entity: ship_entity,
@@ -1351,13 +1343,16 @@ fn on_player_died(
     add: On<Add, HealthZeroMarker>,
     q_ship: Query<(), With<Ship>>,
     mut commands: Commands,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut dying: ResMut<DyingTimer>,
 ) {
     if !q_ship.contains(add.entity) || dying.remaining.is_some() {
         return;
     }
-    shake.trauma = 1.0;
+    // Adding 1.0 clamps trauma to full, kicking the biggest shake.
+    if let Ok(mut input) = q_shake.single_mut() {
+        input.add_trauma += 1.0;
+    }
     dying.remaining = Some(DYING_BEAT);
 
     commands.spawn((
