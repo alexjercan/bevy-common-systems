@@ -281,7 +281,7 @@ fn main() {
             update_heat_bar,
             update_shop_cards,
             update_alarm,
-            giveup_on_escape,
+            set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
             .run_if(in_state(GameState::Playing)),
     );
@@ -661,44 +661,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         suffix: "".to_string(),
     }),));
 
-    commands.spawn((status_bar_item(StatusBarItemConfig {
-        icon: None,
-        value_fn: status_fps_value_fn(),
-        color_fn: status_fps_color_fn(),
-        prefix: "".to_string(),
-        suffix: "fps".to_string(),
-    }),));
+    commands.spawn(status_bar_with_fps());
 }
 
 // --- Shared UI helpers ------------------------------------------------------
-
-fn centered_screen() -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        justify_content: JustifyContent::Center,
-        row_gap: Val::Px(14.0),
-        ..default()
-    }
-}
-
-fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle {
-    (
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-        TextLayout {
-            justify: Justify::Center,
-            ..default()
-        },
-    )
-}
 
 fn best_line(best: f64) -> String {
     if best > 0.0 {
@@ -1214,12 +1180,6 @@ fn update_alarm(
     if progress.alarm_timer <= 0.0 {
         progress.alarm_timer = ALARM_INTERVAL;
         commands.play_sfx_volume(sfx.get(Sfx::Alarm), 0.5);
-    }
-}
-
-fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
-    if keys.just_pressed(KeyCode::Escape) {
-        next.set(GameState::GameOver);
     }
 }
 

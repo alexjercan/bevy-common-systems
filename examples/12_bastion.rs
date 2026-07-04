@@ -215,6 +215,7 @@ fn main() {
     app.add_plugins(FlashPlugin);
     app.add_plugins(ScreenFlashPlugin);
     app.add_plugins(PopupPlugin);
+    app.add_plugins(MenuPlugin);
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
     app.add_plugins(HealthPlugin);
@@ -225,8 +226,7 @@ fn main() {
 
     app.init_resource::<Credits>();
     app.init_resource::<Score>();
-    app.init_resource::<HighScore>();
-    app.init_resource::<NewBest>();
+    app.init_resource::<HighScore<u32>>();
     app.init_resource::<WaveState>();
     app.init_resource::<Build>();
     app.init_resource::<Selection>();
@@ -245,10 +245,7 @@ fn main() {
 
     // Main menu.
     app.add_systems(OnEnter(GameState::Menu), spawn_menu);
-    app.add_systems(
-        Update,
-        (menu_click, pulse_menu_title).run_if(in_state(GameState::Menu)),
-    );
+    app.add_systems(Update, menu_click.run_if(in_state(GameState::Menu)));
 
     // Playing.
     app.add_systems(OnEnter(GameState::Playing), (start_game, spawn_hud).chain());
@@ -267,7 +264,7 @@ fn main() {
             draw_arena,
             update_hud,
             advance_dying,
-            giveup_on_escape,
+            set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
             // `place_or_select` / `update_ghost` read the DragState that
             // `orbit_camera` computes this frame, so pin them after it.
@@ -394,14 +391,6 @@ struct Credits(u32);
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(u32);
 
-/// Best score across runs this session.
-#[derive(Resource, Default)]
-struct HighScore(u32);
-
-/// Whether the last run set a new high score (for the game-over screen).
-#[derive(Resource, Default)]
-struct NewBest(bool);
-
 /// Which tower type is currently armed for building, if any.
 #[derive(Resource, Default)]
 struct Build {
@@ -487,17 +476,27 @@ struct GameAssets {
     spark_material: Handle<StandardMaterial>,
 }
 
-/// One `AudioSource` handle per gameplay event; files under `assets/sounds/` are
-/// generated placeholders (see `assets/sounds/README.md`).
-#[derive(Resource)]
-struct SfxAssets {
-    menu_select: Handle<AudioSource>,
-    build: Handle<AudioSource>,
-    shot: Handle<AudioSource>,
-    kill: Handle<AudioSource>,
-    core_hit: Handle<AudioSource>,
-    wave: Handle<AudioSource>,
-    game_over: Handle<AudioSource>,
+/// One gameplay-event sound, keyed into the crate's `SoundBank`. The semantic
+/// key decouples from the file (`Build -> pickup.wav`, `Shot -> launch.wav`,
+/// `Kill -> bomb.wav`, `CoreHit -> hurt.wav`, `Wave -> level_up.wav`). Files
+/// under `assets/sounds/` are generated placeholders (see
+/// `assets/sounds/README.md`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Sfx {
+    /// Starting a run from the menu.
+    MenuSelect,
+    /// A tower is placed or upgraded.
+    Build,
+    /// A tower fires.
+    Shot,
+    /// An enemy is killed.
+    Kill,
+    /// The Core takes a hit.
+    CoreHit,
+    /// A new wave begins.
+    Wave,
+    /// The run ends.
+    GameOver,
 }
 
 // ---------------------------------------------------------------------------
@@ -555,10 +554,6 @@ struct Tracer {
     ttl: f32,
 }
 
-/// Marks the pulsing menu title.
-#[derive(Component)]
-struct MenuTitle;
-
 /// HUD text tags.
 #[derive(Component)]
 struct HudText;
@@ -574,15 +569,18 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     // Sounds (paths are relative to `assets/`). Reuse the shared placeholder wavs.
-    commands.insert_resource(SfxAssets {
-        menu_select: asset_server.load("sounds/menu_select.wav"),
-        build: asset_server.load("sounds/pickup.wav"),
-        shot: asset_server.load("sounds/launch.wav"),
-        kill: asset_server.load("sounds/bomb.wav"),
-        core_hit: asset_server.load("sounds/hurt.wav"),
-        wave: asset_server.load("sounds/level_up.wav"),
-        game_over: asset_server.load("sounds/game_over.wav"),
-    });
+    commands.insert_resource(SoundBank::load(
+        &asset_server,
+        [
+            (Sfx::MenuSelect, "menu_select"),
+            (Sfx::Build, "pickup"),
+            (Sfx::Shot, "launch"),
+            (Sfx::Kill, "bomb"),
+            (Sfx::CoreHit, "hurt"),
+            (Sfx::Wave, "level_up"),
+            (Sfx::GameOver, "game_over"),
+        ],
+    ));
 
     // Shared render assets.
     let enemy_mesh = meshes.add(TriangleMeshBuilder::new_octahedron(2).build());
@@ -590,10 +588,8 @@ fn setup(
         .iter()
         .map(|spec| {
             materials.add(StandardMaterial {
-                base_color: spec.color,
-                emissive: LinearRgba::from(spec.color) * 0.25,
                 perceptual_roughness: 0.7,
-                ..default()
+                ..glowing_material(spec.color, LinearRgba::from(spec.color) * 0.25)
             })
         })
         .collect();
@@ -603,10 +599,11 @@ fn setup(
     let spark_mesh = meshes.add(Sphere::new(0.25).mesh().ico(2).unwrap());
 
     let ghost_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.5, 0.9, 1.0, 0.4),
         alpha_mode: AlphaMode::Blend,
-        emissive: LinearRgba::rgb(0.1, 0.4, 0.6),
-        ..default()
+        ..glowing_material(
+            Color::srgba(0.5, 0.9, 1.0, 0.4),
+            LinearRgba::rgb(0.1, 0.4, 0.6),
+        )
     });
     let ghost_bad_material = materials.add(StandardMaterial {
         base_color: Color::srgba(1.0, 0.3, 0.3, 0.4),
@@ -615,11 +612,10 @@ fn setup(
     });
     // Emissive HDR (NOT unlit -- unlit skips the lighting pass where emissive is
     // applied, so it would not bloom under `camera/post`).
-    let spark_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(1.0, 0.95, 0.7),
-        emissive: LinearRgba::rgb(6.0, 5.0, 2.0),
-        ..default()
-    });
+    let spark_material = materials.add(glowing_material(
+        Color::srgb(1.0, 0.95, 0.7),
+        LinearRgba::rgb(6.0, 5.0, 2.0),
+    ));
 
     commands.insert_resource(GameAssets {
         enemy_mesh,
@@ -697,23 +693,16 @@ fn setup(
         Core,
         Health::new(CORE_HEALTH),
         Mesh3d(meshes.add(TriangleMeshBuilder::new_octahedron(2).build())),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.6, 0.95, 1.0),
-            emissive: LinearRgba::rgb(0.6, 2.2, 3.0),
-            ..default()
-        })),
+        MeshMaterial3d(materials.add(glowing_material(
+            Color::srgb(0.6, 0.95, 1.0),
+            LinearRgba::rgb(0.6, 2.2, 3.0),
+        ))),
         Transform::from_xyz(0.0, CORE_RADIUS, 0.0).with_scale(Vec3::splat(CORE_RADIUS)),
     ));
 
     // Status bar: FPS only; credits / wave / integrity live in the in-game HUD.
     commands.spawn((status_bar(StatusBarRootConfig::default()),));
-    commands.spawn((status_bar_item(StatusBarItemConfig {
-        icon: None,
-        value_fn: status_fps_value_fn(),
-        color_fn: status_fps_color_fn(),
-        prefix: "".to_string(),
-        suffix: "fps".to_string(),
-    }),));
+    commands.spawn(status_bar_with_fps());
 }
 
 // ---------------------------------------------------------------------------
@@ -813,35 +802,7 @@ fn orbit_camera(
 // Menu
 // ---------------------------------------------------------------------------
 
-fn centered_screen() -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        justify_content: JustifyContent::Center,
-        row_gap: Val::Px(16.0),
-        ..default()
-    }
-}
-
-fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle {
-    (
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-        TextLayout {
-            justify: Justify::Center,
-            ..default()
-        },
-    )
-}
-
-fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
+fn spawn_menu(mut commands: Commands, high: Res<HighScore<u32>>) {
     commands.spawn((
         Name::new("Main Menu"),
         DespawnOnExit(GameState::Menu),
@@ -849,11 +810,11 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
         children![
             (
                 screen_text("BASTION", 76.0, Color::srgb(0.6, 0.95, 1.0)),
-                MenuTitle,
+                TitlePulse::new(Color::srgb(0.6, 0.95, 1.0)),
             ),
             screen_text("Tap or press Space to defend the Core", 30.0, Color::WHITE),
             screen_text(
-                format!("Best: {}", high.0),
+                format!("Best: {}", high.best()),
                 24.0,
                 Color::srgb(0.6, 0.9, 1.0),
             ),
@@ -866,25 +827,14 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
     ));
 }
 
-fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<MenuTitle>>) {
-    let alpha = 0.65 + 0.35 * (time.elapsed_secs() * 2.5).sin();
-    for mut color in q_title.iter_mut() {
-        color.0 = Color::srgba(0.6, 0.95, 1.0, alpha);
-    }
-}
-
 fn menu_click(
     mut commands: Commands,
-    pointer: Res<UnifiedPointer>,
-    keys: Res<ButtonInput<KeyCode>>,
-    sfx: Res<SfxAssets>,
+    start: AnyStartPress,
+    sfx: Res<SoundBank<Sfx>>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    if pointer.just_pressed
-        || keys.just_pressed(KeyCode::Space)
-        || keys.just_pressed(KeyCode::Enter)
-    {
-        commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
+    if start.just_pressed() {
+        commands.play_sfx_volume(sfx.get(Sfx::MenuSelect), 0.7);
         next.set(GameState::Playing);
     }
 }
@@ -1009,7 +959,7 @@ fn advance_waves(
     mut commands: Commands,
     mut wave: ResMut<WaveState>,
     assets: Res<GameAssets>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     q_enemies: Query<(), With<Enemy>>,
 ) {
     let dt = time.delta_secs();
@@ -1036,7 +986,7 @@ fn advance_waves(
         wave.spawn_timer = 0.0;
         wave.gap_timer = WAVE_GAP;
         if wave.number > 1 {
-            commands.play_sfx_volume(sfx.wave.clone(), 0.7);
+            commands.play_sfx_volume(sfx.get(Sfx::Wave), 0.7);
         }
     }
 }
@@ -1081,7 +1031,7 @@ fn spawn_enemy(commands: &mut Commands, assets: &GameAssets, wave: usize) {
 fn move_enemies(
     time: Res<Time>,
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut q_shake: Query<&mut CameraShakeInput>,
     q_core: Query<Entity, With<Core>>,
     mut q_enemies: Query<(Entity, &mut Transform, &mut Enemy)>,
@@ -1105,7 +1055,7 @@ fn move_enemies(
                 source: Some(entity),
                 amount: enemy.core_damage,
             });
-            commands.play_sfx_volume(sfx.core_hit.clone(), 0.8);
+            commands.play_sfx_volume(sfx.get(Sfx::CoreHit), 0.8);
             if let Ok(mut shake) = q_shake.single_mut() {
                 shake.add_trauma += SHAKE_CORE_HIT;
             }
@@ -1243,7 +1193,7 @@ fn place_or_select(
     mut selection: ResMut<Selection>,
     assets: Res<GameAssets>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_towers: Query<(Entity, &Transform), With<Tower>>,
 ) {
@@ -1290,7 +1240,7 @@ fn place_or_select(
         if placement_valid(point, &towers) && **credits >= spec.cost {
             **credits -= spec.cost;
             spawn_tower(&mut commands, &assets, &mut materials, spec_idx, point);
-            commands.play_sfx_volume(sfx.build.clone(), 0.7);
+            commands.play_sfx_volume(sfx.get(Sfx::Build), 0.7);
             // Stay armed so several towers can be placed in a row, unless broke.
             if **credits < spec.cost {
                 build.spec = None;
@@ -1320,11 +1270,10 @@ fn spawn_tower(
         perceptual_roughness: 0.6,
         ..default()
     });
-    let turret_material = materials.add(StandardMaterial {
-        base_color: spec.color.mix(&Color::WHITE, 0.3),
-        emissive: LinearRgba::from(spec.color) * 0.6,
-        ..default()
-    });
+    let turret_material = materials.add(glowing_material(
+        spec.color.mix(&Color::WHITE, 0.3),
+        LinearRgba::from(spec.color) * 0.6,
+    ));
 
     // Turret: a barrel pivoting around Y via `smooth_look_rotation`. Its local
     // forward is +X (the long axis of the barrel), so the aim angle is measured to
@@ -1370,7 +1319,7 @@ fn aim_and_fire_towers(
     time: Res<Time>,
     mut commands: Commands,
     assets: Res<GameAssets>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut q_towers: Query<(&Transform, &mut Tower)>,
     mut q_turret: Query<
         (
@@ -1449,7 +1398,7 @@ fn aim_and_fire_towers(
             ));
             let mut rng = rand::rng();
             commands.trigger(
-                PlaySfx::new(sfx.shot.clone())
+                PlaySfx::new(sfx.get(Sfx::Shot))
                     .with_volume(0.18)
                     .with_speed(rng.random_range(1.2..1.5)),
             );
@@ -1472,7 +1421,7 @@ fn on_enemy_killed(
     mut credits: ResMut<Credits>,
     mut score: ResMut<Score>,
     mut combo: ResMut<Combo>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut q_shake: Query<&mut CameraShakeInput>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_enemy: Query<(&Transform, &Enemy)>,
@@ -1506,7 +1455,7 @@ fn on_enemy_killed(
         shake.add_trauma += SHAKE_KILL;
     }
     commands.trigger(
-        PlaySfx::new(sfx.kill.clone())
+        PlaySfx::new(sfx.get(Sfx::Kill))
             .with_volume(0.4)
             .with_speed(0.9 + 0.05 * multiplier as f32),
     );
@@ -1581,7 +1530,7 @@ fn upgrade_selected(
     keys: Res<ButtonInput<KeyCode>>,
     mut credits: ResMut<Credits>,
     selection: Res<Selection>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut commands: Commands,
     mut q_towers: Query<&mut Tower>,
 ) {
@@ -1602,7 +1551,7 @@ fn upgrade_selected(
     tower.level += 1;
     tower.damage *= 1.5;
     tower.range += 1.0;
-    commands.play_sfx_volume(sfx.build.clone(), 1.0);
+    commands.play_sfx_volume(sfx.get(Sfx::Build), 1.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -1693,29 +1642,15 @@ fn advance_dying(
     }
 }
 
-fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
-    if keys.just_pressed(KeyCode::Escape) {
-        next.set(GameState::GameOver);
-    }
-}
-
-fn record_high_score(
-    score: Res<Score>,
-    mut high: ResMut<HighScore>,
-    mut new_best: ResMut<NewBest>,
-) {
-    new_best.0 = **score > high.0;
-    if new_best.0 {
-        high.0 = **score;
-    }
+fn record_high_score(score: Res<Score>, mut high: ResMut<HighScore<u32>>) {
+    high.record(**score);
 }
 
 fn spawn_game_over(
     mut commands: Commands,
     score: Res<Score>,
     wave: Res<WaveState>,
-    high: Res<HighScore>,
-    new_best: Res<NewBest>,
+    high: Res<HighScore<u32>>,
 ) {
     commands
         .spawn((
@@ -1734,11 +1669,11 @@ fn spawn_game_over(
                 34.0,
                 Color::srgb(0.6, 0.9, 1.0),
             ));
-            if new_best.0 {
+            if high.is_new_best() {
                 parent.spawn(screen_text("New best!", 30.0, Color::srgb(0.4, 0.95, 0.5)));
             } else {
                 parent.spawn(screen_text(
-                    format!("Best: {}", high.0),
+                    format!("Best: {}", high.best()),
                     24.0,
                     Color::srgb(0.6, 0.9, 1.0),
                 ));
@@ -1751,19 +1686,12 @@ fn spawn_game_over(
         });
 }
 
-fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
-    commands.play_sfx_volume(sfx.game_over.clone(), 0.9);
+fn play_game_over_sfx(mut commands: Commands, sfx: Res<SoundBank<Sfx>>) {
+    commands.play_sfx_volume(sfx.get(Sfx::GameOver), 0.9);
 }
 
-fn gameover_click(
-    pointer: Res<UnifiedPointer>,
-    keys: Res<ButtonInput<KeyCode>>,
-    mut next: ResMut<NextState<GameState>>,
-) {
-    if pointer.just_pressed
-        || keys.just_pressed(KeyCode::Space)
-        || keys.just_pressed(KeyCode::Enter)
-    {
+fn gameover_click(start: AnyStartPress, mut next: ResMut<NextState<GameState>>) {
+    if start.just_pressed() {
         next.set(GameState::Menu);
     }
 }

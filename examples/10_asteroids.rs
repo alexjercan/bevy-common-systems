@@ -191,14 +191,14 @@ fn main() {
     // Full-screen red damage flash when the ship is destroyed.
     app.add_plugins(ScreenFlashPlugin);
     app.add_plugins(StatusBarPlugin);
+    app.add_plugins(MenuPlugin);
     app.add_plugins(HealthPlugin);
     app.add_plugins(SfxPlugin);
 
     app.init_state::<GameState>();
 
     app.init_resource::<Score>();
-    app.init_resource::<HighScore>();
-    app.init_resource::<NewBest>();
+    app.init_resource::<HighScore<usize>>();
     app.init_resource::<Wave>();
     app.init_resource::<DyingTimer>();
 
@@ -222,10 +222,7 @@ fn main() {
 
     // Main menu.
     app.add_systems(OnEnter(GameState::Menu), spawn_menu);
-    app.add_systems(
-        Update,
-        (menu_click, pulse_menu_title).run_if(in_state(GameState::Menu)),
-    );
+    app.add_systems(Update, menu_click.run_if(in_state(GameState::Menu)));
 
     // Playing: reset, spawn the ship + HUD + first wave, then run the loop.
     app.add_systems(
@@ -298,14 +295,6 @@ enum GameState {
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
 
-/// Best score across runs this session (not reset per run).
-#[derive(Resource, Default)]
-struct HighScore(usize);
-
-/// Whether the most recent run set a new high score (for the game-over screen).
-#[derive(Resource, Default)]
-struct NewBest(bool);
-
 /// The current wave number (1-based). Higher waves spawn more, faster rocks.
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Wave(usize);
@@ -327,22 +316,24 @@ struct GameAssets {
     bullet_material: Handle<StandardMaterial>,
 }
 
-/// One `AudioSource` handle per gameplay event; the files under `assets/sounds/`
-/// are placeholders (see `assets/sounds/README.md`).
-#[derive(Resource)]
-struct SfxAssets {
+/// One gameplay-event sound, keyed into the crate's `SoundBank`. The semantic
+/// key decouples from the file: `Shot -> launch.wav`, `Explode -> bomb.wav`,
+/// `WaveClear -> level_up.wav`. The files under `assets/sounds/` are
+/// placeholders (see `assets/sounds/README.md`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Sfx {
     /// Clicking "play" on the menu / tapping back from game over.
-    menu_select: Handle<AudioSource>,
+    MenuSelect,
     /// The ship fires a bullet.
-    shot: Handle<AudioSource>,
+    Shot,
     /// An asteroid is destroyed / split.
-    explode: Handle<AudioSource>,
+    Explode,
     /// The ship takes a hit.
-    hurt: Handle<AudioSource>,
+    Hurt,
     /// A wave is cleared.
-    wave_clear: Handle<AudioSource>,
+    WaveClear,
     /// The run ends.
-    game_over: Handle<AudioSource>,
+    GameOver,
 }
 
 /// Fixed background star positions on a plane behind the arena, drawn as faint
@@ -410,8 +401,6 @@ struct ScoreText;
 struct WaveText;
 #[derive(Component)]
 struct HullText;
-#[derive(Component)]
-struct MenuTitle;
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -426,14 +415,17 @@ fn setup(
     let mut rng = rand::rng();
 
     // Load one sound per gameplay event. Paths are relative to `assets/`.
-    commands.insert_resource(SfxAssets {
-        menu_select: asset_server.load("sounds/menu_select.wav"),
-        shot: asset_server.load("sounds/launch.wav"),
-        explode: asset_server.load("sounds/bomb.wav"),
-        hurt: asset_server.load("sounds/hurt.wav"),
-        wave_clear: asset_server.load("sounds/level_up.wav"),
-        game_over: asset_server.load("sounds/game_over.wav"),
-    });
+    commands.insert_resource(SoundBank::load(
+        &asset_server,
+        [
+            (Sfx::MenuSelect, "menu_select"),
+            (Sfx::Shot, "launch"),
+            (Sfx::Explode, "bomb"),
+            (Sfx::Hurt, "hurt"),
+            (Sfx::WaveClear, "level_up"),
+            (Sfx::GameOver, "game_over"),
+        ],
+    ));
 
     // A few distinct rocky octahedra, displaced with Fbm/Perlin noise (the
     // `02_planet` recipe) and pre-scaled to the generation-0 radius so slicing
@@ -596,37 +588,7 @@ fn draw_starfield(stars: Res<Starfield>, mut gizmos: Gizmos) {
 // Menu
 // ---------------------------------------------------------------------------
 
-/// A full-screen, centered UI column used by the menu and game-over screens.
-fn centered_screen() -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        justify_content: JustifyContent::Center,
-        row_gap: Val::Px(16.0),
-        ..default()
-    }
-}
-
-/// One line of menu / game-over text at the given size and color.
-fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle {
-    (
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-        TextLayout {
-            justify: Justify::Center,
-            ..default()
-        },
-    )
-}
-
-fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
+fn spawn_menu(mut commands: Commands, high: Res<HighScore<usize>>) {
     commands.spawn((
         Name::new("Main Menu"),
         DespawnOnExit(GameState::Menu),
@@ -634,11 +596,11 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
         children![
             (
                 screen_text("ASTEROIDS", 72.0, Color::srgb(0.6, 0.9, 1.0)),
-                MenuTitle,
+                TitlePulse::new(Color::srgb(0.6, 0.9, 1.0)),
             ),
             screen_text("Tap or click to play", 32.0, Color::WHITE),
             screen_text(
-                format!("Best: {}", high.0),
+                format!("Best: {}", high.best()),
                 24.0,
                 Color::srgb(0.6, 0.9, 1.0),
             ),
@@ -651,22 +613,14 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
     ));
 }
 
-/// Gently pulse the menu title's alpha so the menu breathes.
-fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<MenuTitle>>) {
-    let alpha = 0.65 + 0.35 * (time.elapsed_secs() * 2.5).sin();
-    for mut color in q_title.iter_mut() {
-        color.0 = Color::srgba(0.6, 0.9, 1.0, alpha);
-    }
-}
-
 fn menu_click(
     mut commands: Commands,
     start: AnyStartPress,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut next: ResMut<NextState<GameState>>,
 ) {
     if start.just_pressed() {
-        commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
+        commands.play_sfx_volume(sfx.get(Sfx::MenuSelect), 0.7);
         next.set(GameState::Playing);
     }
 }
@@ -928,7 +882,7 @@ fn fire_bullets(
     keys: Res<ButtonInput<KeyCode>>,
     pointer: Res<UnifiedPointer>,
     assets: Res<GameAssets>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut q_ship: Query<(&mut Ship, &Transform)>,
 ) {
     let Ok((mut ship, transform)) = q_ship.single_mut() else {
@@ -966,7 +920,7 @@ fn fire_bullets(
     // A soft, slightly pitch-varied blip so rapid fire does not drone.
     let mut rng = rand::rng();
     commands.trigger(
-        PlaySfx::new(sfx.shot.clone())
+        PlaySfx::new(sfx.get(Sfx::Shot))
             .with_volume(0.25)
             .with_speed(rng.random_range(1.3..1.6)),
     );
@@ -1095,7 +1049,7 @@ fn handle_collisions(
     q_ship_model: Query<Entity, With<ShipModel>>,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut score: ResMut<Score>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
 ) {
     let mut handled_asteroids: HashSet<Entity> = HashSet::new();
     let mut despawned_bullets: HashSet<Entity> = HashSet::new();
@@ -1136,7 +1090,7 @@ fn handle_collisions(
                     input.add_trauma += SHAKE_SPLIT * 0.5;
                 }
                 commands.trigger(
-                    PlaySfx::new(sfx.explode.clone())
+                    PlaySfx::new(sfx.get(Sfx::Explode))
                         .with_volume(0.5)
                         .with_speed(1.5),
                 );
@@ -1153,7 +1107,7 @@ fn handle_collisions(
                 }
                 let speed = 1.0 + rock.generation as f32 * 0.35;
                 commands.trigger(
-                    PlaySfx::new(sfx.explode.clone())
+                    PlaySfx::new(sfx.get(Sfx::Explode))
                         .with_volume(0.8)
                         .with_speed(speed),
                 );
@@ -1179,7 +1133,7 @@ fn handle_collisions(
                     ..default()
                 });
             }
-            commands.play_sfx(sfx.hurt.clone());
+            commands.play_sfx(sfx.get(Sfx::Hurt));
             commands.trigger(HealthApplyDamage {
                 entity: ship_entity,
                 source: None,
@@ -1255,14 +1209,14 @@ fn advance_wave(
     dying: Res<DyingTimer>,
     mut wave: ResMut<Wave>,
     assets: Res<GameAssets>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
 ) {
     // Do not spawn a new wave mid-death.
     if dying.remaining.is_some() || !q_asteroids.is_empty() {
         return;
     }
     **wave += 1;
-    commands.play_sfx_volume(sfx.wave_clear.clone(), 0.8);
+    commands.play_sfx_volume(sfx.get(Sfx::WaveClear), 0.8);
     populate_wave(&mut commands, wave.0, &assets);
 }
 
@@ -1343,21 +1297,15 @@ fn advance_dying(
     }
 }
 
-fn record_high_score(
-    score: Res<Score>,
-    mut high: ResMut<HighScore>,
-    mut new_best: ResMut<NewBest>,
-) {
-    new_best.0 = score.0 > high.0;
-    high.0 = high.0.max(score.0);
+fn record_high_score(score: Res<Score>, mut high: ResMut<HighScore<usize>>) {
+    high.record(score.0);
 }
 
 fn spawn_game_over(
     mut commands: Commands,
     score: Res<Score>,
     wave: Res<Wave>,
-    high: Res<HighScore>,
-    new_best: Res<NewBest>,
+    high: Res<HighScore<usize>>,
 ) {
     commands
         .spawn((
@@ -1372,11 +1320,11 @@ fn spawn_game_over(
                 36.0,
                 Color::srgb(0.6, 0.9, 1.0),
             ));
-            if new_best.0 {
+            if high.is_new_best() {
                 parent.spawn(screen_text("New best!", 32.0, Color::srgb(0.4, 0.95, 0.5)));
             } else {
                 parent.spawn(screen_text(
-                    format!("Best: {}", high.0),
+                    format!("Best: {}", high.best()),
                     28.0,
                     Color::srgb(0.7, 0.7, 0.7),
                 ));
@@ -1389,8 +1337,8 @@ fn spawn_game_over(
         });
 }
 
-fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
-    commands.play_sfx_volume(sfx.game_over.clone(), 0.9);
+fn play_game_over_sfx(mut commands: Commands, sfx: Res<SoundBank<Sfx>>) {
+    commands.play_sfx_volume(sfx.get(Sfx::GameOver), 0.9);
 }
 
 fn gameover_click(start: AnyStartPress, mut next: ResMut<NextState<GameState>>) {

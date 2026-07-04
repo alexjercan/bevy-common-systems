@@ -1,6 +1,6 @@
 # assets + scoring + ui/input: migrate the games onto the Wave 2 harvests
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 18
 - TAGS: feature,audio,scoring,ui,input,cleanup
 
@@ -66,3 +66,23 @@ The leaf helpers shipped (`AnyStartPress`/`any_start_pressed`, `set_state_on_key
   emissive)` (spread it for extra fields).
 
 Keep behaviour identical and boot each game.
+
+## Close-out
+
+Migrated all seven games onto the Wave 2 harvest modules (examples only, net
+-264 lines):
+
+- SoundBank<Sfx>: 07/08/10/11/12 (06/09 were the proof games).
+- HighScore<T>: 07/10/11/12 (06/09 were the proof games).
+- ui/menu builders: 08/09/10/11/12 (06/07 were the proof games); 10/12 also
+  adopt TitlePulse + MenuPlugin, 09/11 keep their local brightness pulse.
+- leaf helpers (AnyStartPress / set_state_on_key / status_bar_with_fps /
+  glowing_material): applied across 06/08/09/10/11/12 where each pattern matched
+  (07/10 were the proof games).
+
+Judgement calls (see REVIEW.md): any-key menus (06/09/11) left inline rather than
+narrowed to AnyStartPress; the deliberately unlit streak material (08) and
+in-game Space/TAP paths (09/12) left untouched; 11's f32 tie-as-best becomes
+strict >, behaviour-equivalent. Reviewed APPROVE in one round (five
+informational notes). Verified via full suite + 08/11/12 autopilot + boot checks
++ a menu screenshot.

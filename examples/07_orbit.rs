@@ -194,8 +194,7 @@ fn main() {
     app.init_state::<GameState>();
 
     app.init_resource::<Score>();
-    app.init_resource::<HighScore>();
-    app.init_resource::<NewBest>();
+    app.init_resource::<HighScore<usize>>();
     app.init_resource::<Elapsed>();
     app.init_resource::<Level>();
     app.init_resource::<HitCooldown>();
@@ -280,14 +279,6 @@ enum GameState {
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
 
-/// Best score across runs this session (not reset per run).
-#[derive(Resource, Default)]
-struct HighScore(usize);
-
-/// Whether the most recent run set a new high score (for the game-over screen).
-#[derive(Resource, Default)]
-struct NewBest(bool);
-
 /// Seconds elapsed in the current run, driving the score and the difficulty
 /// level.
 #[derive(Resource, Default)]
@@ -367,21 +358,24 @@ struct OrbitAssets {
 /// systems trigger `PlaySfx` with the matching handle. The files under
 /// `assets/sounds/` are placeholders (see `assets/sounds/README.md`); drop real
 /// audio in at the same paths and nothing here changes.
-#[derive(Resource)]
-struct SfxAssets {
+/// One gameplay-event sound, keyed into the crate's `SoundBank`. Loaded once at
+/// startup from `assets/sounds/<name>.wav`; systems trigger the sound with
+/// `sfx.get(...)`. The files are placeholders (see `assets/sounds/README.md`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Sfx {
     /// Starting a run from the menu (or leaving the game-over screen).
-    menu_select: Handle<AudioSource>,
+    MenuSelect,
     /// An orb is collected.
-    pickup: Handle<AudioSource>,
+    Pickup,
     /// A streak reaches x2 or more (a rising chime layered over the pickup).
     /// Shared with `06_fruitninja`, which uses it for its slice combos.
-    combo: Handle<AudioSource>,
+    Combo,
     /// A hazard is touched (damage taken).
-    hurt: Handle<AudioSource>,
+    Hurt,
     /// A new difficulty level is reached.
-    level_up: Handle<AudioSource>,
+    LevelUp,
     /// The run ends (game-over screen).
-    game_over: Handle<AudioSource>,
+    GameOver,
 }
 
 fn setup(
@@ -390,15 +384,19 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Load one sound per gameplay event. Paths are relative to `assets/`.
-    commands.insert_resource(SfxAssets {
-        menu_select: asset_server.load("sounds/menu_select.wav"),
-        pickup: asset_server.load("sounds/pickup.wav"),
-        combo: asset_server.load("sounds/combo.wav"),
-        hurt: asset_server.load("sounds/hurt.wav"),
-        level_up: asset_server.load("sounds/level_up.wav"),
-        game_over: asset_server.load("sounds/game_over.wav"),
-    });
+    // Load one sound per gameplay event, keyed by `Sfx` (base name, the crate
+    // adds the `sounds/` prefix and `.wav`).
+    commands.insert_resource(SoundBank::load(
+        &asset_server,
+        [
+            (Sfx::MenuSelect, "menu_select"),
+            (Sfx::Pickup, "pickup"),
+            (Sfx::Combo, "combo"),
+            (Sfx::Hurt, "hurt"),
+            (Sfx::LevelUp, "level_up"),
+            (Sfx::GameOver, "game_over"),
+        ],
+    ));
 
     // The planet: a smooth octahedron sphere, straight from `01_sphere`. It is
     // the fixed stage the whole game orbits, so it is spawned once here.
@@ -639,7 +637,7 @@ fn read_steer(
 // --- Menu -----------------------------------------------------------------
 
 /// Spawn the main menu (title + prompt), scoped to the `Menu` state.
-fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
+fn spawn_menu(mut commands: Commands, high: Res<HighScore<usize>>) {
     commands.spawn((
         Name::new("Main Menu"),
         DespawnOnExit(GameState::Menu),
@@ -651,7 +649,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
             ),
             screen_text("Tap or click to play", 32.0, Color::WHITE),
             screen_text(
-                format!("Best: {}", high.0),
+                format!("Best: {}", high.best()),
                 24.0,
                 Color::srgb(0.5, 0.9, 0.7),
             ),
@@ -668,11 +666,11 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
 fn advance_from_menu(
     mut commands: Commands,
     start: AnyStartPress,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut next: ResMut<NextState<GameState>>,
 ) {
     if start.just_pressed() {
-        commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
+        commands.play_sfx_volume(sfx.get(Sfx::MenuSelect), 0.7);
         next.set(GameState::Playing);
     }
 }
@@ -900,7 +898,7 @@ fn maintain_objects(
 /// the post-hit invulnerability window).
 fn resolve_collisions(
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut score: ResMut<Score>,
     mut cooldown: ResMut<HitCooldown>,
     mut streak: ResMut<Streak>,
@@ -936,13 +934,13 @@ fn resolve_collisions(
             // Pickup blip climbs in pitch as the streak grows; a chain of x2+
             // also layers the rising combo chime.
             commands.trigger(
-                PlaySfx::new(sfx.pickup.clone())
+                PlaySfx::new(sfx.get(Sfx::Pickup))
                     .with_volume(0.8)
                     .with_speed(pickup_pitch_for(count)),
             );
             if count >= 2 {
                 commands.trigger(
-                    PlaySfx::new(sfx.combo.clone())
+                    PlaySfx::new(sfx.get(Sfx::Combo))
                         .with_volume(0.5)
                         .with_speed(pickup_pitch_for(count)),
                 );
@@ -1002,7 +1000,7 @@ fn resolve_collisions(
                     despawn_on_end: false,
                 });
             }
-            commands.play_sfx(sfx.hurt.clone());
+            commands.play_sfx(sfx.get(Sfx::Hurt));
             commands.trigger(HealthApplyDamage {
                 entity: runner_entity,
                 source: None,
@@ -1025,13 +1023,13 @@ fn tick_elapsed(time: Res<Time>, mut elapsed: ResMut<Elapsed>) {
 fn advance_level(
     mut commands: Commands,
     elapsed: Res<Elapsed>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut level: ResMut<Level>,
 ) {
     let target = level_for(elapsed.0);
     if target > level.0 {
         level.0 = target;
-        commands.play_sfx_volume(sfx.level_up.clone(), 0.7);
+        commands.play_sfx_volume(sfx.get(Sfx::LevelUp), 0.7);
     }
 }
 
@@ -1236,15 +1234,8 @@ fn on_runner_died(
 }
 
 /// Record the run's score into the session high score, flagging a new best.
-fn record_high_score(
-    score: Res<Score>,
-    elapsed: Res<Elapsed>,
-    mut high: ResMut<HighScore>,
-    mut new_best: ResMut<NewBest>,
-) {
-    let final_score = score_value(score.0, elapsed.0);
-    new_best.0 = final_score > high.0;
-    high.0 = high.0.max(final_score);
+fn record_high_score(score: Res<Score>, elapsed: Res<Elapsed>, mut high: ResMut<HighScore<usize>>) {
+    high.record(score_value(score.0, elapsed.0));
 }
 
 /// Spawn the game-over screen with the final score, scoped to `GameOver`.
@@ -1252,8 +1243,7 @@ fn spawn_game_over(
     mut commands: Commands,
     score: Res<Score>,
     elapsed: Res<Elapsed>,
-    high: Res<HighScore>,
-    new_best: Res<NewBest>,
+    high: Res<HighScore<usize>>,
 ) {
     let final_score = score_value(score.0, elapsed.0);
     commands
@@ -1269,11 +1259,11 @@ fn spawn_game_over(
                 40.0,
                 Color::srgb(0.6, 0.9, 1.0),
             ));
-            if new_best.0 {
+            if high.is_new_best() {
                 parent.spawn(screen_text("New best!", 32.0, Color::srgb(0.4, 0.95, 0.5)));
             } else {
                 parent.spawn(screen_text(
-                    format!("Best: {}", high.0),
+                    format!("Best: {}", high.best()),
                     28.0,
                     Color::srgb(0.7, 0.7, 0.7),
                 ));
@@ -1287,8 +1277,8 @@ fn spawn_game_over(
 }
 
 /// Play the game-over sting when the screen appears.
-fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
-    commands.play_sfx_volume(sfx.game_over.clone(), 0.9);
+fn play_game_over_sfx(mut commands: Commands, sfx: Res<SoundBank<Sfx>>) {
+    commands.play_sfx_volume(sfx.get(Sfx::GameOver), 0.9);
 }
 
 /// Return to the menu on a tap / click from the game-over screen.

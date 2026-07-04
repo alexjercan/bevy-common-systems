@@ -427,15 +427,20 @@ struct Landing {
     tilt: f32,
 }
 
-/// Handles to the one-shot sound effects, loaded once at startup. The files
-/// are the shared placeholder sounds under `assets/sounds/` (see
+/// One gameplay-event sound, keyed into the crate's `SoundBank`. The semantic
+/// key decouples from the file (`Land -> golden.wav`, `Crash -> bomb.wav`). The
+/// files are the shared placeholder sounds under `assets/sounds/` (see
 /// `06_fruitninja`).
-#[derive(Resource)]
-struct SfxAssets {
-    start: Handle<AudioSource>,
-    land: Handle<AudioSource>,
-    crash: Handle<AudioSource>,
-    pickup: Handle<AudioSource>,
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Sfx {
+    /// A run starts (launch).
+    Start,
+    /// The ship touches down softly (success).
+    Land,
+    /// The ship crashes.
+    Crash,
+    /// A fuel can is collected.
+    Pickup,
 }
 
 // --- Markers ---------------------------------------------------------------
@@ -748,10 +753,8 @@ fn setup(
             half_height: 0.7,
         }),
         material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.3, 0.85, 0.4),
-            emissive: LinearRgba::rgb(0.2, 2.5, 0.6),
             metallic: 0.3,
-            ..default()
+            ..glowing_material(Color::srgb(0.3, 0.85, 0.4), LinearRgba::rgb(0.2, 2.5, 0.6))
         }),
     });
     // Placeholder pad so the resource always exists before the first run reads
@@ -842,13 +845,7 @@ fn setup(
 
     // Status bar: FPS, altitude, speed and fuel gauges.
     commands.spawn((status_bar(StatusBarRootConfig::default()),));
-    commands.spawn((status_bar_item(StatusBarItemConfig {
-        icon: None,
-        value_fn: status_fps_value_fn(),
-        color_fn: status_fps_color_fn(),
-        prefix: "".to_string(),
-        suffix: "fps".to_string(),
-    }),));
+    commands.spawn(status_bar_with_fps());
     commands.spawn((status_bar_item(StatusBarItemConfig {
         icon: None,
         value_fn: |world: &World| {
@@ -964,12 +961,15 @@ fn setup(
         suffix: "s".to_string(),
     }),));
 
-    commands.insert_resource(SfxAssets {
-        start: asset_server.load("sounds/launch.wav"),
-        land: asset_server.load("sounds/golden.wav"),
-        crash: asset_server.load("sounds/bomb.wav"),
-        pickup: asset_server.load("sounds/pickup.wav"),
-    });
+    commands.insert_resource(SoundBank::load(
+        &asset_server,
+        [
+            (Sfx::Start, "launch"),
+            (Sfx::Land, "golden"),
+            (Sfx::Crash, "bomb"),
+            (Sfx::Pickup, "pickup"),
+        ],
+    ));
 }
 
 /// Build a stacked cubemap starfield: `size` square faces stacked vertically
@@ -1029,64 +1029,29 @@ fn spawn_menu(mut commands: Commands) {
         .spawn((
             Name::new("Menu UI"),
             DespawnOnExit(GameState::Menu),
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                row_gap: Val::Px(14.0),
-                ..default()
-            },
+            centered_screen(),
         ))
         .with_children(|parent| {
-            parent.spawn((
-                Text::new("DROP ZONE"),
-                TextFont {
-                    font_size: FontSize::Px(72.0),
-                    ..default()
-                },
-                TextColor(Color::srgb(0.6, 0.9, 1.0)),
+            parent.spawn(screen_text("DROP ZONE", 72.0, Color::srgb(0.6, 0.9, 1.0)));
+            parent.spawn(screen_text(
+                "Land softly on the glowing pad",
+                26.0,
+                Color::srgb(0.8, 0.85, 0.9),
             ));
-            parent.spawn((
-                Text::new("Land softly on the glowing pad"),
-                TextFont {
-                    font_size: FontSize::Px(26.0),
-                    ..default()
-                },
-                TextColor(Color::srgb(0.8, 0.85, 0.9)),
-            ));
-            parent.spawn((
-                Text::new(
-                    "Space/Up: thrust    W/S: pitch    A/D: roll\n\
-                     Follow the arrow to the beacon. Grab fuel cans on the way down.\n\n\
-                     Press SPACE to launch",
-                ),
-                TextFont {
-                    font_size: FontSize::Px(22.0),
-                    ..default()
-                },
-                TextColor(Color::srgb(0.7, 0.75, 0.8)),
-                TextLayout {
-                    justify: Justify::Center,
-                    ..default()
-                },
+            parent.spawn(screen_text(
+                "Space/Up: thrust    W/S: pitch    A/D: roll\n\
+                 Follow the arrow to the beacon. Grab fuel cans on the way down.\n\n\
+                 Press SPACE to launch",
+                22.0,
+                Color::srgb(0.7, 0.75, 0.8),
             ));
         });
 }
 
-fn menu_input(
-    keys: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    touches: Res<Touches>,
-    mut next: ResMut<NextState<GameState>>,
-) {
-    // A tap also starts, so the wasm build is enterable on a phone (winit-on-web
-    // delivers taps as touches, not synthesized mouse clicks).
-    if keys.just_pressed(KeyCode::Space)
-        || mouse.just_pressed(MouseButton::Left)
-        || touches.any_just_pressed()
-    {
+fn menu_input(start: AnyStartPress, mut next: ResMut<NextState<GameState>>) {
+    // `AnyStartPress` covers Space/Enter, a click and a tap, so the wasm build is
+    // enterable on a phone (winit-on-web delivers taps as touches).
+    if start.just_pressed() {
         next.set(GameState::Playing);
     }
 }
@@ -1108,7 +1073,7 @@ fn start_run(
     noise: Res<PlanetNoise>,
     can_assets: Res<FuelCanAssets>,
     hazards: Res<HazardAssets>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
 ) {
     fuel.0 = START_FUEL;
     outcome.0 = None;
@@ -1122,7 +1087,7 @@ fn start_run(
     // Wind is a cross-run resource, so it must be reset here (fresh gust phase),
     // like the other per-run resources above.
     *wind = Wind::default();
-    commands.play_sfx(sfx.start.clone());
+    commands.play_sfx(sfx.get(Sfx::Start));
 
     // Roll a fresh landing pad somewhere in the reachable cap around the pole,
     // and place its beacon flush on the real terrain (surface radius at a unit
@@ -1137,11 +1102,10 @@ fn start_run(
         dir: pad_dir,
         pos: pad_pos,
     });
-    let pad_glow = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.2, 0.9, 1.0),
-        emissive: LinearRgba::rgb(0.3, 5.0, 6.0),
-        ..default()
-    });
+    let pad_glow = materials.add(glowing_material(
+        Color::srgb(0.2, 0.9, 1.0),
+        LinearRgba::rgb(0.3, 5.0, 6.0),
+    ));
     commands
         .spawn((
             Name::new("Landing Pad"),
@@ -1264,11 +1228,10 @@ fn start_run(
             radius: 0.35,
             height: 1.1,
         })),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(1.0, 0.85, 0.2),
-            emissive: LinearRgba::rgb(5.0, 3.5, 0.3),
-            ..default()
-        })),
+        MeshMaterial3d(materials.add(glowing_material(
+            Color::srgb(1.0, 0.85, 0.2),
+            LinearRgba::rgb(5.0, 3.5, 0.3),
+        ))),
         Transform::from_translation(ship_start_pos()),
     ));
 
@@ -1347,11 +1310,10 @@ fn start_run(
             Name::new("Thruster"),
             Thruster,
             Mesh3d(meshes.add(Sphere::new(0.5))),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb(1.0, 0.6, 0.1),
-                emissive: LinearRgba::rgb(8.0, 3.0, 0.4),
-                ..default()
-            })),
+            MeshMaterial3d(materials.add(glowing_material(
+                Color::srgb(1.0, 0.6, 0.1),
+                LinearRgba::rgb(8.0, 3.0, 0.4),
+            ))),
             Transform::from_xyz(0.0, -0.9, 0.0).with_scale(Vec3::splat(0.001)),
         ));
     });
@@ -1824,7 +1786,7 @@ fn tick_run_timer(time: Res<Time>, mut timer: ResMut<RunTimer>) {
 fn collect_fuel_cans(
     mut commands: Commands,
     mut fuel: ResMut<Fuel>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     q_ship: Query<&Transform, With<Ship>>,
     q_cans: Query<(Entity, &Transform), With<FuelCan>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
@@ -1838,7 +1800,7 @@ fn collect_fuel_cans(
         }
         commands.entity(can).despawn();
         fuel.0 = add_fuel(fuel.0, FUEL_CAN_AMOUNT);
-        commands.trigger(PlaySfx::new(sfx.pickup.clone()).with_volume(0.8));
+        commands.trigger(PlaySfx::new(sfx.get(Sfx::Pickup)).with_volume(0.8));
 
         // Float a "+FUEL" popup at the can's screen position (skip if off-screen
         // or behind the camera).
@@ -1896,7 +1858,7 @@ fn resolve_collisions(
     fuel: Res<Fuel>,
     pad: Res<LandingPad>,
     timer: Res<RunTimer>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -1967,7 +1929,7 @@ fn resolve_collisions(
                 speed,
                 tilt,
             });
-            commands.play_sfx(sfx.land.clone());
+            commands.play_sfx(sfx.get(Sfx::Land));
             if let Ok(mut input) = q_shake.single_mut() {
                 input.add_trauma += LAND_TRAUMA;
             }
@@ -1997,7 +1959,7 @@ fn resolve_collisions(
                 },
                 DespawnOnExit(GameState::Playing),
             ));
-            commands.play_sfx(sfx.crash.clone());
+            commands.play_sfx(sfx.get(Sfx::Crash));
             if let Ok(mut input) = q_shake.single_mut() {
                 input.add_trauma += CRASH_TRAUMA;
             }
@@ -2012,7 +1974,7 @@ fn resolve_collisions(
             source: None,
             amount: impact_damage(speed),
         });
-        commands.trigger(PlaySfx::new(sfx.crash.clone()).with_volume(0.6));
+        commands.trigger(PlaySfx::new(sfx.get(Sfx::Crash)).with_volume(0.6));
         if let Ok(mut input) = q_shake.single_mut() {
             input.add_trauma += LAND_TRAUMA;
         }
@@ -2070,7 +2032,7 @@ fn resolve_asteroid_hits(
     q_ship: Query<(Entity, &Transform, &ApproachSpeed), With<Ship>>,
     q_asteroids: Query<(Entity, &Transform), With<Asteroid>>,
     outcome: Res<Outcome>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut commands: Commands,
 ) {
@@ -2102,7 +2064,7 @@ fn resolve_asteroid_hits(
             Visibility::Hidden,
             TempEntity(0.2),
         ));
-        commands.trigger(PlaySfx::new(sfx.crash.clone()).with_volume(0.7));
+        commands.trigger(PlaySfx::new(sfx.get(Sfx::Crash)).with_volume(0.7));
         if let Ok(mut input) = q_shake.single_mut() {
             input.add_trauma += LAND_TRAUMA;
         }
@@ -2189,7 +2151,7 @@ fn on_ship_destroyed(
     add: On<Add, HealthZeroMarker>,
     q_ship: Query<(Entity, &Transform, &ApproachSpeed), With<Ship>>,
     state: Res<State<GameState>>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut outcome: ResMut<Outcome>,
     mut next: ResMut<NextState<GameState>>,
@@ -2219,7 +2181,7 @@ fn on_ship_destroyed(
         },
         DespawnOnExit(GameState::Playing),
     ));
-    commands.play_sfx(sfx.crash.clone());
+    commands.play_sfx(sfx.get(Sfx::Crash));
     if let Ok(mut input) = q_shake.single_mut() {
         input.add_trauma += CRASH_TRAUMA;
     }

@@ -201,7 +201,7 @@ fn main() {
 
     app.insert_resource(ClearColor(Color::srgb(0.04, 0.05, 0.08)));
     app.init_resource::<ReactorState>();
-    app.init_resource::<HighScore>();
+    app.init_resource::<HighScore<f32>>();
     // The crate's touchpad plugin owns `TouchSeen` and reveals the vent pad on
     // the first touch (and hides the keyboard legend it replaces).
     app.add_plugins(TouchpadPlugin);
@@ -232,7 +232,7 @@ fn main() {
             apply_danger,
             mirror_health,
             update_alarm_banner,
-            giveup_on_escape,
+            set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
             .run_if(in_state(GameState::Playing)),
     );
@@ -328,18 +328,20 @@ impl ReactorState {
     }
 }
 
-/// Best survival time seen this process, shown on the menu and meltdown screens.
-#[derive(Resource, Default)]
-struct HighScore(f32);
-
-/// Handles for the one-shot sound effects, loaded once in `setup`.
-#[derive(Resource)]
-struct SfxAssets {
-    menu_select: Handle<AudioSource>,
-    vent: Handle<AudioSource>,
-    alarm: Handle<AudioSource>,
-    level_up: Handle<AudioSource>,
-    game_over: Handle<AudioSource>,
+/// One gameplay-event sound, keyed into the crate's `SoundBank`; loaded once in
+/// `setup` from `assets/sounds/<name>.wav`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Sfx {
+    /// Starting a run from the menu (or leaving the meltdown screen).
+    MenuSelect,
+    /// Venting a gauge.
+    Vent,
+    /// A gauge sits in the red (alarm loop).
+    Alarm,
+    /// A difficulty level is reached.
+    LevelUp,
+    /// The reactor melts down (run ends).
+    GameOver,
 }
 
 // --- Components --------------------------------------------------------------
@@ -444,13 +446,16 @@ fn setup(
 ) {
     commands.spawn((Name::new("UI Camera"), Camera2d));
 
-    commands.insert_resource(SfxAssets {
-        menu_select: asset_server.load("sounds/menu_select.wav"),
-        vent: asset_server.load("sounds/vent.wav"),
-        alarm: asset_server.load("sounds/alarm.wav"),
-        level_up: asset_server.load("sounds/level_up.wav"),
-        game_over: asset_server.load("sounds/game_over.wav"),
-    });
+    commands.insert_resource(SoundBank::load(
+        &asset_server,
+        [
+            (Sfx::MenuSelect, "menu_select"),
+            (Sfx::Vent, "vent"),
+            (Sfx::Alarm, "alarm"),
+            (Sfx::LevelUp, "level_up"),
+            (Sfx::GameOver, "game_over"),
+        ],
+    ));
 
     // Seed the reactor once so the always-on bar shows a plausible idle console
     // behind the menu instead of all-zero gauges; `start_run` reseeds each run.
@@ -507,43 +512,7 @@ fn setup(
     }),));
 
     // Frame rate, the crate's built-in item.
-    commands.spawn((status_bar_item(StatusBarItemConfig {
-        icon: None,
-        value_fn: status_fps_value_fn(),
-        color_fn: status_fps_color_fn(),
-        prefix: "".to_string(),
-        suffix: "fps".to_string(),
-    }),));
-}
-
-// --- Shared UI helpers ------------------------------------------------------
-
-fn centered_screen() -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        justify_content: JustifyContent::Center,
-        row_gap: Val::Px(14.0),
-        ..default()
-    }
-}
-
-fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle {
-    (
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-        TextLayout {
-            justify: Justify::Center,
-            ..default()
-        },
-    )
+    commands.spawn(status_bar_with_fps());
 }
 
 fn best_line(best: f32) -> String {
@@ -556,7 +525,7 @@ fn best_line(best: f32) -> String {
 
 // --- Menu -------------------------------------------------------------------
 
-fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
+fn spawn_menu(mut commands: Commands, high: Res<HighScore<f32>>) {
     commands
         .spawn((
             Name::new("Menu"),
@@ -584,7 +553,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
                 Color::srgb(0.6, 0.65, 0.75),
             ));
             parent.spawn(screen_text(
-                best_line(high.0),
+                best_line(high.best()),
                 22.0,
                 Color::srgb(0.95, 0.85, 0.25),
             ));
@@ -608,7 +577,7 @@ fn pulse_menu_title(time: Res<Time>, mut q: Query<&mut TextColor, With<MenuTitle
 /// browser's audio-unlock gesture so the first sound plays on the web build.
 fn menu_start(
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
     touches: Res<Touches>,
@@ -620,7 +589,7 @@ fn menu_start(
         || keys.get_just_pressed().next().is_some()
         || touches.any_just_pressed();
     if pressed {
-        commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
+        commands.play_sfx_volume(sfx.get(Sfx::MenuSelect), 0.7);
         next.set(GameState::Playing);
     }
 }
@@ -771,7 +740,7 @@ fn spawn_vent_pad(mut commands: Commands) {
 fn advance_run(
     time: Res<Time>,
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut reactor: ResMut<ReactorState>,
 ) {
     reactor.elapsed += time.delta_secs();
@@ -780,7 +749,7 @@ fn advance_run(
         reactor.level += 1;
         reactor.next_level_at += LEVEL_INTERVAL;
         reactor.recompute_climb();
-        commands.play_sfx_volume(sfx.level_up.clone(), 0.6);
+        commands.play_sfx_volume(sfx.get(Sfx::LevelUp), 0.6);
     }
 }
 
@@ -818,10 +787,10 @@ fn vent_button_at(point: Vec2, window: Vec2) -> Option<usize> {
 /// Play the vent SFX for a just-vented gauge, pitched up a touch when the gauge is
 /// still in trouble. Shared by the keyboard (`vent_input`) and touch
 /// (`touch_vent_input`) paths so the two input sources sound identical.
-fn trigger_vent_sfx(commands: &mut Commands, sfx: &SfxAssets, gauge_value: f32) {
+fn trigger_vent_sfx(commands: &mut Commands, sfx: &SoundBank<Sfx>, gauge_value: f32) {
     let speed = if gauge_value >= AMBER { 1.15 } else { 1.0 };
     commands.trigger(
-        PlaySfx::new(sfx.vent.clone())
+        PlaySfx::new(sfx.get(Sfx::Vent))
             .with_volume(0.6)
             .with_speed(speed),
     );
@@ -831,7 +800,7 @@ fn trigger_vent_sfx(commands: &mut Commands, sfx: &SfxAssets, gauge_value: f32) 
 fn vent_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut reactor: ResMut<ReactorState>,
 ) {
     for (i, spec) in GAUGES.iter().enumerate() {
@@ -851,7 +820,7 @@ fn touch_vent_input(
     touches: Res<Touches>,
     windows: Query<&Window>,
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut reactor: ResMut<ReactorState>,
 ) {
     let Ok(window) = windows.single() else {
@@ -871,7 +840,7 @@ fn touch_vent_input(
 fn apply_danger(
     time: Res<Time>,
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut reactor: ResMut<ReactorState>,
     q_reactor: Query<Entity, With<Reactor>>,
 ) {
@@ -896,7 +865,7 @@ fn apply_danger(
         reactor.alarm_timer = ALARM_INTERVAL;
         let speed = 1.0 + 0.12 * (reds - 1) as f32;
         commands.trigger(
-            PlaySfx::new(sfx.alarm.clone())
+            PlaySfx::new(sfx.get(Sfx::Alarm))
                 .with_volume(0.5)
                 .with_speed(speed),
         );
@@ -931,12 +900,6 @@ fn update_alarm_banner(
     }
 }
 
-fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
-    if keys.just_pressed(KeyCode::Escape) {
-        next.set(GameState::GameOver);
-    }
-}
-
 /// End the run when the reactor's health reaches zero.
 fn on_reactor_died(
     add: On<Add, HealthZeroMarker>,
@@ -951,15 +914,13 @@ fn on_reactor_died(
 
 // --- Game over --------------------------------------------------------------
 
-fn record_high_score(reactor: Res<ReactorState>, mut high: ResMut<HighScore>) {
-    if reactor.elapsed > high.0 {
-        high.0 = reactor.elapsed;
-    }
+fn record_high_score(reactor: Res<ReactorState>, mut high: ResMut<HighScore<f32>>) {
+    high.record(reactor.elapsed);
 }
 
-fn spawn_game_over(mut commands: Commands, reactor: Res<ReactorState>, high: Res<HighScore>) {
+fn spawn_game_over(mut commands: Commands, reactor: Res<ReactorState>, high: Res<HighScore<f32>>) {
     let survived = reactor.elapsed.floor() as u32;
-    let new_best = reactor.elapsed >= high.0 && reactor.elapsed > 0.0;
+    let new_best = high.is_new_best();
 
     commands
         .spawn((
@@ -982,7 +943,7 @@ fn spawn_game_over(mut commands: Commands, reactor: Res<ReactorState>, high: Res
                 ));
             } else {
                 parent.spawn(screen_text(
-                    best_line(high.0),
+                    best_line(high.best()),
                     24.0,
                     Color::srgb(0.8, 0.8, 0.85),
                 ));
@@ -995,8 +956,8 @@ fn spawn_game_over(mut commands: Commands, reactor: Res<ReactorState>, high: Res
         });
 }
 
-fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
-    commands.play_sfx_volume(sfx.game_over.clone(), 0.8);
+fn play_game_over_sfx(mut commands: Commands, sfx: Res<SoundBank<Sfx>>) {
+    commands.play_sfx_volume(sfx.get(Sfx::GameOver), 0.8);
 }
 
 fn gameover_dismiss(

@@ -236,7 +236,7 @@ fn main() {
             draw_blade_trail,
             draw_cursor_indicator,
             advance_dying,
-            giveup_on_escape,
+            set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
             .run_if(in_state(GameState::Playing)),
     );
@@ -549,11 +549,12 @@ fn setup(
 
     // Golden bonus fruit: bright, emissive gold so it stands out.
     let gold_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(1.0, 0.82, 0.15),
-        emissive: LinearRgba::rgb(0.6, 0.45, 0.05),
         metallic: 0.9,
         perceptual_roughness: 0.25,
-        ..default()
+        ..glowing_material(
+            Color::srgb(1.0, 0.82, 0.15),
+            LinearRgba::rgb(0.6, 0.45, 0.05),
+        )
     });
 
     commands.insert_resource(FruitAssets {
@@ -591,13 +592,7 @@ fn setup(
     // run in `spawn_hud`).
     commands.spawn((status_bar(StatusBarRootConfig::default()),));
 
-    commands.spawn((status_bar_item(StatusBarItemConfig {
-        icon: None,
-        value_fn: status_fps_value_fn(),
-        color_fn: status_fps_color_fn(),
-        prefix: "".to_string(),
-        suffix: "fps".to_string(),
-    }),));
+    commands.spawn(status_bar_with_fps());
 }
 
 /// Text shown by the score HUD for a given score.
@@ -791,14 +786,6 @@ fn update_combo_text(
         } else {
             text.clear();
         }
-    }
-}
-
-/// Give up the current run with Escape (a stand-in lose trigger until bombs
-/// provide the real one).
-fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
-    if keys.just_pressed(KeyCode::Escape) {
-        next.set(GameState::GameOver);
     }
 }
 
