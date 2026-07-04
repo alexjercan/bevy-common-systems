@@ -1,6 +1,6 @@
 # 08_dropzone: Tier-A fun pass (landing pad, fuel pickups, landing/crash visuals)
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 5
 - TAGS: feature,dropzone
 
@@ -72,14 +72,14 @@ The first pass shipped a fixed pad and fixed fuel-can positions. The user asked
 to make each run fresh and easier to navigate. Acceptance criteria for this
 branch (tracked as REVIEW.md R1.1-R1.3):
 
-- [ ] Randomize the landing pad position each run (within the reachable cap
+- [x] Randomize the landing pad position each run (within the reachable cap
       around the +Y spawn pole, clear of the antipode singularity). Pad moves
       from a persistent setup() entity to a per-run entity; still visible on the
       result screen, cleaned up on leaving Result.
-- [ ] Randomize fuel-can positions each run AND keep roughly 3 on the map by
+- [x] Randomize fuel-can positions each run AND keep roughly 3 on the map by
       spawning replacements over time (never zero, never a swarm), like
       `07_orbit`'s maintain-objects pattern.
-- [ ] Add a direction indicator toward the pad -- a diegetic guide (e.g. a
+- [x] Add a direction indicator toward the pad -- a diegetic guide (e.g. a
       world-space arrow that hovers by the ship and points along the ground
       track to the pad), not just the numeric "pad Nm" readout.
 
@@ -121,3 +121,14 @@ autopilot (since removed) flew 741 physics frames to a clean soft landing
 
 Scope held: physics/PD/gravity and the state-machine shape untouched; no
 out-of-scope mechanics (upgrades, cargo, multi-leg, extra pickups) added.
+
+Review (REVIEW.md): round 1 REQUEST_CHANGES (user-added scope + 6 polish
+findings), round 2 APPROVE. The added scope shipped on this branch:
+- Pad position randomized each run (per-run entity, `PlanetNoise` resource for
+  flush placement, cleaned on leaving Result).
+- Fuel cans randomized and kept at ~3 by a maintain/refill spawner.
+- A diegetic guide arrow that points from the ship to the pad.
+Plus the polish (reset shake per run, `add_fuel` helper + test, dust at the
+contact patch, doc-comment and test-name fixes). Final: 6 unit tests, fmt/
+clippy/ascii clean, full cycle flown (random pad, cans held at 3, arrow up,
+clean landing), web showcase rebuilt.
