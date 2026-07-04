@@ -89,8 +89,10 @@ const LEAN_DECAY: f32 = 4.0;
 
 /// Starting fuel units.
 const START_FUEL: f32 = 100.0;
-/// Fuel burned per second while the thruster is firing.
-const FUEL_BURN: f32 = 14.0;
+/// Fuel burned per second while the thruster is firing. Tuned to a third of the
+/// original 14.0 so the tank lasts ~3x longer (keeps the 0..100% gauge intact
+/// rather than raising the max above 100).
+const FUEL_BURN: f32 = 14.0 / 3.0;
 
 /// Fastest impact speed that still counts as a safe landing (m/s).
 const LAND_SPEED_MAX: f32 = 4.5;
@@ -200,15 +202,22 @@ const SHIP_COLLISION_RADIUS: f32 = 1.1;
 // to thread a gap. Discrete colliders are used instead of cranking the global
 // terrain amplitude, which would also disturb the pad's flush placement and the
 // landing feel (see the docs note for this decision).
-/// Number of rock monoliths around the pad (before the difficulty scale).
-const ROCK_COUNT: usize = 6;
-/// Angular radius of the rock ring from the pad direction (radians).
-const ROCK_RING_ANGLE: f32 = 0.085;
+/// Number of rock monoliths around the pad (before the difficulty scale). Kept
+/// low so the approach threads a few scattered spires, not a wall.
+const ROCK_COUNT: usize = 3;
+/// Angular radius of the rock ring from the pad direction (radians). Rocks are
+/// jittered out to `+ ROCK_RING_ANGLE_SPREAD` beyond this, so they sit further
+/// from the pad and spread around the map rather than crowding the touchdown.
+const ROCK_RING_ANGLE: f32 = 0.16;
+const ROCK_RING_ANGLE_SPREAD: f32 = 0.14;
 /// Fraction of the ring the rocks span, leaving the remainder as a threadable
-/// gap (0.78 -> ~280 degrees of rocks, ~80 of clear approach).
-const ROCK_RING_SPAN_FRAC: f32 = 0.78;
-/// Rock monolith size: square footprint half-width and height (world units).
+/// gap (0.7 -> ~250 degrees of rocks, ~110 of clear approach).
+const ROCK_RING_SPAN_FRAC: f32 = 0.7;
+/// Rock monolith size: square footprint half-width, and the height range
+/// (`ROCK_HEIGHT` is the max; each rock rolls a random height down to
+/// `ROCK_MIN_HEIGHT`, so a low one is easy to clear).
 const ROCK_HALF_WIDTH: f32 = 1.2;
+const ROCK_MIN_HEIGHT: f32 = 1.5;
 const ROCK_HEIGHT: f32 = 6.0;
 
 // Asteroids: debris drifting through the descent corridor, driven by the crate's
@@ -244,8 +253,9 @@ const INTEGRITY_MIN_DAMAGE: f32 = 8.0;
 // drifting streak particles and a HUD gauge.
 /// Peak tangential wind acceleration at full gust (world units/s^2), before the
 /// difficulty scale. Compare GRAVITY (5.5) and THRUST_ACCEL (13.0): strong
-/// enough to shove, weak enough to counter with lean.
-const WIND_PEAK_ACCEL: f32 = 3.2;
+/// enough to shove, weak enough to counter with lean. Tuned down (was 3.2) to a
+/// gentle nudge; compare GRAVITY (5.5) and THRUST_ACCEL (13.0).
+const WIND_PEAK_ACCEL: f32 = 0.64;
 /// How fast the gust envelope pulses and the wind bearing rotates (rad/sec). Both
 /// are slow and smooth so the wind is readable and counterable, not a coin flip.
 const WIND_GUST_FREQ: f32 = 0.55;
@@ -379,7 +389,8 @@ struct FuelSpawner {
 struct HazardAssets {
     asteroid_mesh: Handle<Mesh>,
     asteroid_material: Handle<StandardMaterial>,
-    rock_mesh: Handle<Mesh>,
+    // Rocks get a per-run mesh (random height), so only the shared material lives
+    // here.
     rock_material: Handle<StandardMaterial>,
     streak_mesh: Handle<Mesh>,
     streak_material: Handle<StandardMaterial>,
@@ -767,8 +778,9 @@ fn setup(
 
     // Shared hazard assets. The asteroid is a lumpy unit octahedron (the crate's
     // own `TriangleMeshBuilder`, so it also slices cleanly for `mesh/explode`);
-    // scale to size per-instance. The rock is a monolith cuboid, and the streak a
-    // thin translucent shard drifting downwind.
+    // scale to size per-instance. Rocks get a per-run cuboid mesh (random height)
+    // so only their shared material is built here; the streak is a thin
+    // translucent shard drifting downwind.
     let mut asteroid_builder = TriangleMeshBuilder::new_octahedron(2);
     asteroid_builder.apply_noise(&ScaledNoise {
         inner: Fbm::<Perlin>::new(7).set_octaves(3).set_frequency(1.6),
@@ -781,11 +793,6 @@ fn setup(
             perceptual_roughness: 1.0,
             ..default()
         }),
-        rock_mesh: meshes.add(Cuboid::new(
-            ROCK_HALF_WIDTH * 2.0,
-            ROCK_HEIGHT,
-            ROCK_HALF_WIDTH * 2.0,
-        )),
         rock_material: materials.add(StandardMaterial {
             base_color: Color::srgb(0.30, 0.27, 0.24),
             perceptual_roughness: 0.98,
@@ -1174,8 +1181,10 @@ fn start_run(
             ));
         });
 
-    // Ring rock monoliths around the pad, spanning most of the circle so a gap is
-    // left to thread on final approach. Each stands radially on the real terrain.
+    // Scatter a few rock monoliths around the pad, spread out beyond it so the
+    // approach threads past a couple of spires rather than a wall. Each stands
+    // radially on the real terrain, at a random distance and a random height (the
+    // short ones are easy to clear).
     let rock_count = ((ROCK_COUNT as f32) * HAZARD_DIFFICULTY).round() as usize;
     if rock_count > 0 {
         // A tangent basis at the pad, so a bearing maps to a direction offset.
@@ -1186,27 +1195,35 @@ fn start_run(
             let bearing = ring_base
                 + std::f32::consts::TAU * ROCK_RING_SPAN_FRAC * (i as f32 / rock_count as f32);
             let tangent = east * bearing.cos() + north * bearing.sin();
-            let rock_dir =
-                (pad_dir * ROCK_RING_ANGLE.cos() + tangent * ROCK_RING_ANGLE.sin()).normalize();
+            // Jitter each rock's distance from the pad so the ring is uneven and
+            // sits further out.
+            let ring_angle = ROCK_RING_ANGLE + rng.random_range(0.0..ROCK_RING_ANGLE_SPREAD);
+            let rock_dir = (pad_dir * ring_angle.cos() + tangent * ring_angle.sin()).normalize();
             let surf_height = noise
                 .0
                 .get([rock_dir.x as f64, rock_dir.y as f64, rock_dir.z as f64])
                 as f32;
             let surface = rock_dir * (PLANET_BASE_RADIUS * (1.0 + surf_height));
-            // Sink the base slightly into the surface so no gap shows under it.
-            let pos = surface + rock_dir * (ROCK_HEIGHT * 0.5 - 0.4);
+            // Random height (max is ROCK_HEIGHT); a per-rock mesh matches its
+            // collider. Sink the base slightly into the surface so no gap shows.
+            let height = rng.random_range(ROCK_MIN_HEIGHT..ROCK_HEIGHT);
+            let pos = surface + rock_dir * (height * 0.5 - 0.4);
             // Random yaw around the monolith's up axis so the ring is not uniform.
             let yaw = Quat::from_axis_angle(rock_dir, rng.random_range(0.0..std::f32::consts::TAU));
             commands.spawn((
                 Name::new("Rock"),
                 Obstacle,
                 DespawnOnExit(GameState::Playing),
-                Mesh3d(hazards.rock_mesh.clone()),
+                Mesh3d(meshes.add(Cuboid::new(
+                    ROCK_HALF_WIDTH * 2.0,
+                    height,
+                    ROCK_HALF_WIDTH * 2.0,
+                ))),
                 MeshMaterial3d(hazards.rock_material.clone()),
                 Transform::from_translation(pos)
                     .with_rotation(yaw * Quat::from_rotation_arc(Vec3::Y, rock_dir)),
                 RigidBody::Static,
-                Collider::cuboid(ROCK_HALF_WIDTH * 2.0, ROCK_HEIGHT, ROCK_HALF_WIDTH * 2.0),
+                Collider::cuboid(ROCK_HALF_WIDTH * 2.0, height, ROCK_HALF_WIDTH * 2.0),
             ));
         }
     }

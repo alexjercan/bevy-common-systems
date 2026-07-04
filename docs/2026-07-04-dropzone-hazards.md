@@ -99,12 +99,28 @@ panic or query conflict:
 
 The harness was removed before commit.
 
+## Tuning follow-up (playtest feedback)
+
+A first playtest found the descent too punishing, so three constants were eased
+(the difficulty scalar and the mechanics are unchanged):
+
+- **Rocks** went from 6 uniform full-height (`ROCK_HEIGHT`) monoliths in a tight
+  ring to 3 with a **random height** (`ROCK_MIN_HEIGHT`..`ROCK_HEIGHT`, so a low
+  one is trivially cleared), pushed **further out and jittered** in distance
+  (`ROCK_RING_ANGLE` 0.085 -> 0.16 plus a `ROCK_RING_ANGLE_SPREAD` per-rock
+  jitter) with a wider gap (`ROCK_RING_SPAN_FRAC` 0.78 -> 0.7). Because heights
+  now vary per rock, each gets a per-run cuboid mesh (matching its collider);
+  only the shared rock material stays in `HazardAssets`.
+- **Wind** peak was cut ~5x (`WIND_PEAK_ACCEL` 3.2 -> 0.64) to a gentle nudge.
+- **Fuel** lasts ~3x longer via lower consumption (`FUEL_BURN` 14.0 -> 14.0/3),
+  chosen over raising the max so the 0..100% gauge stays intact.
+
 ## Follow-ups (not filed)
 
-- The hazard constants (rock count/size, asteroid count/speed/altitude band,
-  wind peak/frequencies, damage scaling) are reasoned, not play-tuned on a
-  human descent, like the earlier flight-constant tuning cycle
-  (`tasks/20260703-213510`). They want a play-test pass.
+- The remaining hazard constants (asteroid count/speed/altitude band, damage
+  scaling) are reasoned, not play-tuned on a human descent, like the earlier
+  flight-constant tuning cycle (`tasks/20260703-213510`). They want a further
+  play-test pass.
 - If a fourth per-run resource appears, extract a `reset_run_state` helper in
   `start_run` (carried over from the Tier-A retro; `Wind` is now the sixth reset
   resource, so this is closer to worth doing).
