@@ -66,6 +66,23 @@ here (that is `tasks/20260704-103553`); no touch controls here (that is
       stays current. Update `docs/2026-07-03-dropzone-example.md` (or a new doc)
       with what changed and why.
 
+## Added scope (user, 2026-07-04, during review)
+
+The first pass shipped a fixed pad and fixed fuel-can positions. The user asked
+to make each run fresh and easier to navigate. Acceptance criteria for this
+branch (tracked as REVIEW.md R1.1-R1.3):
+
+- [ ] Randomize the landing pad position each run (within the reachable cap
+      around the +Y spawn pole, clear of the antipode singularity). Pad moves
+      from a persistent setup() entity to a per-run entity; still visible on the
+      result screen, cleaned up on leaving Result.
+- [ ] Randomize fuel-can positions each run AND keep roughly 3 on the map by
+      spawning replacements over time (never zero, never a swarm), like
+      `07_orbit`'s maintain-objects pattern.
+- [ ] Add a direction indicator toward the pad -- a diegetic guide (e.g. a
+      world-space arrow that hovers by the ship and points along the ground
+      track to the pad), not just the numeric "pad Nm" readout.
+
 ## Notes
 
 - Distance-for-points from the original request is realized as A1
