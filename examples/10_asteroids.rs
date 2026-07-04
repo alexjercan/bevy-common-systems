@@ -188,6 +188,8 @@ fn main() {
     app.add_plugins(CameraShakePlugin);
     // Material hit-flash: the hull flashes red when the ship takes a hit.
     app.add_plugins(FlashPlugin);
+    // Full-screen red damage flash when the ship is destroyed.
+    app.add_plugins(ScreenFlashPlugin);
     app.add_plugins(StatusBarPlugin);
     app.add_plugins(HealthPlugin);
     app.add_plugins(SfxPlugin);
@@ -437,13 +439,6 @@ struct Bullet {
 /// Marker for the main camera so the framing / shake systems can find it.
 #[derive(Component)]
 struct MainCamera;
-
-/// Full-screen red flash shown briefly when the ship is destroyed.
-#[derive(Component)]
-struct RedFlash {
-    age: f32,
-    lifetime: f32,
-}
 
 /// HUD text markers.
 #[derive(Component)]
@@ -1368,40 +1363,27 @@ fn on_player_died(
     }
     dying.remaining = Some(DYING_BEAT);
 
-    commands.spawn((
-        Name::new("Red Flash"),
-        RedFlash {
-            age: 0.0,
-            lifetime: DYING_BEAT,
-        },
-        DespawnOnExit(GameState::Playing),
-        Node {
-            position_type: PositionType::Absolute,
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.9, 0.1, 0.1, 0.5)),
-    ));
+    // Full-screen red flash that fades over the death beat, via ScreenFlashPlugin.
+    commands
+        .spawn(screen_flash(
+            Color::srgb(0.9, 0.1, 0.1),
+            0.5,
+            1.0 / DYING_BEAT,
+        ))
+        .insert(DespawnOnExit(GameState::Playing));
 }
 
-/// Count down the death beat and switch to the game-over screen, fading the flash.
+/// Count down the death beat and switch to the game-over screen. The flash it
+/// spawns fades and despawns itself through `ScreenFlashPlugin`.
 fn advance_dying(
     time: Res<Time>,
     mut dying: ResMut<DyingTimer>,
     mut next: ResMut<NextState<GameState>>,
-    mut q_flash: Query<(&mut RedFlash, &mut BackgroundColor)>,
 ) {
     let Some(remaining) = dying.remaining.as_mut() else {
         return;
     };
-    let dt = time.delta_secs();
-    for (mut flash, mut background) in q_flash.iter_mut() {
-        flash.age += dt;
-        let alpha = (1.0 - flash.age / flash.lifetime).clamp(0.0, 1.0) * 0.5;
-        background.0 = Color::srgba(0.9, 0.1, 0.1, alpha);
-    }
-    *remaining -= dt;
+    *remaining -= time.delta_secs();
     if *remaining <= 0.0 {
         dying.remaining = None;
         next.set(GameState::GameOver);

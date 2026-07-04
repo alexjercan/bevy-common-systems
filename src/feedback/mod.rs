@@ -5,6 +5,8 @@
 //!
 //! - `flash` - a material hit-flash: briefly override an entity's material
 //!   emissive / base color and ease it back to the original.
+//! - `screen_flash` - a full-screen damage overlay: spike a screen-filling
+//!   tint's alpha to a peak and decay it back to transparent.
 //!
 //! Import the commonly used types through the prelude:
 //!
@@ -13,6 +15,7 @@
 //! ```
 
 pub mod flash;
+pub mod screen_flash;
 
 /// Re-exports the commonly used feedback types and plugins.
 ///
@@ -20,5 +23,5 @@ pub mod flash;
 /// use bevy_common_systems::feedback::prelude::*;
 /// ```
 pub mod prelude {
-    pub use super::flash::prelude::*;
+    pub use super::{flash::prelude::*, screen_flash::prelude::*};
 }

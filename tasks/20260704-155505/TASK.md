@@ -1,6 +1,6 @@
 # feedback: promote the full-screen damage overlay (06/07/10) into a screen-flash
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 34
 - TAGS: feature,feedback,cleanup
 
@@ -35,8 +35,15 @@ material flash).
 
 ## Steps
 
-- [ ] Design the screen-flash API (one shape covering the spike-to-peak-then-decay
-      and the spawn-and-fade variants).
-- [ ] Add `src/feedback/screen_flash.rs` (+ prelude wiring), with tests.
-- [ ] Refactor 06, 07 and 10 onto it, deleting their local overlay copies.
-- [ ] Verify: full check suite + boot the three examples.
+- [x] Design the screen-flash API (one shape covering the spike-to-peak-then-decay
+      and the spawn-and-fade variants). See
+      docs/2026-07-04-feedback-screen-flash-module.md: a `ScreenFlash { peak_alpha,
+      decay, despawn_on_end }` component (color lives in `BackgroundColor`), plus
+      `screen_flash()` (one-shot builder) and `screen_flash_node()` (shared node).
+- [x] Add `src/feedback/screen_flash.rs` (+ prelude wiring), with tests (4:
+      alpha scale/clamp, insert-spike + tint preserved, spawn-and-fade despawn,
+      persistent re-spike).
+- [x] Refactor 06, 07 and 10 onto it, deleting their local overlay copies
+      (RedFlash/fade_red_flash, DamageFlash resource + fade_damage_flash).
+- [x] Verify: full check suite (fmt/clippy/test/examples/ascii, all green) +
+      booted all three examples to the render loop, no panics.

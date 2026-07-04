@@ -187,6 +187,8 @@ fn main() {
     app.add_plugins(StatusBarPlugin);
     // Floating "+N" / streak popups rise and fade via the crate's PopupPlugin.
     app.add_plugins(PopupPlugin);
+    // Full-screen red damage overlay spiked on a hazard hit, via ScreenFlashPlugin.
+    app.add_plugins(ScreenFlashPlugin);
 
     app.init_state::<GameState>();
 
@@ -197,7 +199,6 @@ fn main() {
     app.init_resource::<Level>();
     app.init_resource::<HitCooldown>();
     app.init_resource::<Streak>();
-    app.init_resource::<DamageFlash>();
 
     // Persistent scene: camera, light, planet and the FPS status bar live for
     // the whole run, independent of game state.
@@ -225,7 +226,6 @@ fn main() {
             tick_hit_cooldown,
             tick_streak,
             blink_runner,
-            fade_damage_flash,
             update_hud,
             giveup_on_escape,
         )
@@ -320,11 +320,6 @@ impl Default for Level {
 /// and blinks while this is above zero.
 #[derive(Resource, Default)]
 struct HitCooldown(f32);
-
-/// Red damage-flash intensity (0..1); a hazard hit spikes it to 1 and it fades
-/// to zero, driving the alpha of the full-screen damage overlay.
-#[derive(Resource, Default)]
-struct DamageFlash(f32);
 
 /// The player marker. Holds the moving frame on the sphere surface: `up` is the
 /// outward surface normal (also the direction fed to the orbit), and `forward`
@@ -772,7 +767,6 @@ fn start_game(
     mut cooldown: ResMut<HitCooldown>,
     mut streak: ResMut<Streak>,
     mut q_shake: Query<&mut CameraShakeInput>,
-    mut flash: ResMut<DamageFlash>,
 ) {
     score.0 = 0;
     elapsed.0 = 0.0;
@@ -784,7 +778,8 @@ fn start_game(
     if let Ok(mut input) = q_shake.single_mut() {
         input.reset = true;
     }
-    flash.0 = 0.0;
+    // The damage overlay is respawned transparent by spawn_hud each run, so
+    // there is no persistent flash intensity to reset here.
 }
 
 /// Spawn the player marker: a `DirectionalSphereOrbit` rider plus the `Runner`
@@ -991,7 +986,7 @@ fn resolve_collisions(
     mut cooldown: ResMut<HitCooldown>,
     mut streak: ResMut<Streak>,
     mut q_shake: Query<&mut CameraShakeInput>,
-    mut flash: ResMut<DamageFlash>,
+    q_flash_overlay: Query<Entity, With<DamageFlashOverlay>>,
     q_runner: Query<(Entity, &Transform), With<Runner>>,
     q_hazards: Query<(Entity, &Transform), With<Hazard>>,
     q_orbs: Query<(Entity, &Transform), With<Orb>>,
@@ -1080,7 +1075,15 @@ fn resolve_collisions(
             if let Ok(mut input) = q_shake.single_mut() {
                 input.add_trauma += HAZARD_TRAUMA;
             }
-            flash.0 = 1.0;
+            // Re-spike the persistent full-screen overlay to its peak; it decays
+            // back to transparent via ScreenFlashPlugin.
+            if let Ok(overlay) = q_flash_overlay.single() {
+                commands.entity(overlay).insert(ScreenFlash {
+                    peak_alpha: DAMAGE_FLASH_PEAK_ALPHA,
+                    decay: DAMAGE_FLASH_DECAY,
+                    despawn_on_end: false,
+                });
+            }
             commands.play_sfx(sfx.hurt.clone());
             commands.trigger(HealthApplyDamage {
                 entity: runner_entity,
@@ -1137,19 +1140,15 @@ fn blink_runner(cooldown: Res<HitCooldown>, mut q_runner: Query<&mut Visibility,
 
 /// Spawn the in-game HUD (score, level, health bar), scoped to `Playing`.
 fn spawn_hud(mut commands: Commands) {
-    // Full-screen red damage overlay, transparent until a hit spikes it. Spawned
-    // first and pinned below the HUD so it never hides the score / health.
+    // Persistent full-screen overlay, transparent until a hit spikes it (a hazard
+    // inserts a `ScreenFlash` to re-spike; ScreenFlashPlugin decays it back).
+    // Spawned first and pinned below the HUD so it never hides the score / health.
     commands.spawn((
         Name::new("Damage Flash"),
         DamageFlashOverlay,
         DespawnOnExit(GameState::Playing),
         GlobalZIndex(-1),
-        Node {
-            position_type: PositionType::Absolute,
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            ..default()
-        },
+        screen_flash_node(),
         BackgroundColor(Color::srgba(0.85, 0.05, 0.05, 0.0)),
     ));
 
@@ -1314,21 +1313,6 @@ fn spawn_streak_banner(commands: &mut Commands, count: usize) {
             ..default()
         },
     ));
-}
-
-// --- Impact feedback ------------------------------------------------------
-
-/// Fade the red damage overlay each frame, driving its alpha from the decaying
-/// `DamageFlash` intensity a hit spiked.
-fn fade_damage_flash(
-    time: Res<Time>,
-    mut flash: ResMut<DamageFlash>,
-    mut q_overlay: Query<&mut BackgroundColor, With<DamageFlashOverlay>>,
-) {
-    flash.0 = (flash.0 - DAMAGE_FLASH_DECAY * time.delta_secs()).max(0.0);
-    for mut color in q_overlay.iter_mut() {
-        color.0 = Color::srgba(0.85, 0.05, 0.05, flash.0 * DAMAGE_FLASH_PEAK_ALPHA);
-    }
 }
 
 // --- Game over ------------------------------------------------------------

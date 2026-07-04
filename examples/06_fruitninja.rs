@@ -170,6 +170,8 @@ fn main() {
     app.add_plugins(StatusBarPlugin);
     // Floating "+N" / combo popups rise and fade via the crate's PopupPlugin.
     app.add_plugins(PopupPlugin);
+    // Full-screen red damage flash on a bomb death, via ScreenFlashPlugin.
+    app.add_plugins(ScreenFlashPlugin);
     app.add_plugins(HealthPlugin);
     // Trauma-driven camera shake; the camera carries a `CameraShake` and game
     // code adds trauma through its `CameraShakeInput`.
@@ -246,7 +248,6 @@ fn main() {
             update_combo_text,
             draw_blade_trail,
             draw_cursor_indicator,
-            fade_red_flash,
             advance_dying,
             giveup_on_escape,
         )
@@ -456,13 +457,6 @@ fn tick_elapsed(time: Res<Time>, mut elapsed: ResMut<Elapsed>) {
 #[derive(Resource, Default)]
 struct DyingTimer {
     remaining: Option<f32>,
-}
-
-/// Full-screen red flash shown briefly when a bomb ends the run.
-#[derive(Component)]
-struct RedFlash {
-    age: f32,
-    lifetime: f32,
 }
 
 /// A sliced fruit mid-"pop": it scales up for a beat, then bursts.
@@ -750,21 +744,14 @@ fn on_player_died(
     }
     dying.remaining = Some(DYING_BEAT);
 
-    commands.spawn((
-        Name::new("Red Flash"),
-        RedFlash {
-            age: 0.0,
-            lifetime: DYING_BEAT,
-        },
-        DespawnOnExit(GameState::Playing),
-        Node {
-            position_type: PositionType::Absolute,
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.9, 0.1, 0.1, 0.5)),
-    ));
+    // Full-screen red flash that fades over the death beat, via ScreenFlashPlugin.
+    commands
+        .spawn(screen_flash(
+            Color::srgb(0.9, 0.1, 0.1),
+            0.5,
+            1.0 / DYING_BEAT,
+        ))
+        .insert(DespawnOnExit(GameState::Playing));
 }
 
 /// Count down the post-bomb beat and switch to the game-over screen when done.
@@ -780,23 +767,6 @@ fn advance_dying(
     if *remaining <= 0.0 {
         dying.remaining = None;
         next.set(GameState::GameOver);
-    }
-}
-
-/// Fade the red flash out over its lifetime, then despawn it.
-fn fade_red_flash(
-    time: Res<Time>,
-    mut commands: Commands,
-    mut q_flash: Query<(Entity, &mut RedFlash, &mut BackgroundColor)>,
-) {
-    let dt = time.delta_secs();
-    for (entity, mut flash, mut background) in q_flash.iter_mut() {
-        flash.age += dt;
-        let alpha = (1.0 - flash.age / flash.lifetime).clamp(0.0, 1.0) * 0.5;
-        background.0 = Color::srgba(0.9, 0.1, 0.1, alpha);
-        if flash.age >= flash.lifetime {
-            commands.entity(entity).despawn();
-        }
     }
 }
 
