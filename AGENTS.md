@@ -122,6 +122,17 @@ changing code; consistency is the crate's main defense against bloat.
   mesh/builder) export plain types and functions instead. Systems that
   need ordering hooks get a public `SystemSet` enum named `*Systems`
   (a few use `*PluginSystems`).
+  - Ordering caveat: `.before(SetX)` / `.after(SetX)` orders a system only
+    relative to `SetX`'s *current members*. If `SetX` can be empty (e.g. it
+    belongs to a sibling plugin that may not be added), those edges vanish and
+    give no guarantee. When system A must run before system B regardless, pin
+    it with a direct edge -- `configure_sets(schedule, B.after(A))` or
+    `chain()` -- never by ordering both against a third set that might be
+    empty. This bit `camera/shake`: Restore/Apply were ordered only around
+    `ChaseCameraSystems::Sync`, which is empty for static-camera games, so the
+    two were unordered and could drift; the passing test masked it because the
+    executor resolved the ambiguity in insertion order
+    (`docs/retros/20260704-134500-camera-shake-module.md`).
 - Config / Input / Output / State component split:
   - a public config component named after the feature (`WASDCamera`,
     `ChaseCamera`, `PDController`, `SphereOrbit`, ...);
