@@ -319,7 +319,18 @@ Examples:
   `AmbientLight` and `border_radius:` up front avoids a batch of compile errors
   (this has bitten three cycles now: `docs/retros/20260703-150200-bevy-019-migration.md`,
   `docs/retros/20260703-165432-dropzone-example.md` and
-  `docs/retros/20260704-103517-dropzone-touch-controls.md`).
+  `docs/retros/20260704-103517-dropzone-touch-controls.md`). The same "copy /
+  verify, do not improvise the visual layer" rule extends past compile errors to
+  things that render wrong silently (a background run cannot see the screen, so
+  they are not panics): a `StandardMaterial` with an HDR `emissive` must NOT set
+  `unlit: true` or it will not bloom -- `unlit` makes Bevy skip the lighting pass
+  where emissive is applied (`bevy_pbr` `render/pbr.wgsl`); an entity that
+  carries mesh children but no mesh of its own needs an explicit `Visibility` for
+  the children to render (else `B0004`); and camera shake is an absolute offset
+  from a fixed base (`translation = BASE + offset`, per `06_fruitninja`), never
+  an accumulating `+=`, or the camera drifts. All three slipped past
+  implementation and were caught in review in `10_asteroids`
+  (`docs/retros/20260703-170744-asteroids-example.md`).
 - Running examples: the examples open a window and are the de facto integration
   tests, so a new or changed example is not "done" until it has actually been
   run once - `cargo build` only proves it compiles, not that it boots. Even a
