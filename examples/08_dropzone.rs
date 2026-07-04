@@ -10,16 +10,26 @@
 //! grabbing fuel cans on the way down both boost the score, so the descent is a
 //! route to plan, not just a fall to survive.
 //!
+//! The descent is also dangerous: rock monoliths ring the pad so the final
+//! approach has to thread a gap, asteroids drift through the corridor on the
+//! `transform/random_sphere_orbit` driver, and a time-varying wind shoves the
+//! ship sideways so you have to lean into it. Grazing a rock or asteroid costs
+//! ship integrity (a `Health` pool) rather than instantly killing -- a light
+//! graze chips it, a hard smash empties it and ends the run. Every hazard scales
+//! off one `HAZARD_DIFFICULTY` knob.
+//!
 //! It stitches several crate pieces together at once:
 //! - `physics/pd_controller` - orientation control (the whole point).
-//! - `mesh/builder` - the planet mesh, and an avian trimesh collider built from
-//!   its triangles.
-//! - `mesh/explode` + `helpers/temp` - the crash effect.
+//! - `mesh/builder` - the planet mesh, an avian trimesh collider built from its
+//!   triangles, and the lumpy asteroid mesh.
+//! - `mesh/explode` + `helpers/temp` - the crash effect and the asteroid shatter.
+//! - `transform/random_sphere_orbit` - the drifting asteroids.
+//! - `health` - ship structural integrity: grazes drain it, zero ends the run.
 //! - `camera/skybox` - a procedurally generated starfield (no asset file).
 //! - `camera/post` - bloom, so the thruster flame glows.
 //! - `camera/chase` - a third-person camera that follows the ship but stays
 //!   level with the terrain instead of rolling with the hull.
-//! - `ui/status` - altitude / speed / fuel gauges.
+//! - `ui/status` - altitude / speed / fuel / hull / wind gauges.
 //! - `audio` - one-shot sound effects on the key events.
 //!
 //! It follows the shape of `06_fruitninja`: Bevy states for menu / playing /
@@ -174,6 +184,78 @@ const SHAKE_DECAY: f32 = 1.6;
 const POPUP_LIFETIME: f32 = 0.9;
 const POPUP_RISE_SPEED: f32 = 60.0;
 
+// --- Hazards ----------------------------------------------------------------
+
+/// One scalar every hazard knob multiplies by, so the whole descent's danger can
+/// be tuned (and later ramped) from a single place. 1.0 is the shipped baseline;
+/// an on-difficulty ramp is deliberately out of scope for this pass, but the
+/// constants below are all expressed relative to this so a ramp is a one-liner.
+const HAZARD_DIFFICULTY: f32 = 1.0;
+
+/// The ship's collision radius used by the proximity checks against asteroids
+/// (the hull is a 1.6-cube, so a little over its half-extent).
+const SHIP_COLLISION_RADIUS: f32 = 1.1;
+
+// Rough terrain: rock monoliths ringed around the pad so the final approach has
+// to thread a gap. Discrete colliders are used instead of cranking the global
+// terrain amplitude, which would also disturb the pad's flush placement and the
+// landing feel (see the docs note for this decision).
+/// Number of rock monoliths around the pad (before the difficulty scale).
+const ROCK_COUNT: usize = 6;
+/// Angular radius of the rock ring from the pad direction (radians).
+const ROCK_RING_ANGLE: f32 = 0.085;
+/// Fraction of the ring the rocks span, leaving the remainder as a threadable
+/// gap (0.78 -> ~280 degrees of rocks, ~80 of clear approach).
+const ROCK_RING_SPAN_FRAC: f32 = 0.78;
+/// Rock monolith size: square footprint half-width and height (world units).
+const ROCK_HALF_WIDTH: f32 = 1.2;
+const ROCK_HEIGHT: f32 = 6.0;
+
+// Asteroids: debris drifting through the descent corridor, driven by the crate's
+// `RandomSphereOrbit` (the same family `07_orbit` uses for its wanderers).
+/// Number of drifting asteroids (before the difficulty scale).
+const ASTEROID_COUNT: usize = 7;
+/// Asteroid collision radius (world units) for the proximity hit check.
+const ASTEROID_RADIUS: f32 = 1.3;
+/// Altitude band above the base surface the asteroids wander in, so they clutter
+/// the corridor rather than orbiting uselessly high or scraping the ground. The
+/// top stays below the ship's spawn altitude so a run never opens inside one.
+const ASTEROID_ALT_MIN: f32 = 5.0;
+const ASTEROID_ALT_MAX: f32 = START_ALTITUDE - 6.0;
+/// Asteroid drift speed range (radians/sec along the surface).
+const ASTEROID_SPEED_MIN: f32 = 0.25;
+const ASTEROID_SPEED_MAX: f32 = 0.6;
+/// Fragments an asteroid shatters into when the ship strikes it.
+const ASTEROID_FRAGMENTS: usize = 5;
+
+// Ship structural integrity: a `Health` pool that a graze chips and a hard hit
+// empties. Terrain contact stays instant-crash (see docs); only obstacles and
+// asteroids route through integrity.
+/// Ship integrity (Health) at the start of a run.
+const SHIP_MAX_INTEGRITY: f32 = 100.0;
+/// Integrity lost per m/s of impact speed on an obstacle or asteroid, so a slow
+/// graze costs a little and a fast smash can empty the pool in one hit.
+const INTEGRITY_DAMAGE_PER_SPEED: f32 = 9.0;
+/// A damage floor, so even a crawling contact costs something.
+const INTEGRITY_MIN_DAMAGE: f32 = 8.0;
+
+// Wind: a time-varying tangential acceleration the player fights with lean. One
+// more world-space acceleration folded into the gravity channel, telegraphed by
+// drifting streak particles and a HUD gauge.
+/// Peak tangential wind acceleration at full gust (world units/s^2), before the
+/// difficulty scale. Compare GRAVITY (5.5) and THRUST_ACCEL (13.0): strong
+/// enough to shove, weak enough to counter with lean.
+const WIND_PEAK_ACCEL: f32 = 3.2;
+/// How fast the gust envelope pulses and the wind bearing rotates (rad/sec). Both
+/// are slow and smooth so the wind is readable and counterable, not a coin flip.
+const WIND_GUST_FREQ: f32 = 0.55;
+const WIND_TURN_SPEED: f32 = 0.16;
+/// Wind-streak telegraph: spawn interval at full gust (seconds, longer when the
+/// gust is weaker), particle lifetime, and drift speed.
+const WIND_STREAK_INTERVAL: f32 = 0.11;
+const WIND_STREAK_LIFETIME: f32 = 0.75;
+const WIND_STREAK_SPEED: f32 = 9.0;
+
 // --- CLI -------------------------------------------------------------------
 
 #[derive(Parser)]
@@ -252,6 +334,9 @@ struct Telemetry {
     altitude: f32,
     speed: f32,
     fuel: f32,
+    /// Ship structural integrity as a percentage of the max (0..100), mirrored
+    /// from the ship's `Health` so the status-bar closure stays cheap.
+    integrity: f32,
     /// Great-circle surface distance from the ship's ground track to the landing
     /// pad (world units), shown on the HUD as a homing hint.
     pad_dist: f32,
@@ -288,6 +373,33 @@ struct FuelSpawner {
     timer: f32,
 }
 
+/// Shared asteroid and rock assets, built once so per-run spawning does not
+/// allocate new meshes/materials. The streak assets telegraph the wind.
+#[derive(Resource)]
+struct HazardAssets {
+    asteroid_mesh: Handle<Mesh>,
+    asteroid_material: Handle<StandardMaterial>,
+    rock_mesh: Handle<Mesh>,
+    rock_material: Handle<StandardMaterial>,
+    streak_mesh: Handle<Mesh>,
+    streak_material: Handle<StandardMaterial>,
+}
+
+/// The time-varying tangential wind. A single phase drives both the gust
+/// envelope (magnitude) and the slowly rotating bearing (direction); the actual
+/// world-space acceleration is recomputed each frame in the ship's tangent plane
+/// and cached in `accel` for `apply_ship_forces`, the streak telegraph and the
+/// HUD gauge to read. Reset each run in `start_run`.
+#[derive(Resource, Default)]
+struct Wind {
+    /// Phase accumulator (seconds of flight) driving bearing and gust.
+    phase: f32,
+    /// Current world-space wind acceleration (tangential to the surface).
+    accel: Vec3,
+    /// Countdown to the next telegraph streak.
+    streak_timer: f32,
+}
+
 /// Camera-shake energy (trauma, 0..1); decays to zero, jittering the camera
 /// while positive. A touchdown (landing or crash) tops it up. Ported from
 /// `07_orbit`.
@@ -310,6 +422,9 @@ struct Outcome(Option<Landing>);
 struct Landing {
     /// Whether the touchdown was within the safe speed and tilt limits.
     landed: bool,
+    /// Whether the run ended because integrity was depleted (an asteroid/obstacle
+    /// structural failure) rather than a hard terrain impact. Implies `!landed`.
+    destroyed: bool,
     /// Points awarded (zero on a crash).
     score: i32,
     /// Impact speed at first contact (m/s).
@@ -356,6 +471,17 @@ struct Pad;
 /// The diegetic guide arrow that hovers by the ship and points to the pad.
 #[derive(Component)]
 struct GuideArrow;
+
+/// A drifting asteroid, driven around the planet by `RandomSphereOrbit`. Grazing
+/// one damages the ship's integrity and shatters the asteroid.
+#[derive(Component)]
+struct Asteroid;
+
+/// A static rock monolith ringed around the pad; a solid obstacle whose contact
+/// costs integrity (a hard hit ends the run). Marker so collision handling can
+/// tell it apart from the planet surface and the asteroids.
+#[derive(Component)]
+struct Obstacle;
 
 /// The main camera (marker for the camera-shake and popup-projection queries).
 #[derive(Component)]
@@ -468,6 +594,10 @@ fn main() {
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
     app.add_plugins(SfxPlugin);
+    // Hazards: drifting asteroids ride the random-orbit driver, and a graze routes
+    // through the ship's integrity Health pool.
+    app.add_plugins(SphereRandomOrbitPlugin);
+    app.add_plugins(HealthPlugin);
 
     app.init_state::<GameState>();
     app.init_resource::<ShipInput>();
@@ -478,6 +608,7 @@ fn main() {
     app.init_resource::<CameraShake>();
     app.init_resource::<RunTimer>();
     app.init_resource::<FuelSpawner>();
+    app.init_resource::<Wind>();
     app.insert_resource(Fuel(START_FUEL));
 
     app.add_systems(Startup, setup);
@@ -501,7 +632,10 @@ fn main() {
             collect_fuel_cans,
             update_guide_arrow,
             update_touch_hud.after(update_touch_control),
-            resolve_landing,
+            update_wind,
+            spawn_wind_streaks.after(update_wind),
+            resolve_asteroid_hits,
+            resolve_collisions,
         )
             .run_if(in_state(GameState::Playing)),
     );
@@ -545,8 +679,19 @@ fn main() {
         PostUpdate,
         apply_camera_shake.after(ChaseCameraSystems::Sync),
     );
+    // Copy each asteroid's random-orbit position onto its Transform, after the
+    // orbit driver has advanced it (same handoff as `07_orbit`).
+    app.add_systems(
+        PostUpdate,
+        apply_asteroid_transforms
+            .after(SphereRandomOrbitSystems::Sync)
+            .run_if(in_state(GameState::Playing)),
+    );
 
     app.add_observer(on_fragments_spawned);
+    // Structural failure: when the ship's integrity Health hits zero, end the run
+    // as a crash (explode the hull, go to the result screen).
+    app.add_observer(on_ship_destroyed);
 
     app.run();
 }
@@ -618,6 +763,42 @@ fn setup(
     commands.insert_resource(LandingPad {
         dir: Vec3::Y,
         pos: Vec3::Y * PLANET_BASE_RADIUS,
+    });
+
+    // Shared hazard assets. The asteroid is a lumpy unit octahedron (the crate's
+    // own `TriangleMeshBuilder`, so it also slices cleanly for `mesh/explode`);
+    // scale to size per-instance. The rock is a monolith cuboid, and the streak a
+    // thin translucent shard drifting downwind.
+    let mut asteroid_builder = TriangleMeshBuilder::new_octahedron(2);
+    asteroid_builder.apply_noise(&ScaledNoise {
+        inner: Fbm::<Perlin>::new(7).set_octaves(3).set_frequency(1.6),
+        amplitude: 0.35,
+    });
+    commands.insert_resource(HazardAssets {
+        asteroid_mesh: meshes.add(asteroid_builder.build()),
+        asteroid_material: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.34, 0.30, 0.28),
+            perceptual_roughness: 1.0,
+            ..default()
+        }),
+        rock_mesh: meshes.add(Cuboid::new(
+            ROCK_HALF_WIDTH * 2.0,
+            ROCK_HEIGHT,
+            ROCK_HALF_WIDTH * 2.0,
+        )),
+        rock_material: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.30, 0.27, 0.24),
+            perceptual_roughness: 0.98,
+            ..default()
+        }),
+        streak_mesh: meshes.add(Cuboid::new(0.08, 0.08, 0.7)),
+        streak_material: materials.add(StandardMaterial {
+            base_color: Color::srgba(0.75, 0.85, 1.0, 0.5),
+            emissive: LinearRgba::new(0.4, 0.6, 1.0, 1.0),
+            alpha_mode: AlphaMode::Blend,
+            unlit: true,
+            ..default()
+        }),
     });
 
     // A sun plus the ambient fill set in `main` keeps the night side readable.
@@ -718,6 +899,49 @@ fn setup(
             })
         },
         prefix: "fuel ".to_string(),
+        suffix: "%".to_string(),
+    }),));
+    commands.spawn((status_bar_item(StatusBarItemConfig {
+        icon: None,
+        value_fn: |world: &World| {
+            world
+                .get_resource::<Telemetry>()
+                .map(|t| std::sync::Arc::new(t.integrity.max(0.0).round() as u32) as _)
+        },
+        color_fn: |v| {
+            let integrity = (*v).downcast_ref::<u32>()?;
+            Some(if *integrity < 25 {
+                Color::srgb(1.0, 0.3, 0.3)
+            } else if *integrity < 55 {
+                Color::srgb(1.0, 0.9, 0.3)
+            } else {
+                Color::srgb(0.6, 0.9, 0.7)
+            })
+        },
+        prefix: "hull ".to_string(),
+        suffix: "%".to_string(),
+    }),));
+    commands.spawn((status_bar_item(StatusBarItemConfig {
+        icon: None,
+        value_fn: |world: &World| {
+            // Wind as a 0..100 fraction of peak gust, so the gauge reads like the
+            // others; the drifting streaks show the direction.
+            world.get_resource::<Wind>().map(|w| {
+                let frac = w.accel.length() / (WIND_PEAK_ACCEL * HAZARD_DIFFICULTY);
+                std::sync::Arc::new((frac.clamp(0.0, 1.0) * 100.0).round() as u32) as _
+            })
+        },
+        color_fn: |v| {
+            let wind = (*v).downcast_ref::<u32>()?;
+            Some(if *wind > 66 {
+                Color::srgb(1.0, 0.4, 0.4)
+            } else if *wind > 33 {
+                Color::srgb(1.0, 0.85, 0.4)
+            } else {
+                Color::srgb(0.6, 0.85, 1.0)
+            })
+        },
+        prefix: "wind ".to_string(),
         suffix: "%".to_string(),
     }),));
     commands.spawn((status_bar_item(StatusBarItemConfig {
@@ -883,8 +1107,10 @@ fn start_run(
     mut shake: ResMut<CameraShake>,
     mut spawner: ResMut<FuelSpawner>,
     mut touch: ResMut<TouchControl>,
+    mut wind: ResMut<Wind>,
     noise: Res<PlanetNoise>,
     can_assets: Res<FuelCanAssets>,
+    hazards: Res<HazardAssets>,
     sfx: Res<SfxAssets>,
 ) {
     fuel.0 = START_FUEL;
@@ -894,6 +1120,9 @@ fn start_run(
     spawner.timer = 0.0;
     *input = ShipInput::default();
     *touch = TouchControl::default();
+    // Wind is a cross-run resource, so it must be reset here (fresh gust phase),
+    // like the other per-run resources above.
+    *wind = Wind::default();
     commands.play_sfx(sfx.start.clone());
 
     // Roll a fresh landing pad somewhere in the reachable cap around the pole,
@@ -944,6 +1173,72 @@ fn start_run(
                 Transform::from_xyz(0.0, 12.0, 0.0),
             ));
         });
+
+    // Ring rock monoliths around the pad, spanning most of the circle so a gap is
+    // left to thread on final approach. Each stands radially on the real terrain.
+    let rock_count = ((ROCK_COUNT as f32) * HAZARD_DIFFICULTY).round() as usize;
+    if rock_count > 0 {
+        // A tangent basis at the pad, so a bearing maps to a direction offset.
+        let east = pad_dir.cross(Vec3::Y).normalize_or(Vec3::X);
+        let north = pad_dir.cross(east).normalize_or(Vec3::Z);
+        let ring_base = rng.random_range(0.0..std::f32::consts::TAU);
+        for i in 0..rock_count {
+            let bearing = ring_base
+                + std::f32::consts::TAU * ROCK_RING_SPAN_FRAC * (i as f32 / rock_count as f32);
+            let tangent = east * bearing.cos() + north * bearing.sin();
+            let rock_dir =
+                (pad_dir * ROCK_RING_ANGLE.cos() + tangent * ROCK_RING_ANGLE.sin()).normalize();
+            let surf_height = noise
+                .0
+                .get([rock_dir.x as f64, rock_dir.y as f64, rock_dir.z as f64])
+                as f32;
+            let surface = rock_dir * (PLANET_BASE_RADIUS * (1.0 + surf_height));
+            // Sink the base slightly into the surface so no gap shows under it.
+            let pos = surface + rock_dir * (ROCK_HEIGHT * 0.5 - 0.4);
+            // Random yaw around the monolith's up axis so the ring is not uniform.
+            let yaw = Quat::from_axis_angle(rock_dir, rng.random_range(0.0..std::f32::consts::TAU));
+            commands.spawn((
+                Name::new("Rock"),
+                Obstacle,
+                DespawnOnExit(GameState::Playing),
+                Mesh3d(hazards.rock_mesh.clone()),
+                MeshMaterial3d(hazards.rock_material.clone()),
+                Transform::from_translation(pos)
+                    .with_rotation(yaw * Quat::from_rotation_arc(Vec3::Y, rock_dir)),
+                RigidBody::Static,
+                Collider::cuboid(ROCK_HALF_WIDTH * 2.0, ROCK_HEIGHT, ROCK_HALF_WIDTH * 2.0),
+            ));
+        }
+    }
+
+    // Scatter drifting asteroids through the descent corridor, each wandering on
+    // the sphere via the crate's `RandomSphereOrbit` (as `07_orbit` does). They
+    // start near the pole (high phi) so they clutter where the ship descends.
+    let asteroid_count = ((ASTEROID_COUNT as f32) * HAZARD_DIFFICULTY).round() as usize;
+    for _ in 0..asteroid_count {
+        let alt = rng.random_range(ASTEROID_ALT_MIN..ASTEROID_ALT_MAX);
+        let radius = PLANET_BASE_RADIUS * (1.0 + TERRAIN_AMPLITUDE as f32) + alt;
+        let theta = rng.random_range(0.0..std::f32::consts::TAU);
+        // Bias elevation toward the +Y pole (phi -> FRAC_PI_2) so asteroids seed
+        // inside the descent cap rather than around the far equator.
+        let phi = std::f32::consts::FRAC_PI_2 - rng.random_range(0.0..0.7);
+        let angular_speed = rng.random_range(ASTEROID_SPEED_MIN..ASTEROID_SPEED_MAX);
+        commands.spawn((
+            Name::new("Asteroid"),
+            Asteroid,
+            DespawnOnExit(GameState::Playing),
+            RandomSphereOrbit {
+                radius,
+                angular_speed,
+                center: Vec3::ZERO,
+                initial_theta: theta,
+                initial_phi: phi,
+            },
+            Mesh3d(hazards.asteroid_mesh.clone()),
+            MeshMaterial3d(hazards.asteroid_material.clone()),
+            Transform::from_scale(Vec3::splat(ASTEROID_RADIUS)),
+        ));
+    }
 
     // Seed the fuel field to the target count at random spots; the maintain
     // system tops it back up over time as cans are collected.
@@ -1013,6 +1308,9 @@ fn start_run(
             // Landing / crash detection.
             CollisionEventsEnabled,
             ApproachSpeed::default(),
+            // Structural integrity: grazes chip it, a hard hit empties it. Zero
+            // integrity ends the run via the `on_ship_destroyed` observer.
+            Health::new(SHIP_MAX_INTEGRITY),
         ))
         .id();
     // The controller reads the body it is attached to.
@@ -1338,6 +1636,7 @@ fn set_attitude_target(
 fn apply_ship_forces(
     input: Res<ShipInput>,
     time: Res<Time>,
+    wind: Res<Wind>,
     mut fuel: ResMut<Fuel>,
     mut q_ship: Query<
         (
@@ -1354,9 +1653,11 @@ fn apply_ship_forces(
         return;
     };
 
-    // Radial gravity toward the planet centre.
+    // Radial gravity toward the planet centre, plus the tangential wind gust: both
+    // share the world-space acceleration channel (wind is one more term, exactly
+    // the pattern the task calls for).
     let radial_up = position.0.normalize_or(Vec3::Y);
-    gravity.0 = -radial_up * GRAVITY;
+    gravity.0 = -radial_up * GRAVITY + wind.accel;
 
     // Thrust along the ship's local up while firing and fuelled.
     if input.thrust && fuel.0 > 0.0 {
@@ -1385,14 +1686,19 @@ fn update_telemetry(
     fuel: Res<Fuel>,
     pad: Res<LandingPad>,
     mut telemetry: ResMut<Telemetry>,
-    q_ship: Query<(&Transform, &LinearVelocity), With<Ship>>,
+    q_ship: Query<(&Transform, &LinearVelocity, &Health), With<Ship>>,
 ) {
-    let Ok((transform, velocity)) = q_ship.single() else {
+    let Ok((transform, velocity, health)) = q_ship.single() else {
         return;
     };
     telemetry.altitude = transform.translation.length() - PLANET_BASE_RADIUS;
     telemetry.speed = velocity.0.length();
     telemetry.fuel = fuel.0;
+    telemetry.integrity = if health.max > 0.0 {
+        health.current / health.max * 100.0
+    } else {
+        0.0
+    };
     // Great-circle surface distance from the ship's ground track to the pad.
     let ground_dir = transform.translation.normalize_or(Vec3::Y);
     telemetry.pad_dist = ground_dir.angle_between(pad.dir) * PLANET_BASE_RADIUS;
@@ -1639,9 +1945,11 @@ fn animate_floating_text(
 
 // --- Playing: landing / crash ----------------------------------------------
 
-fn resolve_landing(
+fn resolve_collisions(
     mut collisions: MessageReader<CollisionStart>,
     q_ship: Query<(Entity, &Transform, &ApproachSpeed), With<Ship>>,
+    q_planet: Query<(), With<Planet>>,
+    q_obstacle: Query<(), With<Obstacle>>,
     fuel: Res<Fuel>,
     pad: Res<LandingPad>,
     timer: Res<RunTimer>,
@@ -1656,14 +1964,31 @@ fn resolve_landing(
     let Ok((ship, transform, approach)) = q_ship.single() else {
         return;
     };
-
-    // The ship's only possible collision is with the planet, so any event
-    // touching it is a touchdown.
-    let touched = collisions
-        .read()
-        .any(|c| c.collider1 == ship || c.collider2 == ship);
-    if !touched {
+    // Once a run has resolved (landed, crashed or destroyed), ignore any trailing
+    // contact events from the same frame.
+    if outcome.0.is_some() {
         return;
+    }
+
+    // Classify the ship's contacts this frame: hitting the planet surface is a
+    // touchdown (landing eval), hitting a rock monolith is a structural impact
+    // (integrity damage). Asteroids carry no collider -- they are handled by the
+    // proximity check in `resolve_asteroid_hits`.
+    let mut planet_touch = false;
+    let mut obstacle_touch = false;
+    for c in collisions.read() {
+        let other = if c.collider1 == ship {
+            c.collider2
+        } else if c.collider2 == ship {
+            c.collider1
+        } else {
+            continue;
+        };
+        if q_planet.contains(other) {
+            planet_touch = true;
+        } else if q_obstacle.contains(other) {
+            obstacle_touch = true;
+        }
     }
 
     // Use the pre-impact speed, not the live velocity: by now the solver has
@@ -1671,58 +1996,85 @@ fn resolve_landing(
     let speed = approach.0;
     let up = transform.translation.normalize_or(Vec3::Y);
     let tilt = (transform.rotation * Vec3::Y).angle_between(up);
-    // Great-circle surface distance from the touchdown point to the pad centre.
-    let pad_dist = up.angle_between(pad.dir) * PLANET_BASE_RADIUS;
 
-    // Kick up dust at the contact patch (just under the hull) either way.
-    spawn_dust(
-        &mut commands,
-        &mut meshes,
-        &mut materials,
-        transform.translation - up * 0.8,
-        up,
-    );
+    if planet_touch {
+        // Great-circle surface distance from the touchdown point to the pad.
+        let pad_dist = up.angle_between(pad.dir) * PLANET_BASE_RADIUS;
 
-    if speed <= LAND_SPEED_MAX && tilt <= LAND_TILT_MAX {
-        let score = landing_score(fuel.0, speed, tilt, pad_dist, timer.0);
-        outcome.0 = Some(Landing {
-            landed: true,
-            score,
-            speed,
-            tilt,
+        // Kick up dust at the contact patch (just under the hull) either way.
+        spawn_dust(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            transform.translation - up * 0.8,
+            up,
+        );
+
+        if speed <= LAND_SPEED_MAX && tilt <= LAND_TILT_MAX {
+            // A touchdown resolves the run here; if an asteroid graze in the same
+            // frame also triggered lethal damage, this LANDED outcome is set
+            // first and the deferred `on_ship_destroyed` is guarded out. Landing
+            // takes precedence over a simultaneous graze -- rare, and the kinder
+            // resolution.
+            let score = landing_score(fuel.0, speed, tilt, pad_dist, timer.0);
+            outcome.0 = Some(Landing {
+                landed: true,
+                destroyed: false,
+                score,
+                speed,
+                tilt,
+            });
+            commands.play_sfx(sfx.land.clone());
+            shake.trauma = (shake.trauma + LAND_TRAUMA).min(1.0);
+            // Freeze the hull where it touched down so it stays visibly parked on
+            // the pad through the result screen (it has no DespawnOnExit, so it
+            // survives the state change; `cleanup_run_scene` clears it on leaving
+            // Result). Static + zeroed velocity stops any post-contact drift.
+            commands.entity(ship).insert((
+                RigidBody::Static,
+                LinearVelocity::default(),
+                AngularVelocity::default(),
+            ));
+        } else {
+            outcome.0 = Some(Landing {
+                landed: false,
+                destroyed: false,
+                score: 0,
+                speed,
+                tilt,
+            });
+            // Break the hull apart. The `on_fragments_spawned` observer turns the
+            // slices into flying debris; DespawnOnExit(Playing) here removes the
+            // shell as the state changes to Result, after the fragments spawn.
+            commands.entity(ship).insert((
+                ExplodeMesh {
+                    fragment_count: FRAGMENT_COUNT,
+                },
+                DespawnOnExit(GameState::Playing),
+            ));
+            commands.play_sfx(sfx.crash.clone());
+            shake.trauma = (shake.trauma + CRASH_TRAUMA).min(1.0);
+        }
+        next.set(GameState::Result);
+    } else if obstacle_touch {
+        // Solid rock: chip (or empty) integrity by impact speed. The run only
+        // ends if this zeroes the pool, which the `on_ship_destroyed` observer
+        // turns into a crash; a survivable graze just costs integrity and shakes.
+        commands.trigger(HealthApplyDamage {
+            entity: ship,
+            source: None,
+            amount: impact_damage(speed),
         });
-        commands.play_sfx(sfx.land.clone());
+        commands.trigger(PlaySfx::new(sfx.crash.clone()).with_volume(0.6));
         shake.trauma = (shake.trauma + LAND_TRAUMA).min(1.0);
-        // Freeze the hull where it touched down so it stays visibly parked on
-        // the pad through the result screen (it has no DespawnOnExit, so it
-        // survives the state change; `despawn_ships` clears it on leaving
-        // Result). Static + zeroed velocity stops any post-contact drift.
-        commands.entity(ship).insert((
-            RigidBody::Static,
-            LinearVelocity::default(),
-            AngularVelocity::default(),
-        ));
-    } else {
-        outcome.0 = Some(Landing {
-            landed: false,
-            score: 0,
-            speed,
-            tilt,
-        });
-        // Break the hull apart. The `on_fragments_spawned` observer turns the
-        // slices into flying debris; DespawnOnExit(Playing) here removes the
-        // shell as the state changes to Result, after the fragments spawn.
-        commands.entity(ship).insert((
-            ExplodeMesh {
-                fragment_count: FRAGMENT_COUNT,
-            },
-            DespawnOnExit(GameState::Playing),
-        ));
-        commands.play_sfx(sfx.crash.clone());
-        shake.trauma = (shake.trauma + CRASH_TRAUMA).min(1.0);
+        spawn_dust(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            transform.translation - up * 0.8,
+            up,
+        );
     }
-
-    next.set(GameState::Result);
 }
 
 /// Reward a gentle, upright, fuel-efficient touchdown, landed near the pad and
@@ -1738,6 +2090,187 @@ fn landing_score(fuel: f32, speed: f32, tilt: f32, pad_dist: f32, run_time: f32)
     // landing just gets none (never negative), so care is not punished.
     let time_bonus = ((PAR_TIME - run_time) / PAR_TIME).clamp(0.0, 1.0) * TIME_BONUS_MAX;
     (100.0 + fuel_bonus + soft_bonus + level_bonus + proximity_bonus + time_bonus).round() as i32
+}
+
+/// Integrity lost from an obstacle or asteroid contact at `speed` m/s: linear in
+/// impact speed with a floor, so a slow graze still stings and a fast smash can
+/// empty the pool (`SHIP_MAX_INTEGRITY`) in one hit. Pure, unit-tested below.
+fn impact_damage(speed: f32) -> f32 {
+    (speed * INTEGRITY_DAMAGE_PER_SPEED).max(INTEGRITY_MIN_DAMAGE)
+}
+
+// --- Playing: hazards ------------------------------------------------------
+
+/// Copy each asteroid's `RandomSphereOrbit` position onto its `Transform`, after
+/// the orbit driver has advanced it. Same handoff as `07_orbit`'s wanderers;
+/// scale is left untouched (set once at spawn).
+fn apply_asteroid_transforms(
+    mut q_asteroids: Query<(&RandomSphereOrbitOutput, &mut Transform), With<Asteroid>>,
+) {
+    for (output, mut transform) in q_asteroids.iter_mut() {
+        transform.translation = **output;
+    }
+}
+
+/// Damage the ship and shatter any asteroid it grazes. Proximity check (not a
+/// physics collider), matching `07_orbit` and sidestepping the tunneling risk of
+/// teleporting a kinematic body along an orbit each frame. The graze routes
+/// through `HealthApplyDamage`; a fatal blow is turned into a crash by
+/// `on_ship_destroyed`.
+fn resolve_asteroid_hits(
+    q_ship: Query<(Entity, &Transform, &ApproachSpeed), With<Ship>>,
+    q_asteroids: Query<(Entity, &Transform), With<Asteroid>>,
+    outcome: Res<Outcome>,
+    sfx: Res<SfxAssets>,
+    mut shake: ResMut<CameraShake>,
+    mut commands: Commands,
+) {
+    if outcome.0.is_some() {
+        return;
+    }
+    let Ok((ship, ship_transform, approach)) = q_ship.single() else {
+        return;
+    };
+    let hit_dist = SHIP_COLLISION_RADIUS + ASTEROID_RADIUS;
+    for (asteroid, transform) in q_asteroids.iter() {
+        if ship_transform.translation.distance(transform.translation) > hit_dist {
+            continue;
+        }
+        // Integrity damage scaled by the ship's speed (asteroids drift slowly, so
+        // the ship's speed is a good stand-in for the relative impact speed).
+        commands.trigger(HealthApplyDamage {
+            entity: ship,
+            source: Some(asteroid),
+            amount: impact_damage(approach.0),
+        });
+        // Shatter the asteroid so it cannot hit again: drop the marker (stops
+        // repeat hits and the transform sync), slice it into debris via
+        // `mesh/explode`, and hide + auto-despawn the spent shell.
+        commands.entity(asteroid).remove::<Asteroid>().insert((
+            ExplodeMesh {
+                fragment_count: ASTEROID_FRAGMENTS,
+            },
+            Visibility::Hidden,
+            TempEntity(0.2),
+        ));
+        commands.trigger(PlaySfx::new(sfx.crash.clone()).with_volume(0.7));
+        shake.trauma = (shake.trauma + LAND_TRAUMA).min(1.0);
+    }
+}
+
+/// Evolve the tangential wind: a slowly rotating bearing and a smooth gust
+/// envelope, both driven off one phase so the wind is readable and counterable.
+/// Caches the world-space acceleration for `apply_ship_forces`, the streak
+/// telegraph and the HUD gauge.
+fn update_wind(time: Res<Time>, mut wind: ResMut<Wind>, q_ship: Query<&Position, With<Ship>>) {
+    wind.phase += time.delta_secs();
+    let radial_up = q_ship
+        .single()
+        .map(|p| p.0.normalize_or(Vec3::Y))
+        .unwrap_or(Vec3::Y);
+    // A tangent basis at the ship; the wind bearing rotates within it. Near the
+    // pole `radial_up` is ~+Y, so fall back to a different reference axis.
+    let mut east = radial_up.cross(Vec3::Y);
+    if east.length_squared() < 1e-4 {
+        east = radial_up.cross(Vec3::X);
+    }
+    let east = east.normalize_or(Vec3::X);
+    let north = radial_up.cross(east).normalize_or(Vec3::Z);
+    let bearing = wind.phase * WIND_TURN_SPEED;
+    let dir = east * bearing.cos() + north * bearing.sin();
+    // Gust envelope in 0..1, smooth so gusts build and ease predictably.
+    let gust = 0.5 + 0.5 * (wind.phase * WIND_GUST_FREQ).sin();
+    wind.accel = dir * (WIND_PEAK_ACCEL * HAZARD_DIFFICULTY * gust);
+}
+
+/// Blow translucent streak particles downwind past the ship so the wind's
+/// direction and strength are visible. Denser when the gust is stronger. Reuses
+/// the `FragmentMotion` integrator and `helpers/temp`, like the dust.
+fn spawn_wind_streaks(
+    time: Res<Time>,
+    mut wind: ResMut<Wind>,
+    hazards: Res<HazardAssets>,
+    q_ship: Query<&Transform, With<Ship>>,
+    mut commands: Commands,
+) {
+    let peak = WIND_PEAK_ACCEL * HAZARD_DIFFICULTY;
+    let strength = wind.accel.length();
+    if strength < peak * 0.08 {
+        return; // near-calm: no streaks
+    }
+    wind.streak_timer -= time.delta_secs();
+    if wind.streak_timer > 0.0 {
+        return;
+    }
+    // Stronger gust -> shorter interval (denser streaks).
+    let frac = (strength / peak).clamp(0.1, 1.0);
+    wind.streak_timer = WIND_STREAK_INTERVAL / frac;
+    let Ok(ship) = q_ship.single() else {
+        return;
+    };
+    let dir = wind.accel.normalize_or(Vec3::X);
+    // Spawn upwind of the ship, jittered across the wind and in altitude, so the
+    // streak drifts visibly past the hull.
+    let mut rng = rand::rng();
+    let across = dir
+        .cross(ship.translation.normalize_or(Vec3::Y))
+        .normalize_or(Vec3::X);
+    let up = ship.translation.normalize_or(Vec3::Y);
+    let offset = across * rng.random_range(-3.0..3.0) + up * rng.random_range(-2.0..3.0);
+    let pos = ship.translation - dir * 4.0 + offset;
+    commands.spawn((
+        Name::new("Wind Streak"),
+        Mesh3d(hazards.streak_mesh.clone()),
+        MeshMaterial3d(hazards.streak_material.clone()),
+        Transform::from_translation(pos).with_rotation(Quat::from_rotation_arc(Vec3::Z, dir)),
+        FragmentMotion {
+            velocity: dir * WIND_STREAK_SPEED,
+            spin: Vec3::ZERO,
+        },
+        TempEntity(WIND_STREAK_LIFETIME),
+    ));
+}
+
+/// End the run when the ship's integrity Health hits zero: a structural failure
+/// crash. Explodes the hull and routes to the result screen, distinct from a
+/// hard terrain impact so the result screen can name the cause.
+fn on_ship_destroyed(
+    add: On<Add, HealthZeroMarker>,
+    q_ship: Query<(Entity, &Transform, &ApproachSpeed), With<Ship>>,
+    state: Res<State<GameState>>,
+    sfx: Res<SfxAssets>,
+    mut shake: ResMut<CameraShake>,
+    mut outcome: ResMut<Outcome>,
+    mut next: ResMut<NextState<GameState>>,
+    mut commands: Commands,
+) {
+    if *state.get() != GameState::Playing {
+        return;
+    }
+    let Ok((ship, transform, approach)) = q_ship.single() else {
+        return;
+    };
+    if add.entity != ship || outcome.0.is_some() {
+        return;
+    }
+    let up = transform.translation.normalize_or(Vec3::Y);
+    let tilt = (transform.rotation * Vec3::Y).angle_between(up);
+    outcome.0 = Some(Landing {
+        landed: false,
+        destroyed: true,
+        score: 0,
+        speed: approach.0,
+        tilt,
+    });
+    commands.entity(ship).insert((
+        ExplodeMesh {
+            fragment_count: FRAGMENT_COUNT,
+        },
+        DespawnOnExit(GameState::Playing),
+    ));
+    commands.play_sfx(sfx.crash.clone());
+    shake.trauma = (shake.trauma + CRASH_TRAUMA).min(1.0);
+    next.set(GameState::Result);
 }
 
 /// Kick up a short-lived puff of dust particles at a contact point, biased
@@ -1879,6 +2412,7 @@ fn spawn_result(mut commands: Commands, outcome: Res<Outcome>) {
             score,
             speed,
             tilt,
+            ..
         }) => (
             "LANDED!".to_string(),
             Color::srgb(0.5, 1.0, 0.6),
@@ -1887,6 +2421,13 @@ fn spawn_result(mut commands: Commands, outcome: Res<Outcome>) {
                 speed,
                 tilt.to_degrees()
             ),
+        ),
+        Some(Landing {
+            destroyed: true, ..
+        }) => (
+            "DESTROYED".to_string(),
+            Color::srgb(1.0, 0.4, 0.4),
+            "Hull integrity depleted\nby asteroid and obstacle strikes".to_string(),
         ),
         Some(Landing { speed, tilt, .. }) => (
             "CRASHED".to_string(),
@@ -2099,5 +2640,24 @@ mod tests {
             let lean = touch_lean(Vec2::new(x, y), r, d);
             assert!(lean.x.abs() <= MAX_LEAN + 1e-4 && lean.y.abs() <= MAX_LEAN + 1e-4);
         }
+    }
+
+    /// Integrity damage scales with impact speed above a floor: a slow graze
+    /// still costs `INTEGRITY_MIN_DAMAGE`, a brisk hit scales linearly, and a
+    /// fast enough smash empties the whole pool in one blow.
+    #[test]
+    fn impact_damage_floors_then_scales_with_speed() {
+        // A crawling contact takes the floor, not the (smaller) linear term.
+        assert_eq!(impact_damage(0.0), INTEGRITY_MIN_DAMAGE);
+        let slow = INTEGRITY_MIN_DAMAGE / INTEGRITY_DAMAGE_PER_SPEED * 0.5;
+        assert_eq!(impact_damage(slow), INTEGRITY_MIN_DAMAGE);
+
+        // Above the floor speed it is linear in impact speed.
+        let brisk = 6.0;
+        assert!((impact_damage(brisk) - brisk * INTEGRITY_DAMAGE_PER_SPEED).abs() < 1e-4);
+
+        // A fast enough hit is lethal in one blow (>= the whole integrity pool).
+        let lethal_speed = SHIP_MAX_INTEGRITY / INTEGRITY_DAMAGE_PER_SPEED;
+        assert!(impact_damage(lethal_speed) >= SHIP_MAX_INTEGRITY);
     }
 }

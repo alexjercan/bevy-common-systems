@@ -267,13 +267,21 @@ Examples:
   the PD controller torques the avian3d rigid body toward that attitude (this
   is the crate's first real physics sim, not just the debug renderer). Touch
   down slow and upright to score; hit too hard or too tilted and the hull
-  breaks apart via `mesh/explode`. Pulls in `camera/skybox` (a procedurally
-  generated starfield, no asset file), `camera/post` bloom on the thruster
-  flame, `camera/chase`, `ui/status` gauges (altitude/speed/fuel) and `audio`.
-  The planet's avian trimesh collider is built inline from
-  `TriangleMeshBuilder::vertices_and_indices()`. Follows the `06_fruitninja`
-  shape (states, sounds, wasm). See `docs/2026-07-03-dropzone-example.md`;
-  the flight constants were play-tested and tuned in `tasks/20260703-213510`.
+  breaks apart via `mesh/explode`. The descent is also hazardous: rock monoliths
+  ring the pad (static colliders forming a gap to thread), asteroids drift the
+  corridor on `RandomSphereOrbit`, and a time-varying wind shoves the ship
+  sideways; grazing a rock or asteroid drains a ship-integrity `Health` pool
+  (`HealthPlugin`) scaled by impact speed, and zero integrity ends the run --
+  terrain contact stays instant-crash. All hazards scale off one
+  `HAZARD_DIFFICULTY` knob. Pulls in `camera/skybox` (a procedurally generated
+  starfield, no asset file), `camera/post` bloom on the thruster flame,
+  `camera/chase`, `transform/random_sphere_orbit`, `health`, `ui/status` gauges
+  (altitude/speed/fuel/hull/wind) and `audio`. The planet's avian trimesh
+  collider is built inline from `TriangleMeshBuilder::vertices_and_indices()`.
+  Follows the `06_fruitninja` shape (states, sounds, wasm). See
+  `docs/2026-07-03-dropzone-example.md`, `docs/2026-07-04-dropzone-tier-a-fun.md`
+  and `docs/2026-07-04-dropzone-hazards.md`; the flight constants were
+  play-tested and tuned in `tasks/20260703-213510`.
 - `10_asteroids` - a top-down "asteroids" shooter and the crate's physics-
   fragments showcase, the counterpoint to `06_fruitninja`. You fly a ship around
   a bounded, zero-gravity arena and shoot drifting octahedron rocks; a hit

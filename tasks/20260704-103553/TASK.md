@@ -1,6 +1,6 @@
 # 08_dropzone: hazards pass (obstacles, asteroids, wind, rough terrain, ship integrity)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 3
 - TAGS: feature,dropzone
 
@@ -39,40 +39,54 @@ Scope = the hazard/obstacle family only:
 
 ## Steps
 
-- [ ] Obstacles / rough terrain (B1). Add terrain hazards the ship can hit:
-      crank local `TERRAIN_AMPLITUDE` for spires/arches the existing trimesh
-      already supports, and/or add discrete rock meshes with colliders near the
-      pad so the approach has to thread a gap. Hitting one at speed = crash via
-      the existing explode path. Cheapest hazard; do first.
-- [ ] Moving asteroids / debris (B1). Spawn drifting asteroids using the
-      `transform/*` orbit family (`RandomSphereOrbit`, as `07_orbit` does) or
-      simple ballistic motion. Collision with the ship deals damage (see
-      structural integrity below) and can shatter the asteroid via
-      `mesh/explode`.
-- [ ] Ship structural integrity / health. Give the ship a `Health` component;
-      route asteroid/graze impacts through `HealthApplyDamage` scaled by impact
-      speed, so a light graze costs integrity but a hard hit still ends the run
-      (via `HealthZeroMarker` -> crash/explode). Surface integrity on the
-      `ui/status` bar next to altitude/speed/fuel. Decide + note: does terrain
-      contact also cost integrity, or stay instant-crash as today?
-- [ ] Wind / gust (B4). Add a time-varying tangential
-      `ConstantLinearAcceleration` the player must counter with lean. One more
-      acceleration component, same pattern as gravity/thrust. Keep it readable
-      (telegraph direction/strength, e.g. a HUD wind indicator or drifting
-      particles). Tune so it adds challenge without being unfair.
-- [ ] Difficulty knobs. Wire hazard density / wind strength / terrain roughness
-      to a difficulty scalar so they can ramp (leave the ramp itself optional;
-      the spike's multi-level idea C1 is out of scope, just make the constants
-      tunable).
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test`,
-      `./scripts/check-ascii.sh`, then RUN the example and confirm the render
-      loop plus each hazard behaves (obstacle crash, asteroid damage + integrity
-      drain + kill, wind pushes and is counterable). PHYSICS-TUNING RISK: fast
-      asteroid/terrain collisions may reintroduce tunneling the base game
-      avoided (the doc notes no `SweptCcd` was needed at current speeds) -- if a
-      fast hit tunnels, enable avian CCD on the relevant bodies and note it.
-      Rebuild the web showcase (`npm run build`) and document decisions in
-      `docs/`.
+- [x] Obstacles / rough terrain (B1). Added discrete rock monoliths (static
+      cuboid colliders, `Obstacle` marker) ringed around the pad, spanning
+      `ROCK_RING_SPAN_FRAC` of the circle so a gap is left to thread. Chose
+      discrete rocks over cranking `TERRAIN_AMPLITUDE` (which would disturb the
+      pad's flush placement); noted in the doc. A rock hit costs integrity and
+      can end the run.
+- [x] Moving asteroids / debris (B1). `ASTEROID_COUNT` lumpy asteroids
+      (`TriangleMeshBuilder` octahedron) wander the corridor on `RandomSphereOrbit`,
+      seeded near the pole. A graze damages the ship and shatters the asteroid
+      via `mesh/explode` (proximity check, not a physics collider -- avoids the
+      tunneling risk of teleporting a kinematic body along an orbit).
+- [x] Ship structural integrity / health. Ship carries `Health::new(SHIP_MAX_INTEGRITY)`;
+      obstacle/asteroid hits route through `HealthApplyDamage` scaled by impact
+      speed (`impact_damage`, unit-tested), a light graze chips and a hard hit
+      can empty it. `HealthZeroMarker` -> `on_ship_destroyed` ends the run as a
+      structural-failure crash. A `hull %` HUD gauge surfaces it. DECISION:
+      terrain contact stays instant-crash; only obstacles/asteroids cost
+      integrity (keeps the core landing game unambiguous). Noted in the doc.
+- [x] Wind / gust (B4). A `Wind` resource evolves one phase into a rotating
+      bearing + smooth gust envelope; the tangential acceleration is folded into
+      the ship's existing `ConstantLinearAcceleration` (one more term). Telegraphed
+      by translucent streak particles blown downwind and a `wind %` HUD gauge.
+- [x] Difficulty knobs. All hazard magnitudes scale off one `HAZARD_DIFFICULTY`
+      scalar (rock count, asteroid count, wind peak); the ramp itself is left out
+      of scope, constants are tunable.
+- [x] Verify: fmt/clippy(--all-targets)/test/ascii all clean. Ran the example
+      (reaches render loop); a temporary env-gated autopilot (since removed) flew
+      Menu -> Playing -> Result confirming each hazard path (asteroid damage +
+      shatter, obstacle impact kill, integrity drain, wind pushes the ship) with
+      no panic. No tunneling observed (asteroids use proximity; rocks are static),
+      so no CCD added. Web showcase rebuilt (`npm run build` exit 0, webpack ok).
+      Decisions in `docs/2026-07-04-dropzone-hazards.md`.
+
+## Close-out
+
+Shipped the whole hazard/obstacle family on `feature/08-dropzone-hazards`,
+reusing existing crate systems (`transform/random_sphere_orbit`, `health`,
+`mesh/explode`) per AGENTS.md. `resolve_landing` was refactored into
+`resolve_collisions`, which classifies each ship contact as planet (landing eval,
+unchanged) vs obstacle (integrity damage) -- stricter and more correct than the
+old "any contact = touchdown". Nine in-module unit tests (added `impact_damage`).
+Review (REVIEW.md): round 1 APPROVE -- an independent skeptical pass found no
+CRITICAL/MAJOR issues, only three MINOR cosmetic/theoretical edges (one
+documented with an inline comment). See
+`docs/2026-07-04-dropzone-hazards.md` for the decisions and trade-offs.
+
+Scope held: flight model (PD/gravity/thrust) and the Menu/Playing/Result shape
+untouched; no out-of-scope mechanics added.
 
 ## Notes
 
