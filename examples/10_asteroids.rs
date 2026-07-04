@@ -186,6 +186,8 @@ fn main() {
     app.add_plugins(ExplodeMeshPlugin);
     app.add_plugins(PostProcessingDefaultPlugin);
     app.add_plugins(CameraShakePlugin);
+    // Material hit-flash: the hull flashes red when the ship takes a hit.
+    app.add_plugins(FlashPlugin);
     app.add_plugins(StatusBarPlugin);
     app.add_plugins(HealthPlugin);
     app.add_plugins(SfxPlugin);
@@ -1142,6 +1144,7 @@ fn handle_collisions(
     q_bullet: Query<(), With<Bullet>>,
     q_asteroid: Query<(&Asteroid, Has<Exploding>)>,
     mut q_ship: Query<(Entity, &mut Ship)>,
+    q_ship_model: Query<Entity, With<ShipModel>>,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut score: ResMut<Score>,
     sfx: Res<SfxAssets>,
@@ -1217,6 +1220,16 @@ fn handle_collisions(
             ship.invuln = INVULN_TIME;
             if let Some(input) = shake.as_mut() {
                 input.add_trauma += SHAKE_HIT;
+            }
+            // Flash the hull emissive red on the hit; the crate `FlashPlugin`
+            // clones the hull material so the flash rides on this ship alone and
+            // eases back. Layers over the i-frame visibility blink.
+            if let Ok(model) = q_ship_model.single() {
+                commands.entity(model).insert(Flash {
+                    color: Color::srgb(6.0, 0.4, 0.4),
+                    duration: 0.3,
+                    ..default()
+                });
             }
             commands.play_sfx(sfx.hurt.clone());
             commands.trigger(HealthApplyDamage {
