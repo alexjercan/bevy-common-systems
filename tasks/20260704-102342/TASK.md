@@ -1,8 +1,14 @@
 # 08_dropzone: landing target + fuel pickups + touch controls
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 3
 - TAGS: feature,dropzone
+
+> SUPERSEDED: this combined follow-up was split, per user direction, into three
+> focused tasks. Do not implement this one; use these instead:
+> - `tasks/20260704-103544` -- Tier-A fun pass (landing pad, fuel, landing/crash visuals)
+> - `tasks/20260704-103553` -- hazards pass (obstacles, asteroids, wind, integrity)
+> - `tasks/20260704-103517` -- mobile virtual-pad touch controls
 
 ## Goal
 

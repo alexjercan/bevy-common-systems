@@ -283,8 +283,15 @@ one cycle, while still reading as a small crate demo. Larger items -- obstacles
 (B1), wind (B4), multi-leg refuel runs (B2), tilt/accelerometer mode -- are
 follow-on slices, each its own task.
 
-Follow-up implementation task filed: see `tasks/` (created alongside this
-spike).
+Follow-up implementation tasks filed (per user direction, split into three
+focused tasks rather than one combined slice):
+- `tasks/20260704-103544` -- Tier-A fun pass (all A proposals: landing pad +
+  positional score, fuel pickups, optional time term, landing/crash visuals).
+- `tasks/20260704-103553` -- hazards pass (Tier B obstacles + wind + asteroids +
+  rough terrain, with ship structural integrity via `HealthPlugin`).
+- `tasks/20260704-103517` -- mobile virtual-pad touch controls (Part 2 option 1).
+The C proposals and the bigger B items (pickups-beyond-fuel, upgrades, cargo,
+multi-leg refuel) are intentionally left out for now.
 
 ## Steps
 

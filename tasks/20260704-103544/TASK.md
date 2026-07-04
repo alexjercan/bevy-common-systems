@@ -1,0 +1,79 @@
+# 08_dropzone: Tier-A fun pass (landing pad, fuel pickups, landing/crash visuals)
+
+- STATUS: OPEN
+- PRIORITY: 5
+- TAGS: feature,dropzone
+
+## Goal
+
+First and smallest of three follow-ups from the fun+mobile spike
+(`tasks/20260704-102022`, read Part 1 Tier A first). Turn `examples/08_dropzone.rs`
+from a physics demo into a small *game* by adding the whole Tier-A set, WITHOUT
+touching the physics / PD controller / gravity or turning it into a bigger game
+(no upgrades, no cargo, no multi-leg refuel runs -- those were explicitly cut).
+Stay a small, copy-pastable crate demo.
+
+Scope = spike Tier A only: A1 landing pad + positional score, A2 fuel pickups,
+A3 optional efficiency/time term, A4 juice (visible landing + crash). No hazards
+here (that is `tasks/20260704-103553`); no touch controls here (that is
+`tasks/20260704-103517`).
+
+## Baseline (from the spike, for grounding)
+
+- Scoring is a pure function `landing_score(fuel, speed, tilt)` =
+  `100 + fuel*3 + (4.5-speed)*40 + (0.35-tilt)*200`. Adding a positional term is
+  a small, isolated change.
+- Game ends on FIRST contact (Menu / Playing / Result states). Everything below
+  avoids reworking that state machine.
+- `START_FUEL` 100, `FUEL_BURN` 14/s. Fuel already dominates the score, so
+  pickups meaningfully change routing.
+
+## Steps
+
+- [ ] A1 -- landing pad + positional score. Spawn a glowing landing-pad / beacon
+      marker on the surface (reuse the `07_orbit` glowing-marker look). Add a
+      `proximity_bonus = (pad_radius - touchdown_dist).max(0) * k` term to the
+      landing score so landing on/near the pad scores more than landing
+      anywhere. Show the pad clearly (beacon + optional HUD direction hint).
+      Decision to make + note: single pad vs a few; how "distance" is measured
+      (great-circle on the surface vs straight-line).
+- [ ] A2 -- fuel pickups (fuel cans). Spawn a small set of floating fuel cells on
+      the descent path, placed slightly OFF the efficient line so grabbing one
+      trades altitude/control for fuel (a real risk/reward routing choice, not
+      free candy). Detect fly-through (avian sensor collider or a simple
+      distance check), add to `Fuel` (decide: cap at `START_FUEL` or allow
+      overfill -- note the choice), play the existing `pickup` sound, and pop a
+      rising "+FUEL" popup (reuse the `07_orbit` "+N" pattern via `helpers/temp`
+      + `ui`).
+- [ ] A3 (optional, cheap) -- efficiency/time term. A visible descent timer or
+      "descent score" that gently rewards committing to a line instead of
+      hovering; one resource + one `ui/status` line. Skip if it muddies the
+      scoring; note the decision either way.
+- [ ] A4 -- landing + crash visuals (juice). Make the outcome legible:
+      - On a good landing, the ship visibly stays put / "sticks" on the pad
+        (kill residual motion, maybe a small settle + a landing flash/dust
+        puff), rather than the game just cutting to the Result screen.
+      - On a crash, the hull explodes -- the `mesh/explode` crash path already
+        exists; make sure it reads well (camera punch on impact, reuse the
+        fragment system, maybe a soft dust puff even on a good touchdown).
+      - Reuse `camera/post` bloom, `mesh/explode`, `helpers/temp`, `audio`; this
+        is the `07_orbit` polish template (`feature/07-orbit-polish`).
+- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test`,
+      `./scripts/check-ascii.sh`, then actually RUN the example (not just build:
+      AGENTS.md gotcha) and confirm it reaches the render loop and each new
+      mechanic works (pad scores, pickup adds fuel, land sticks, crash
+      explodes). Rebuild the web/wasm showcase (`npm run build`) so the demo
+      stays current. Update `docs/2026-07-03-dropzone-example.md` (or a new doc)
+      with what changed and why.
+
+## Notes
+
+- Distance-for-points from the original request is realized as A1
+  (close-to-a-hard-pad), which the spike argues beats rewarding raw distance
+  (raw distance perversely rewards flying off to nowhere).
+- Deliberately OUT of scope (user cut): pickups-beyond-fuel, ship upgrades,
+  cargo/weight, multi-leg refuel, multiple planets. Do not scope-creep.
+- Keep faithful to AGENTS.md: additive, physics path untouched, example is the
+  integration test, stay wasm-friendly, plain ASCII.
+- Supersedes the earlier combined follow-up `tasks/20260704-102342` (now split
+  into this + hazards + mobile tasks).
