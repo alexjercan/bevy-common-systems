@@ -53,6 +53,8 @@ the cycle went.
       and to document the shim (done in this task).
 - [x] AGENTS.md Gotchas: add the "fresh worktree has no node_modules, run
       npm ci before web builds" note (proposed below / added with this retro).
-- [ ] Future: when a second web game gains sound, lift the inline shim into a
+- [x] Future: when a second web game gains sound, lift the inline shim into a
       shared snippet (web/games/_shared/audio-unlock.js via trunk). Noted in the
-      docs; no tatr task yet since only one game has sound.
+      docs; no tatr task yet since only one game has sound. (Done in task
+      20260704-101920: extracted to web/games/_shared/audio-unlock.js, loaded
+      by all three games.)
