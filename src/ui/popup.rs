@@ -10,10 +10,12 @@
 //! The popup is a plain Bevy UI `Text` node with a [`Popup`] component; the
 //! plugin advances it. Because it is screen-space, the caller decides *where* on
 //! screen it appears: for a world event, project the world position to a
-//! viewport point yourself (`camera.world_to_viewport(...)`) and pass that in;
-//! for a fixed banner, pass a constant screen point. Keeping the projection in
-//! the caller is deliberate -- it varies per game, so the module stays free of a
-//! camera handle.
+//! viewport point yourself (see [`camera::project::world_to_screen`]) and pass
+//! that in; for a fixed banner, pass a constant screen point. Keeping the
+//! projection in the caller is deliberate -- it varies per game, so the module
+//! stays free of a camera handle.
+//!
+//! [`camera::project::world_to_screen`]: crate::camera::project::world_to_screen
 //!
 //! The component split follows the crate convention:
 //!

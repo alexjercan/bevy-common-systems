@@ -4,6 +4,7 @@
 //! - Chase camera
 //! - Camera shake (trauma)
 //! - Post processing camera utilities
+//! - Screen <-> world projection helpers
 //! - Skybox rendering helpers
 //! - WASD style free camera
 //!
@@ -15,6 +16,7 @@
 
 pub mod chase;
 pub mod post;
+pub mod project;
 pub mod shake;
 pub mod skybox;
 pub mod wasd;
@@ -26,7 +28,7 @@ pub mod wasd;
 /// ```
 pub mod prelude {
     pub use super::{
-        chase::prelude::*, post::prelude::*, shake::prelude::*, skybox::prelude::*,
-        wasd::prelude::*,
+        chase::prelude::*, post::prelude::*, project::prelude::*, shake::prelude::*,
+        skybox::prelude::*, wasd::prelude::*,
     };
 }

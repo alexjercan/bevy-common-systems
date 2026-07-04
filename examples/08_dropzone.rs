@@ -1841,7 +1841,8 @@ fn collect_fuel_cans(
         // Float a "+FUEL" popup at the can's screen position (skip if off-screen
         // or behind the camera).
         if let Ok((camera, cam_transform)) = q_camera.single() {
-            if let Ok(viewport_pos) = camera.world_to_viewport(cam_transform, transform.translation)
+            if let Some(viewport_pos) =
+                world_to_screen(camera, cam_transform, transform.translation)
             {
                 // Use the crate's `popup` builder but override its `Popup` to
                 // keep 08's slower, longer-lived feel (0.9s / 60px/s), which

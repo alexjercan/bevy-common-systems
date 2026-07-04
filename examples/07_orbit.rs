@@ -1033,8 +1033,8 @@ fn resolve_collisions(
             // skip it if the orb is off-screen / behind the camera), and a
             // "STREAK xN" banner near the top once the chain reaches x2.
             if let Ok((camera, camera_transform)) = q_camera.single() {
-                if let Ok(viewport_pos) =
-                    camera.world_to_viewport(camera_transform, transform.translation)
+                if let Some(viewport_pos) =
+                    world_to_screen(camera, camera_transform, transform.translation)
                 {
                     commands
                         .spawn(popup(

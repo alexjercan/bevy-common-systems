@@ -1195,9 +1195,7 @@ fn slice_objects(
                 input.add_trauma += SLICE_TRAUMA;
             }
 
-            let viewport_pos = camera
-                .world_to_viewport(camera_transform, transform.translation)
-                .ok();
+            let viewport_pos = world_to_screen(camera, camera_transform, transform.translation);
 
             if is_golden {
                 // Golden fruit: flat bonus, and it buys extra combo time by
@@ -1409,19 +1407,20 @@ fn active_pointer_pos(touch_pos: Option<Vec2>, cursor_pos: Option<Vec2>) -> Opti
 /// World position where the pointer ray meets the play plane, if the given
 /// screen position projects onto the plane. Shared by mouse and touch: the
 /// caller resolves the screen position (see `active_pointer_pos`), this only
-/// does the camera projection.
+/// pins the crate's `pointer_on_plane` helper to this game's play plane (the
+/// `z = PLAY_Z` plane).
 fn pointer_on_play_plane(
     screen_pos: Vec2,
     camera: &Camera,
     camera_transform: &GlobalTransform,
 ) -> Option<Vec3> {
-    let ray = camera
-        .viewport_to_world(camera_transform, screen_pos)
-        .ok()?;
-    let plane = InfinitePlane3d::new(Vec3::Z);
-    let distance = ray.intersect_plane(Vec3::new(0.0, 0.0, PLAY_Z), plane)?;
-
-    Some(ray.get_point(distance))
+    pointer_on_plane(
+        camera,
+        camera_transform,
+        screen_pos,
+        Vec3::new(0.0, 0.0, PLAY_Z),
+        InfinitePlane3d::new(Vec3::Z),
+    )
 }
 
 /// True when the segment `a -> b` passes within `radius` of `center`.

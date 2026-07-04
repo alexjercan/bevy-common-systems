@@ -905,9 +905,15 @@ fn control_ship(
     // Where is the pointer on the play plane, if it is down?
     let (cam, cam_transform) = *camera;
     let pointer_target = if pointer.pressed {
-        pointer
-            .screen_pos
-            .and_then(|pos| pointer_on_play_plane(pos, cam, cam_transform))
+        pointer.screen_pos.and_then(|pos| {
+            pointer_on_plane(
+                cam,
+                cam_transform,
+                pos,
+                Vec3::ZERO,
+                InfinitePlane3d::new(Vec3::Z),
+            )
+        })
     } else {
         None
     };
@@ -1509,20 +1515,6 @@ fn mesh_centroid(mesh: &Mesh) -> Vec3 {
     } else {
         Vec3::ZERO
     }
-}
-
-/// World position where the pointer ray meets the play plane (Z = 0).
-fn pointer_on_play_plane(
-    screen_pos: Vec2,
-    camera: &Camera,
-    camera_transform: &GlobalTransform,
-) -> Option<Vec3> {
-    let ray = camera
-        .viewport_to_world(camera_transform, screen_pos)
-        .ok()?;
-    let plane = InfinitePlane3d::new(Vec3::Z);
-    let distance = ray.intersect_plane(Vec3::ZERO, plane)?;
-    Some(ray.get_point(distance))
 }
 
 #[cfg(test)]

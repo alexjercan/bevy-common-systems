@@ -1,6 +1,6 @@
 # camera/project: screen<->world projection helpers (Wave A)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 32
 - TAGS: spike,feature,camera
 
