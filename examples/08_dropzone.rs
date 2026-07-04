@@ -6,7 +6,9 @@
 //! a ship down onto it: thrust counteracts gravity, and the PD controller
 //! rotates the rigid body toward whatever attitude you steer to (avian3d
 //! torque). Touch down slow and upright to score; hit too hard or too tilted
-//! and the hull breaks apart via `mesh/explode`.
+//! and the hull breaks apart via `mesh/explode`. Landing on the glowing pad and
+//! grabbing fuel cans on the way down both boost the score, so the descent is a
+//! route to plan, not just a fall to survive.
 //!
 //! It stitches several crate pieces together at once:
 //! - `physics/pd_controller` - orientation control (the whole point).
@@ -93,6 +95,67 @@ const FRAGMENT_SPEED: f32 = 6.0;
 /// How long crash fragments live before despawning (seconds).
 const FRAGMENT_LIFETIME: f32 = 4.0;
 
+// --- Landing pad -----------------------------------------------------------
+
+/// The landing pad spawns at a random spot each run, at a polar angle in this
+/// band from the +Y start pole (radians). The lower bound keeps it off the exact
+/// spawn point (so reaching it is always a deliberate steer); the upper bound
+/// keeps it within a fuelled lateral reach and well clear of the antipode, where
+/// the `from_rotation_arc` upright target would be singular.
+const PAD_ANGLE_MIN: f32 = 0.18;
+const PAD_ANGLE_MAX: f32 = 0.5;
+/// Surface distance (world units) at which the pad proximity bonus reaches zero.
+/// Land farther than this from the pad and it scores no pad bonus.
+const PAD_REWARD_RADIUS: f32 = 26.0;
+/// Maximum pad proximity bonus, for a bullseye touchdown on the pad centre.
+const PAD_PROXIMITY_MAX: f32 = 400.0;
+
+// --- Fuel pickups ----------------------------------------------------------
+
+/// Fuel units restored by flying the ship through one fuel can.
+const FUEL_CAN_AMOUNT: f32 = 25.0;
+/// Distance from the ship centre within which a fuel can is collected.
+const FUEL_CAN_PICKUP_RADIUS: f32 = 2.6;
+/// How many fuel cans to keep floating in the play area at once. The spawner
+/// tops up to this over time as cans are collected, so there are never zero and
+/// never a swarm.
+const FUEL_CAN_TARGET: usize = 3;
+/// Seconds between fuel-can top-up spawns while below the target count.
+const FUEL_CAN_SPAWN_INTERVAL: f32 = 2.5;
+/// Polar-angle cap (radians) of the region above the planet the cans scatter in.
+const FUEL_CAN_SPREAD: f32 = 0.55;
+
+// --- Direction guide -------------------------------------------------------
+
+/// How far above the ship the diegetic guide arrow hovers (world units).
+const GUIDE_ARROW_HEIGHT: f32 = 2.6;
+
+// --- Descent timer ---------------------------------------------------------
+
+/// "Par" descent time (seconds). Landing faster earns a time bonus that decays
+/// to zero at par; a slower landing simply gets no time bonus (never a
+/// penalty), so a careful, unhurried approach is never punished.
+const PAR_TIME: f32 = 30.0;
+/// Maximum time bonus, for an instantaneous (t = 0) landing.
+const TIME_BONUS_MAX: f32 = 150.0;
+
+// --- Juice -----------------------------------------------------------------
+
+/// Number of dust puffs kicked up on contact (landing or crash).
+const DUST_COUNT: usize = 10;
+/// Dust puff lifetime before despawning (seconds).
+const DUST_LIFETIME: f32 = 1.1;
+/// Camera-shake trauma (0..1) added on a soft landing and on a crash. A crash
+/// hits harder. Ported from `07_orbit`.
+const LAND_TRAUMA: f32 = 0.3;
+const CRASH_TRAUMA: f32 = 0.75;
+/// Camera-shake feel: peak jolt offset (world units) and trauma decay per sec.
+const SHAKE_MAX_OFFSET: f32 = 0.9;
+const SHAKE_DECAY: f32 = 1.6;
+/// Floating "+FUEL" popup feel: lifetime (seconds) and rise speed (px/s).
+const POPUP_LIFETIME: f32 = 0.9;
+const POPUP_RISE_SPEED: f32 = 60.0;
+
 // --- CLI -------------------------------------------------------------------
 
 #[derive(Parser)]
@@ -142,7 +205,54 @@ struct Telemetry {
     altitude: f32,
     speed: f32,
     fuel: f32,
+    /// Great-circle surface distance from the ship's ground track to the landing
+    /// pad (world units), shown on the HUD as a homing hint.
+    pad_dist: f32,
 }
+
+/// The landing pad the player aims for, re-rolled to a random spot each run.
+/// Proximity to it at touchdown drives a score bonus (see [`landing_score`]) and
+/// it is the target the guide arrow points to.
+#[derive(Resource)]
+struct LandingPad {
+    /// Unit direction from the planet centre to the pad (used for scoring by
+    /// great-circle distance).
+    dir: Vec3,
+    /// World position of the pad on the surface (used by the guide arrow).
+    pos: Vec3,
+}
+
+/// The planet's terrain noise, kept so a new run can sample the surface radius at
+/// the freshly-rolled pad direction (matching how the mesh was displaced).
+#[derive(Resource)]
+struct PlanetNoise(ScaledNoise<Fbm<Perlin>>);
+
+/// Shared mesh/material for fuel cans, built once so the spawner does not
+/// allocate new assets on every top-up.
+#[derive(Resource)]
+struct FuelCanAssets {
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+}
+
+/// Countdown to the next fuel-can top-up spawn (see [`maintain_fuel_cans`]).
+#[derive(Resource, Default)]
+struct FuelSpawner {
+    timer: f32,
+}
+
+/// Camera-shake energy (trauma, 0..1); decays to zero, jittering the camera
+/// while positive. A touchdown (landing or crash) tops it up. Ported from
+/// `07_orbit`.
+#[derive(Resource, Default)]
+struct CameraShake {
+    trauma: f32,
+}
+
+/// Seconds elapsed in the current run, shown on the HUD and rewarded: a faster
+/// safe landing scores a small time bonus (see [`landing_score`]).
+#[derive(Resource, Default)]
+struct RunTimer(f32);
 
 /// The result of the last run, shown on the result screen.
 #[derive(Resource, Default)]
@@ -169,6 +279,7 @@ struct SfxAssets {
     start: Handle<AudioSource>,
     land: Handle<AudioSource>,
     crash: Handle<AudioSource>,
+    pickup: Handle<AudioSource>,
 }
 
 // --- Markers ---------------------------------------------------------------
@@ -184,6 +295,38 @@ struct Planet;
 /// The glowing thruster flame, a child of the ship scaled by thrust each frame.
 #[derive(Component)]
 struct Thruster;
+
+/// A floating fuel can; flying the ship through it restores fuel and despawns
+/// the can.
+#[derive(Component)]
+struct FuelCan;
+
+/// The landing-pad beacon (a per-run entity), kept visible into the result
+/// screen and cleared on leaving it.
+#[derive(Component)]
+struct Pad;
+
+/// The diegetic guide arrow that hovers by the ship and points to the pad.
+#[derive(Component)]
+struct GuideArrow;
+
+/// The main camera (marker for the camera-shake and popup-projection queries).
+#[derive(Component)]
+struct MainCamera;
+
+/// A short-lived UI text that rises and fades out (the "+FUEL" pickup popup).
+/// Ported from `07_orbit`.
+#[derive(Component)]
+struct FloatingText {
+    /// Seconds since the popup was spawned.
+    age: f32,
+    /// Total lifetime in seconds; the popup despawns once `age` reaches it.
+    lifetime: f32,
+    /// Upward screen speed in pixels per second.
+    rise_speed: f32,
+    /// Base color; its alpha ramps down as the popup ages.
+    color: Color,
+}
 
 /// The ship's speed captured once per render frame in `PreUpdate`, before the
 /// fixed-physics loop runs. On the frame the ship touches down avian's solver
@@ -268,6 +411,9 @@ fn main() {
     app.init_resource::<ShipInput>();
     app.init_resource::<Telemetry>();
     app.init_resource::<Outcome>();
+    app.init_resource::<CameraShake>();
+    app.init_resource::<RunTimer>();
+    app.init_resource::<FuelSpawner>();
     app.insert_resource(Fuel(START_FUEL));
 
     app.add_systems(Startup, setup);
@@ -284,6 +430,10 @@ fn main() {
             read_input,
             update_telemetry,
             update_thruster_flame,
+            tick_run_timer,
+            maintain_fuel_cans,
+            collect_fuel_cans,
+            update_guide_arrow,
             resolve_landing,
         )
             .run_if(in_state(GameState::Playing)),
@@ -309,10 +459,25 @@ fn main() {
     // Result.
     app.add_systems(OnEnter(GameState::Result), spawn_result);
     app.add_systems(Update, result_input.run_if(in_state(GameState::Result)));
+    // Clear the parked ship and the pad beacon (both kept visible through the
+    // Result screen) when leaving Result, before the next run spawns fresh ones.
+    // A crashed hull is already gone (it despawns on leaving Playing).
+    app.add_systems(OnExit(GameState::Result), cleanup_run_scene);
 
-    // These run in every state: fragments keep animating into the result
-    // screen, and the camera frames the planet on the menu/result screens too.
-    app.add_systems(Update, (move_fragments, drive_chase_camera));
+    // These run in every state: fragments and dust keep animating into the
+    // result screen, popups fade, the camera frames the planet on menu/result
+    // too, and the shake settles wherever it was last kicked.
+    app.add_systems(
+        Update,
+        (move_fragments, animate_floating_text, drive_chase_camera),
+    );
+    // The camera punch is additive on top of the chase camera's transform, so it
+    // must run after the chase sync (PostUpdate). The next chase sync overwrites
+    // translation, so the offset never accumulates.
+    app.add_systems(
+        PostUpdate,
+        apply_camera_shake.after(ChaseCameraSystems::Sync),
+    );
 
     app.add_observer(on_fragments_spawned);
 
@@ -365,6 +530,29 @@ fn setup(
         planet_collider,
     ));
 
+    // The pad is re-rolled each run in `start_run`, which samples the terrain
+    // noise to sit the beacon flush on the surface; keep the noise for that.
+    commands.insert_resource(PlanetNoise(noise));
+    // Shared fuel-can assets, so the spawner does not allocate per top-up.
+    commands.insert_resource(FuelCanAssets {
+        mesh: meshes.add(Cylinder {
+            radius: 0.5,
+            half_height: 0.7,
+        }),
+        material: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.3, 0.85, 0.4),
+            emissive: LinearRgba::rgb(0.2, 2.5, 0.6),
+            metallic: 0.3,
+            ..default()
+        }),
+    });
+    // Placeholder pad so the resource always exists before the first run reads
+    // it; `start_run` overwrites it with the rolled position.
+    commands.insert_resource(LandingPad {
+        dir: Vec3::Y,
+        pos: Vec3::Y * PLANET_BASE_RADIUS,
+    });
+
     // A sun plus the ambient fill set in `main` keeps the night side readable.
     commands.spawn((
         Name::new("Sun"),
@@ -384,6 +572,7 @@ fn setup(
     // that stays level with the terrain.
     commands.spawn((
         Name::new("Main Camera"),
+        MainCamera,
         Camera3d::default(),
         Transform::from_xyz(0.0, PLANET_BASE_RADIUS + START_ALTITUDE, -20.0)
             .looking_at(Vec3::Y * PLANET_BASE_RADIUS, Vec3::Y),
@@ -464,11 +653,34 @@ fn setup(
         prefix: "fuel ".to_string(),
         suffix: "%".to_string(),
     }),));
+    commands.spawn((status_bar_item(StatusBarItemConfig {
+        icon: None,
+        value_fn: |world: &World| {
+            world
+                .get_resource::<Telemetry>()
+                .map(|t| std::sync::Arc::new(t.pad_dist.round() as i32) as _)
+        },
+        color_fn: |_v| Some(Color::srgb(0.3, 0.9, 1.0)),
+        prefix: "pad ".to_string(),
+        suffix: "m".to_string(),
+    }),));
+    commands.spawn((status_bar_item(StatusBarItemConfig {
+        icon: None,
+        value_fn: |world: &World| {
+            world
+                .get_resource::<RunTimer>()
+                .map(|t| std::sync::Arc::new(t.0.round() as i32) as _)
+        },
+        color_fn: |_v| Some(Color::srgb(0.82, 0.85, 0.9)),
+        prefix: "t ".to_string(),
+        suffix: "s".to_string(),
+    }),));
 
     commands.insert_resource(SfxAssets {
         start: asset_server.load("sounds/launch.wav"),
         land: asset_server.load("sounds/golden.wav"),
         crash: asset_server.load("sounds/bomb.wav"),
+        pickup: asset_server.load("sounds/pickup.wav"),
     });
 }
 
@@ -549,7 +761,7 @@ fn spawn_menu(mut commands: Commands) {
                 TextColor(Color::srgb(0.6, 0.9, 1.0)),
             ));
             parent.spawn((
-                Text::new("Land softly on the planet"),
+                Text::new("Land softly on the glowing pad"),
                 TextFont {
                     font_size: FontSize::Px(26.0),
                     ..default()
@@ -557,7 +769,11 @@ fn spawn_menu(mut commands: Commands) {
                 TextColor(Color::srgb(0.8, 0.85, 0.9)),
             ));
             parent.spawn((
-                Text::new("Space/Up: thrust    W/S: pitch    A/D: roll\n\nPress SPACE to launch"),
+                Text::new(
+                    "Space/Up: thrust    W/S: pitch    A/D: roll\n\
+                     Follow the arrow to the beacon. Grab fuel cans on the way down.\n\n\
+                     Press SPACE to launch",
+                ),
                 TextFont {
                     font_size: FontSize::Px(22.0),
                     ..default()
@@ -590,12 +806,92 @@ fn start_run(
     mut fuel: ResMut<Fuel>,
     mut input: ResMut<ShipInput>,
     mut outcome: ResMut<Outcome>,
+    mut timer: ResMut<RunTimer>,
+    mut shake: ResMut<CameraShake>,
+    mut spawner: ResMut<FuelSpawner>,
+    noise: Res<PlanetNoise>,
+    can_assets: Res<FuelCanAssets>,
     sfx: Res<SfxAssets>,
 ) {
     fuel.0 = START_FUEL;
     outcome.0 = None;
+    timer.0 = 0.0;
+    shake.trauma = 0.0;
+    spawner.timer = 0.0;
     *input = ShipInput::default();
     commands.play_sfx(sfx.start.clone());
+
+    // Roll a fresh landing pad somewhere in the reachable cap around the pole,
+    // and place its beacon flush on the real terrain (surface radius at a unit
+    // direction is `R * (1 + noise(dir))`, matching `apply_noise`).
+    let mut rng = rand::rng();
+    let pad_dir = random_cap_dir(&mut rng, PAD_ANGLE_MIN, PAD_ANGLE_MAX);
+    let pad_height = noise
+        .0
+        .get([pad_dir.x as f64, pad_dir.y as f64, pad_dir.z as f64]) as f32;
+    let pad_pos = pad_dir * (PLANET_BASE_RADIUS * (1.0 + pad_height));
+    commands.insert_resource(LandingPad {
+        dir: pad_dir,
+        pos: pad_pos,
+    });
+    let pad_glow = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.2, 0.9, 1.0),
+        emissive: LinearRgba::rgb(0.3, 5.0, 6.0),
+        ..default()
+    });
+    commands
+        .spawn((
+            Name::new("Landing Pad"),
+            Pad,
+            Transform::from_translation(pad_pos)
+                .with_rotation(Quat::from_rotation_arc(Vec3::Y, pad_dir)),
+            Visibility::default(),
+        ))
+        .with_children(|parent| {
+            // A flat glowing ring flush on the surface.
+            parent.spawn((
+                Name::new("Pad Ring"),
+                Mesh3d(meshes.add(Cylinder {
+                    radius: 3.0,
+                    half_height: 0.12,
+                })),
+                MeshMaterial3d(pad_glow.clone()),
+                Transform::from_xyz(0.0, 0.12, 0.0),
+            ));
+            // A tall thin beacon so the pad is visible from the start altitude.
+            parent.spawn((
+                Name::new("Pad Beacon"),
+                Mesh3d(meshes.add(Cylinder {
+                    radius: 0.22,
+                    half_height: 12.0,
+                })),
+                MeshMaterial3d(pad_glow.clone()),
+                Transform::from_xyz(0.0, 12.0, 0.0),
+            ));
+        });
+
+    // Seed the fuel field to the target count at random spots; the maintain
+    // system tops it back up over time as cans are collected.
+    for _ in 0..FUEL_CAN_TARGET {
+        spawn_fuel_can(&mut commands, &can_assets, random_fuel_can_pos(&mut rng));
+    }
+
+    // Diegetic guide arrow: hovers by the ship each frame and points to the pad.
+    commands.spawn((
+        Name::new("Guide Arrow"),
+        GuideArrow,
+        DespawnOnExit(GameState::Playing),
+        Mesh3d(meshes.add(Cone {
+            radius: 0.35,
+            height: 1.1,
+        })),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(1.0, 0.85, 0.2),
+            emissive: LinearRgba::rgb(5.0, 3.5, 0.3),
+            ..default()
+        })),
+        Transform::from_translation(ship_start_pos()),
+    ));
 
     // Spawn just above the tallest peak, upright (radial up at the +Y pole is
     // world up, so identity is upright).
@@ -612,7 +908,10 @@ fn start_run(
         .spawn((
             Name::new("Ship"),
             Ship,
-            DespawnOnExit(GameState::Playing),
+            // No DespawnOnExit here: a soft landing keeps the parked hull visible
+            // on the result screen (cleaned up by `despawn_ships` on leaving
+            // Result). A crash re-adds DespawnOnExit(Playing) so the shattered
+            // hull vanishes as its fragments fly.
             // A boxy lander body; centred on the origin so `ExplodeMesh` can
             // slice it, and flat-bottomed so it rests instead of rolling.
             Mesh3d(meshes.add(Cuboid::new(1.6, 1.1, 1.6))),
@@ -793,6 +1092,7 @@ fn track_approach_speed(mut q_ship: Query<(&LinearVelocity, &mut ApproachSpeed),
 
 fn update_telemetry(
     fuel: Res<Fuel>,
+    pad: Res<LandingPad>,
     mut telemetry: ResMut<Telemetry>,
     q_ship: Query<(&Transform, &LinearVelocity), With<Ship>>,
 ) {
@@ -802,6 +1102,9 @@ fn update_telemetry(
     telemetry.altitude = transform.translation.length() - PLANET_BASE_RADIUS;
     telemetry.speed = velocity.0.length();
     telemetry.fuel = fuel.0;
+    // Great-circle surface distance from the ship's ground track to the pad.
+    let ground_dir = transform.translation.normalize_or(Vec3::Y);
+    telemetry.pad_dist = ground_dir.angle_between(pad.dir) * PLANET_BASE_RADIUS;
 }
 
 fn update_thruster_flame(
@@ -825,17 +1128,19 @@ fn update_thruster_flame(
 }
 
 /// Where the ship spawns each run: straight above the +Y pole, clear of the
-/// tallest peak. Also the camera's fallback anchor when there is no ship (Menu /
-/// Result), so those screens frame the planet from above instead of parking the
-/// camera inside it.
+/// tallest peak. Also the camera's fallback anchor when there is no ship (the
+/// menu, or the result screen after a crash), so those screens frame the planet
+/// from above instead of parking the camera inside it. (After a soft landing the
+/// hull survives into Result, so there the camera follows the parked ship.)
 fn ship_start_pos() -> Vec3 {
     Vec3::Y * (PLANET_BASE_RADIUS * (1.0 + TERRAIN_AMPLITUDE as f32) + START_ALTITUDE)
 }
 
 /// Drive the chase camera every frame in every state: follow the ship when it
-/// exists, otherwise sit at the spawn vantage. Running in the menu too lets the
-/// smoothed camera state settle on the vantage before a run starts, so Playing
-/// opens on the ship instead of swooping out from the planet centre.
+/// exists (in Playing, and on the result screen after a soft landing, where the
+/// parked hull is kept), otherwise sit at the spawn vantage. Running in the menu
+/// too lets the smoothed camera state settle on the vantage before a run starts,
+/// so Playing opens on the ship instead of swooping out from the planet centre.
 fn drive_chase_camera(
     q_ship: Query<&Transform, With<Ship>>,
     mut q_cam: Query<&mut ChaseCameraInput>,
@@ -854,13 +1159,205 @@ fn drive_chase_camera(
     input.anchor_rot = Quat::from_rotation_arc(Vec3::Y, radial_up);
 }
 
+// --- Playing: fuel pickups & timer -----------------------------------------
+
+/// A unit direction inside a polar-angle cap around the +Y pole, uniform in
+/// azimuth. `min`/`max` bound the polar angle (radians) from +Y.
+fn random_cap_dir(rng: &mut impl Rng, min: f32, max: f32) -> Vec3 {
+    let theta = rng.random_range(min..max);
+    let phi = rng.random_range(0.0..std::f32::consts::TAU);
+    Vec3::new(
+        theta.sin() * phi.cos(),
+        theta.cos(),
+        theta.sin() * phi.sin(),
+    )
+    .normalize()
+}
+
+/// A random fuel-can position: somewhere in the descent cap above the planet,
+/// between just above the surface and the start altitude, so it is reachable.
+fn random_fuel_can_pos(rng: &mut impl Rng) -> Vec3 {
+    let alt = rng.random_range(4.0..START_ALTITUDE);
+    let radius = PLANET_BASE_RADIUS * (1.0 + TERRAIN_AMPLITUDE as f32) + alt;
+    random_cap_dir(rng, 0.0, FUEL_CAN_SPREAD) * radius
+}
+
+/// Spawn one fuel can at `pos`, scoped to the current run.
+fn spawn_fuel_can(commands: &mut Commands, assets: &FuelCanAssets, pos: Vec3) {
+    commands.spawn((
+        Name::new("Fuel Can"),
+        FuelCan,
+        DespawnOnExit(GameState::Playing),
+        Mesh3d(assets.mesh.clone()),
+        MeshMaterial3d(assets.material.clone()),
+        Transform::from_translation(pos),
+    ));
+}
+
+/// Keep roughly `FUEL_CAN_TARGET` cans floating: while at target the refill
+/// timer stays primed; once a can is collected the timer counts down and spawns
+/// one replacement at a random spot every `FUEL_CAN_SPAWN_INTERVAL` seconds, so
+/// the field refills over time rather than instantly or emptying out.
+fn maintain_fuel_cans(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut spawner: ResMut<FuelSpawner>,
+    assets: Res<FuelCanAssets>,
+    q_cans: Query<(), With<FuelCan>>,
+) {
+    if q_cans.iter().count() >= FUEL_CAN_TARGET {
+        // At target: hold the timer primed so the next drop waits a full interval.
+        spawner.timer = FUEL_CAN_SPAWN_INTERVAL;
+        return;
+    }
+    spawner.timer -= time.delta_secs();
+    if spawner.timer > 0.0 {
+        return;
+    }
+    let mut rng = rand::rng();
+    spawn_fuel_can(&mut commands, &assets, random_fuel_can_pos(&mut rng));
+    spawner.timer = FUEL_CAN_SPAWN_INTERVAL;
+}
+
+/// Restore fuel from a collected can, capped at the starting tank so the `%`
+/// gauge never exceeds 100. Pure, unit-tested below.
+fn add_fuel(current: f32, amount: f32) -> f32 {
+    (current + amount).min(START_FUEL)
+}
+
+/// Count the run timer up while the ship is flying.
+fn tick_run_timer(time: Res<Time>, mut timer: ResMut<RunTimer>) {
+    timer.0 += time.delta_secs();
+}
+
+/// Collect any fuel can the ship flies through: restore fuel (capped at the
+/// starting tank so the `%` gauge stays sane), chirp, and float a "+FUEL" popup.
+fn collect_fuel_cans(
+    mut commands: Commands,
+    mut fuel: ResMut<Fuel>,
+    sfx: Res<SfxAssets>,
+    q_ship: Query<&Transform, With<Ship>>,
+    q_cans: Query<(Entity, &Transform), With<FuelCan>>,
+    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+) {
+    let Ok(ship) = q_ship.single() else {
+        return;
+    };
+    for (can, transform) in q_cans.iter() {
+        if ship.translation.distance(transform.translation) > FUEL_CAN_PICKUP_RADIUS {
+            continue;
+        }
+        commands.entity(can).despawn();
+        fuel.0 = add_fuel(fuel.0, FUEL_CAN_AMOUNT);
+        commands.trigger(PlaySfx::new(sfx.pickup.clone()).with_volume(0.8));
+
+        // Float a "+FUEL" popup at the can's screen position (skip if off-screen
+        // or behind the camera).
+        if let Ok((camera, cam_transform)) = q_camera.single() {
+            if let Ok(viewport_pos) = camera.world_to_viewport(cam_transform, transform.translation)
+            {
+                spawn_floating_text(
+                    &mut commands,
+                    viewport_pos,
+                    "+FUEL",
+                    30.0,
+                    Color::srgb(0.6, 1.0, 0.7),
+                );
+            }
+        }
+    }
+}
+
+/// Hover the diegetic guide arrow above the ship and point it along the ship's
+/// ground track toward the pad, so the player always knows which way to steer.
+fn update_guide_arrow(
+    pad: Res<LandingPad>,
+    q_ship: Query<&Transform, (With<Ship>, Without<GuideArrow>)>,
+    mut q_arrow: Query<&mut Transform, (With<GuideArrow>, Without<Ship>)>,
+) {
+    let Ok(ship) = q_ship.single() else {
+        return;
+    };
+    let Ok(mut arrow) = q_arrow.single_mut() else {
+        return;
+    };
+    let up = ship.translation.normalize_or(Vec3::Y);
+    // Horizontal (tangent-plane) direction from the ship toward the pad; when the
+    // ship is directly over the pad this collapses to `up` (arrow points up).
+    let to_pad = pad.pos - ship.translation;
+    let tangent = (to_pad - up * to_pad.dot(up)).normalize_or(up);
+    arrow.translation = ship.translation + up * GUIDE_ARROW_HEIGHT;
+    // The cone's axis is +Y; aim it along the tangent so it points to the pad.
+    arrow.rotation = Quat::from_rotation_arc(Vec3::Y, tangent);
+}
+
+/// Spawn a floating "+FUEL" popup at a viewport position, scoped to `Playing`.
+/// It rises and fades via `animate_floating_text`. Ported from `07_orbit`.
+fn spawn_floating_text(
+    commands: &mut Commands,
+    viewport_pos: Vec2,
+    text: impl Into<String>,
+    size: f32,
+    color: Color,
+) {
+    commands.spawn((
+        Name::new("Floating Text"),
+        FloatingText {
+            age: 0.0,
+            lifetime: POPUP_LIFETIME,
+            rise_speed: POPUP_RISE_SPEED,
+            color,
+        },
+        DespawnOnExit(GameState::Playing),
+        Text::new(text.into()),
+        TextFont {
+            font_size: FontSize::Px(size),
+            ..default()
+        },
+        TextColor(color),
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(viewport_pos.x),
+            top: Val::Px(viewport_pos.y),
+            ..default()
+        },
+    ));
+}
+
+/// Advance floating popups: rise up the screen, fade out, and despawn at the end
+/// of their lifetime. Ported from `07_orbit`.
+fn animate_floating_text(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut q_text: Query<(Entity, &mut FloatingText, &mut Node, &mut TextColor)>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut floating, mut node, mut text_color) in q_text.iter_mut() {
+        floating.age += dt;
+        if floating.age >= floating.lifetime {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        if let Val::Px(top) = node.top {
+            node.top = Val::Px(top - floating.rise_speed * dt);
+        }
+        let alpha = 1.0 - floating.age / floating.lifetime;
+        text_color.0 = floating.color.with_alpha(alpha);
+    }
+}
+
 // --- Playing: landing / crash ----------------------------------------------
 
 fn resolve_landing(
     mut collisions: MessageReader<CollisionStart>,
     q_ship: Query<(Entity, &Transform, &ApproachSpeed), With<Ship>>,
     fuel: Res<Fuel>,
+    pad: Res<LandingPad>,
+    timer: Res<RunTimer>,
     sfx: Res<SfxAssets>,
+    mut shake: ResMut<CameraShake>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut outcome: ResMut<Outcome>,
     mut next: ResMut<NextState<GameState>>,
     mut commands: Commands,
@@ -883,9 +1380,20 @@ fn resolve_landing(
     let speed = approach.0;
     let up = transform.translation.normalize_or(Vec3::Y);
     let tilt = (transform.rotation * Vec3::Y).angle_between(up);
+    // Great-circle surface distance from the touchdown point to the pad centre.
+    let pad_dist = up.angle_between(pad.dir) * PLANET_BASE_RADIUS;
+
+    // Kick up dust at the contact patch (just under the hull) either way.
+    spawn_dust(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        transform.translation - up * 0.8,
+        up,
+    );
 
     if speed <= LAND_SPEED_MAX && tilt <= LAND_TILT_MAX {
-        let score = landing_score(fuel.0, speed, tilt);
+        let score = landing_score(fuel.0, speed, tilt, pad_dist, timer.0);
         outcome.0 = Some(Landing {
             landed: true,
             score,
@@ -893,6 +1401,16 @@ fn resolve_landing(
             tilt,
         });
         commands.play_sfx(sfx.land.clone());
+        shake.trauma = (shake.trauma + LAND_TRAUMA).min(1.0);
+        // Freeze the hull where it touched down so it stays visibly parked on
+        // the pad through the result screen (it has no DespawnOnExit, so it
+        // survives the state change; `despawn_ships` clears it on leaving
+        // Result). Static + zeroed velocity stops any post-contact drift.
+        commands.entity(ship).insert((
+            RigidBody::Static,
+            LinearVelocity::default(),
+            AngularVelocity::default(),
+        ));
     } else {
         outcome.0 = Some(Landing {
             landed: false,
@@ -901,22 +1419,109 @@ fn resolve_landing(
             tilt,
         });
         // Break the hull apart. The `on_fragments_spawned` observer turns the
-        // slices into flying debris; the shell despawns with the Playing state.
-        commands.entity(ship).insert(ExplodeMesh {
-            fragment_count: FRAGMENT_COUNT,
-        });
+        // slices into flying debris; DespawnOnExit(Playing) here removes the
+        // shell as the state changes to Result, after the fragments spawn.
+        commands.entity(ship).insert((
+            ExplodeMesh {
+                fragment_count: FRAGMENT_COUNT,
+            },
+            DespawnOnExit(GameState::Playing),
+        ));
         commands.play_sfx(sfx.crash.clone());
+        shake.trauma = (shake.trauma + CRASH_TRAUMA).min(1.0);
     }
 
     next.set(GameState::Result);
 }
 
-/// Reward a gentle, upright, fuel-efficient touchdown.
-fn landing_score(fuel: f32, speed: f32, tilt: f32) -> i32 {
+/// Reward a gentle, upright, fuel-efficient touchdown, landed near the pad and
+/// flown briskly. Pure function, unit-tested below.
+fn landing_score(fuel: f32, speed: f32, tilt: f32, pad_dist: f32, run_time: f32) -> i32 {
     let fuel_bonus = fuel * 3.0;
     let soft_bonus = (LAND_SPEED_MAX - speed).max(0.0) * 40.0;
     let level_bonus = (LAND_TILT_MAX - tilt).max(0.0) * 200.0;
-    (100.0 + fuel_bonus + soft_bonus + level_bonus).round() as i32
+    // Closer to the pad centre is worth more, fading linearly to zero at the
+    // reward radius; nothing beyond it.
+    let proximity_bonus = (1.0 - pad_dist / PAD_REWARD_RADIUS).max(0.0) * PAD_PROXIMITY_MAX;
+    // A brisk descent earns a bonus that fades to zero at par time; a slower
+    // landing just gets none (never negative), so care is not punished.
+    let time_bonus = ((PAR_TIME - run_time) / PAR_TIME).clamp(0.0, 1.0) * TIME_BONUS_MAX;
+    (100.0 + fuel_bonus + soft_bonus + level_bonus + proximity_bonus + time_bonus).round() as i32
+}
+
+/// Kick up a short-lived puff of dust particles at a contact point, biased
+/// outward along the surface normal. Reuses the `FragmentMotion` integrator
+/// (`move_fragments`) and `helpers/temp` for auto-despawn, exactly like the
+/// crash debris, so no new machinery is needed.
+fn spawn_dust(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    at: Vec3,
+    up: Vec3,
+) {
+    let material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.62, 0.57, 0.5),
+        perceptual_roughness: 1.0,
+        ..default()
+    });
+    let mesh = meshes.add(Sphere::new(0.18));
+    let mut rng = rand::rng();
+    for _ in 0..DUST_COUNT {
+        let scatter = Vec3::new(
+            rng.random_range(-1.0..1.0),
+            rng.random_range(-1.0..1.0),
+            rng.random_range(-1.0..1.0),
+        );
+        let dir = (up + scatter * 0.8).normalize_or(up);
+        commands.spawn((
+            Name::new("Dust"),
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(material.clone()),
+            Transform::from_translation(at),
+            FragmentMotion {
+                velocity: dir * rng.random_range(2.0..5.0),
+                spin: Vec3::ZERO,
+            },
+            TempEntity(DUST_LIFETIME),
+        ));
+    }
+}
+
+/// Despawn the parked hull (from a soft landing) and the pad beacon when leaving
+/// the result screen, before the next run rolls and spawns fresh ones.
+fn cleanup_run_scene(mut commands: Commands, q_scene: Query<Entity, Or<(With<Ship>, With<Pad>)>>) {
+    for entity in q_scene.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+/// Jolt the camera by a decaying random offset while trauma is positive. Runs
+/// after the chase camera writes its transform (PostUpdate), so the offset is
+/// additive; the next chase sync overwrites translation, so it never
+/// accumulates. Ported from `07_orbit`.
+fn apply_camera_shake(
+    time: Res<Time>,
+    mut shake: ResMut<CameraShake>,
+    mut q_camera: Query<&mut Transform, With<MainCamera>>,
+) {
+    shake.trauma = (shake.trauma - SHAKE_DECAY * time.delta_secs()).max(0.0);
+    // Square the trauma so small residual energy fades to nothing quickly.
+    let amount = shake.trauma * shake.trauma;
+    if amount <= 0.0 {
+        return;
+    }
+    let Ok(mut transform) = q_camera.single_mut() else {
+        return;
+    };
+    let mut rng = rand::rng();
+    let offset = Vec3::new(
+        rng.random_range(-1.0..1.0),
+        rng.random_range(-1.0..1.0),
+        rng.random_range(-1.0..1.0),
+    ) * SHAKE_MAX_OFFSET
+        * amount;
+    transform.translation += offset;
 }
 
 /// Turn each mesh slice into an independent flying fragment (see `05_explode`).
@@ -1057,5 +1662,105 @@ fn result_input(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<Game
         next.set(GameState::Playing);
     } else if keys.just_pressed(KeyCode::Escape) {
         next.set(GameState::Menu);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A perfect touchdown: full tank, dead stop, upright, dead centre on the
+    /// pad, instant. It beats an identical flight that lands one reward-radius
+    /// away and at par time by exactly the proximity + time bonus it forgoes.
+    #[test]
+    fn landing_score_bullseye_beats_a_far_slow_landing() {
+        let bullseye = landing_score(START_FUEL, 0.0, 0.0, 0.0, 0.0);
+        let far_slow = landing_score(START_FUEL, 0.0, 0.0, PAD_REWARD_RADIUS, PAR_TIME);
+        assert!(
+            bullseye > far_slow,
+            "a bullseye ({bullseye}) should beat a far, slow landing ({far_slow})"
+        );
+        let expected_gap = (PAD_PROXIMITY_MAX + TIME_BONUS_MAX).round() as i32;
+        assert_eq!(bullseye - far_slow, expected_gap);
+    }
+
+    /// Collecting a can tops fuel up but never overfills past the starting tank,
+    /// so the `%` gauge stays in range.
+    #[test]
+    fn add_fuel_caps_at_the_starting_tank() {
+        assert_eq!(add_fuel(50.0, FUEL_CAN_AMOUNT), 50.0 + FUEL_CAN_AMOUNT);
+        assert_eq!(add_fuel(START_FUEL - 5.0, FUEL_CAN_AMOUNT), START_FUEL);
+        assert_eq!(add_fuel(START_FUEL, FUEL_CAN_AMOUNT), START_FUEL);
+    }
+
+    /// The proximity bonus decays to zero at the reward radius and never goes
+    /// negative past it (landing far away simply forgoes the bonus).
+    #[test]
+    fn pad_proximity_bonus_clamps_at_the_reward_radius() {
+        let at_edge = landing_score(
+            0.0,
+            LAND_SPEED_MAX,
+            LAND_TILT_MAX,
+            PAD_REWARD_RADIUS,
+            PAR_TIME,
+        );
+        let way_past = landing_score(
+            0.0,
+            LAND_SPEED_MAX,
+            LAND_TILT_MAX,
+            PAD_REWARD_RADIUS * 4.0,
+            PAR_TIME,
+        );
+        // Both forgo every optional bonus, so both are the flat base score.
+        assert_eq!(at_edge, 100);
+        assert_eq!(way_past, 100);
+    }
+
+    /// A slower-than-par landing is never punished: its time bonus floors at
+    /// zero rather than going negative.
+    #[test]
+    fn time_bonus_never_penalizes_a_slow_landing() {
+        let at_par = landing_score(START_FUEL, 0.0, 0.0, 0.0, PAR_TIME);
+        let well_over_par = landing_score(START_FUEL, 0.0, 0.0, 0.0, PAR_TIME * 3.0);
+        assert_eq!(at_par, well_over_par);
+    }
+
+    /// Randomly generated fuel cans are always finite, sit above the surface
+    /// (never buried), and stay within the reachable descent cap above the pole.
+    #[test]
+    fn random_fuel_cans_are_reachable_and_above_the_surface() {
+        let mut rng = rand::rng();
+        let surface = PLANET_BASE_RADIUS * (1.0 + TERRAIN_AMPLITUDE as f32);
+        for _ in 0..200 {
+            let pos = random_fuel_can_pos(&mut rng);
+            assert!(pos.is_finite());
+            assert!(
+                pos.length() > surface,
+                "fuel can at r={} should clear the surface r={surface}",
+                pos.length()
+            );
+            // Inside the descent cap: polar angle from +Y within the spread.
+            let polar = pos.normalize().angle_between(Vec3::Y);
+            assert!(
+                polar <= FUEL_CAN_SPREAD + 1e-4,
+                "fuel can polar angle {polar} should be within the spread"
+            );
+        }
+    }
+
+    /// The pad is rolled inside the reachable band around the pole, always a
+    /// unit direction and never at the exact spawn point or the antipode.
+    #[test]
+    fn random_pad_dir_stays_in_the_reachable_band() {
+        let mut rng = rand::rng();
+        for _ in 0..200 {
+            let dir = random_cap_dir(&mut rng, PAD_ANGLE_MIN, PAD_ANGLE_MAX);
+            assert!((dir.length() - 1.0).abs() < 1e-4, "pad dir must be unit");
+            let polar = dir.angle_between(Vec3::Y);
+            assert!(
+                (PAD_ANGLE_MIN - 1e-4..=PAD_ANGLE_MAX + 1e-4).contains(&polar),
+                "pad polar angle {polar} should be in [{PAD_ANGLE_MIN}, {PAD_ANGLE_MAX}]"
+            );
+        }
     }
 }
