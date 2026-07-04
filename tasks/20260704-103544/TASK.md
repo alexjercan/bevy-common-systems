@@ -1,6 +1,6 @@
 # 08_dropzone: Tier-A fun pass (landing pad, fuel pickups, landing/crash visuals)
 
-- STATUS: OPEN
+- STATUS: IN_PROGRESS
 - PRIORITY: 5
 - TAGS: feature,dropzone
 
@@ -30,14 +30,14 @@ here (that is `tasks/20260704-103553`); no touch controls here (that is
 
 ## Steps
 
-- [ ] A1 -- landing pad + positional score. Spawn a glowing landing-pad / beacon
+- [x] A1 -- landing pad + positional score. Spawn a glowing landing-pad / beacon
       marker on the surface (reuse the `07_orbit` glowing-marker look). Add a
       `proximity_bonus = (pad_radius - touchdown_dist).max(0) * k` term to the
       landing score so landing on/near the pad scores more than landing
       anywhere. Show the pad clearly (beacon + optional HUD direction hint).
       Decision to make + note: single pad vs a few; how "distance" is measured
       (great-circle on the surface vs straight-line).
-- [ ] A2 -- fuel pickups (fuel cans). Spawn a small set of floating fuel cells on
+- [x] A2 -- fuel pickups (fuel cans). Spawn a small set of floating fuel cells on
       the descent path, placed slightly OFF the efficient line so grabbing one
       trades altitude/control for fuel (a real risk/reward routing choice, not
       free candy). Detect fly-through (avian sensor collider or a simple
@@ -45,11 +45,11 @@ here (that is `tasks/20260704-103553`); no touch controls here (that is
       overfill -- note the choice), play the existing `pickup` sound, and pop a
       rising "+FUEL" popup (reuse the `07_orbit` "+N" pattern via `helpers/temp`
       + `ui`).
-- [ ] A3 (optional, cheap) -- efficiency/time term. A visible descent timer or
+- [x] A3 (optional, cheap) -- efficiency/time term. A visible descent timer or
       "descent score" that gently rewards committing to a line instead of
       hovering; one resource + one `ui/status` line. Skip if it muddies the
       scoring; note the decision either way.
-- [ ] A4 -- landing + crash visuals (juice). Make the outcome legible:
+- [x] A4 -- landing + crash visuals (juice). Make the outcome legible:
       - On a good landing, the ship visibly stays put / "sticks" on the pad
         (kill residual motion, maybe a small settle + a landing flash/dust
         puff), rather than the game just cutting to the Result screen.
@@ -58,7 +58,7 @@ here (that is `tasks/20260704-103553`); no touch controls here (that is
         fragment system, maybe a soft dust puff even on a good touchdown).
       - Reuse `camera/post` bloom, `mesh/explode`, `helpers/temp`, `audio`; this
         is the `07_orbit` polish template (`feature/07-orbit-polish`).
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test`,
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test`,
       `./scripts/check-ascii.sh`, then actually RUN the example (not just build:
       AGENTS.md gotcha) and confirm it reaches the render loop and each new
       mechanic works (pad scores, pickup adds fuel, land sticks, crash
@@ -77,3 +77,30 @@ here (that is `tasks/20260704-103553`); no touch controls here (that is
   integration test, stay wasm-friendly, plain ASCII.
 - Supersedes the earlier combined follow-up `tasks/20260704-102342` (now split
   into this + hazards + mobile tasks).
+
+## Close-out
+
+Implemented all four Tier-A items on branch `feature/08-dropzone-fun`
+(`examples/08_dropzone.rs`), documented in
+`docs/2026-07-04-dropzone-tier-a-fun.md`:
+
+- A1 landing pad: emissive ring+beacon placed flush on the real terrain
+  (evaluates the same noise the mesh uses); `proximity_bonus` in `landing_score`
+  by great-circle distance; live "pad Nm" HUD hint. Single pad (decision noted).
+- A2 fuel cans: 3 emissive canisters off the descent line; distance-check
+  pickup; fuel capped at `START_FUEL` (decision noted); `pickup.wav` + a "+FUEL"
+  floating popup ported from `07_orbit`.
+- A3 timer: "t Ns" HUD + a `time_bonus` that never penalises a slow landing.
+- A4 juice: dust puff (reusing `FragmentMotion`/`move_fragments` + `helpers/temp`)
+  and a camera punch (`07_orbit` `CameraShake`, applied after
+  `ChaseCameraSystems::Sync`); a soft landing freezes the hull (`RigidBody::Static`)
+  and keeps it visible on the result screen. Crash keeps its proven
+  spawn-fragments-then-`DespawnOnExit(Playing)` ordering.
+
+Verified: 4 new in-module unit tests pass; fmt/clippy(--all-targets)/ascii
+clean; ran the example (reaches render loop), and a temporary env-gated
+autopilot (since removed) flew 741 physics frames to a clean soft landing
+(score 497) with no gameplay panic. Web showcase rebuilt via `npm run build`.
+
+Scope held: physics/PD/gravity and the state-machine shape untouched; no
+out-of-scope mechanics (upgrades, cargo, multi-leg, extra pickups) added.
