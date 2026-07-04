@@ -92,6 +92,26 @@ unified mouse+touch pointer, and the same wasm/trunk web build.
   confirmed the full loop. Lesson: the two harness plugins are mutually
   exclusive; use one or the other per run.
 
+## Post-merge fixes
+
+Two control bugs the user hit playing the merged build, fixed on
+`fix/12-bastion-orbit-upgrade`:
+
+- **Orbit did nothing.** `orbit_camera` wrote `PointRotationInput` and read
+  `PointRotationOutput` (for the pitch clamp) but never copied the output
+  quaternion onto the rig's `Transform.rotation` -- and `PointRotationPlugin`
+  only maintains the Output component, it does not touch the Transform. So the
+  pivot stayed at identity and neither A/D nor drag moved the camera. Fixed by
+  adding `&mut Transform` to the rig query and `transform.rotation = out.0`. This
+  slipped through the original cycle because verification confirmed "no panic +
+  towers/enemies present" but never confirmed the view actually *rotated* -- a
+  proxy check, not the real behavior.
+- **Upgrade was unreachable.** A tap only selected a tower when *not* in build
+  mode, so after building you had to press Q before U would do anything, and the
+  HUD gave no hint. Now a real tap on an existing tower selects it in any mode
+  (Space stays pure placement), and the HUD's second line shows the selected
+  tower, its level, and `press U to upgrade (Nc)`.
+
 ## Verification
 
 - `cargo clippy --all-targets` and `--features debug`: clean.

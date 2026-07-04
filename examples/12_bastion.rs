@@ -729,12 +729,25 @@ fn orbit_camera(
     keys: Res<ButtonInput<KeyCode>>,
     pointer: Res<UnifiedPointer>,
     mut drag: ResMut<DragState>,
-    mut q_rig: Query<(&PointRotationOutput, &mut PointRotationInput), With<CameraRig>>,
+    mut q_rig: Query<
+        (
+            &PointRotationOutput,
+            &mut PointRotationInput,
+            &mut Transform,
+        ),
+        With<CameraRig>,
+    >,
 ) {
-    let Ok((out, mut input)) = q_rig.single_mut() else {
+    let Ok((out, mut input, mut transform)) = q_rig.single_mut() else {
         return;
     };
     let dt = time.delta_secs();
+
+    // Apply the accumulated orbit rotation to the pivot. `PointRotationPlugin`
+    // integrates `PointRotationInput` into `PointRotationOutput` (a Quat) in
+    // PostUpdate but never touches the Transform, so the example must copy it
+    // across; without this the camera never actually orbits.
+    transform.rotation = out.0;
 
     let mut yaw = 0.0;
     let mut pitch = 0.0;
@@ -927,13 +940,16 @@ fn spawn_hud(mut commands: Commands) {
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_hud(
     credits: Res<Credits>,
     score: Res<Score>,
     wave: Res<WaveState>,
     combo: Res<Combo>,
     build: Res<Build>,
+    selection: Res<Selection>,
     q_core: Query<&Health, With<Core>>,
+    q_towers: Query<&Tower>,
     mut q_text: Query<&mut Text, With<HudText>>,
 ) {
     let Ok(mut text) = q_text.single_mut() else {
@@ -941,15 +957,36 @@ fn update_hud(
     };
     let integrity = q_core.single().map(|h| h.current).unwrap_or(0.0);
     let specs = tower_specs();
-    let build_line = match build.spec {
-        Some(i) => format!("Building: {} ({}c)", specs[i].name, specs[i].cost),
-        None => "1/2 pick a tower".to_string(),
-    };
     let combo_line = if combo.0.count() >= 2 {
         format!("   COMBO x{}", combo.0.count())
     } else {
         String::new()
     };
+
+    // Second line: what a tap does right now -- upgrade a selected tower, place an
+    // armed tower, or the default hint.
+    let action_line = match selection.tower.and_then(|e| q_towers.get(e).ok()) {
+        Some(tower) => {
+            let cost = upgrade_cost(tower.spec, tower.level);
+            let affordable = if **credits >= cost {
+                ""
+            } else {
+                " -- need more"
+            };
+            format!(
+                "Selected {} Lv{}   press U to upgrade ({}c){}",
+                specs[tower.spec].name, tower.level, cost, affordable,
+            )
+        }
+        None => match build.spec {
+            Some(i) => format!(
+                "Building {} ({}c) -- tap the ground to place, or tap a tower to select",
+                specs[i].name, specs[i].cost,
+            ),
+            None => "1/2 pick a tower to build, or tap a tower to select".to_string(),
+        },
+    };
+
     text.0 = format!(
         "Core {:.0}%   Credits {}   Wave {}   Score {}{}\n{}",
         (integrity / CORE_HEALTH * 100.0).max(0.0),
@@ -957,7 +994,7 @@ fn update_hud(
         wave.number,
         **score,
         combo_line,
-        build_line,
+        action_line,
     );
 }
 
@@ -1228,7 +1265,24 @@ fn place_or_select(
         return;
     };
 
-    // If a tower type is armed, try to place.
+    // A real tap (not the Space keyboard-place path) landing on an existing tower
+    // always selects it -- even while a tower type is armed -- so upgrading is
+    // reachable without first pressing Q to leave build mode.
+    if drag.released_tap {
+        let mut nearest: Option<(Entity, f32)> = None;
+        for (e, t) in q_towers.iter() {
+            let d = t.translation.distance(point);
+            if d < 1.4 && nearest.map(|(_, bd)| d < bd).unwrap_or(true) {
+                nearest = Some((e, d));
+            }
+        }
+        if let Some((e, _)) = nearest {
+            selection.tower = Some(e);
+            return;
+        }
+    }
+
+    // Otherwise, if a tower type is armed, try to place one at the point.
     if let Some(spec_idx) = build.spec {
         let towers: Vec<Vec3> = q_towers.iter().map(|(_, t)| t.translation).collect();
         let specs = tower_specs();
@@ -1245,15 +1299,10 @@ fn place_or_select(
         return;
     }
 
-    // Otherwise, a tap selects the nearest tower to the pointed spot (if close).
-    let mut best: Option<(Entity, f32)> = None;
-    for (e, t) in q_towers.iter() {
-        let d = t.translation.distance(point);
-        if d < 1.4 && best.map(|(_, bd)| d < bd).unwrap_or(true) {
-            best = Some((e, d));
-        }
+    // A tap on empty ground with nothing armed clears any selection.
+    if drag.released_tap {
+        selection.tower = None;
     }
-    selection.tower = best.map(|(e, _)| e);
 }
 
 /// Spawn a tower: a base body plus a turret child carrying `SmoothLookRotation`.
