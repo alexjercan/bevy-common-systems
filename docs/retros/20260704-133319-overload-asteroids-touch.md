@@ -38,10 +38,11 @@ for what was built. This is about how the cycle went.
   `/work` isolate each task with `sprout`, whose worktrees live under
   `~/.cache/sprouts`, but the background-session guard only accepts worktrees
   under `.claude/worktrees/`. Disabling the guard was (correctly) denied by the
-  self-modification classifier. Resolution: run the whole cycle in one
-  `EnterWorktree` worktree with a commit per task, executing the work/review/retro
-  phases inline rather than via the sprout-spawning sub-skills. Worked, but it is
-  a real seam between the /flow design and bg-session isolation.
+  self-modification classifier. Resolution: run the whole cycle in one worktree
+  under `.claude/worktrees/` (use the sprout skill), with a commit per task,
+  executing the work/review/retro phases inline rather than via the sprout-spawning
+  sub-skills. Worked, but it is a real seam between the /flow design and bg-session
+  isolation.
 - `tatr new` collided on same-second IDs: two `tatr new` calls in the same second
   returned the same ID, silently overwriting the first task with the second's
   title, leaving two identical tasks and no overload task. Had to delete and
@@ -57,9 +58,10 @@ for what was built. This is about how the cycle went.
 ## What to improve next time
 
 - When a bg session must run a sprout-based skill (`/flow`, `/work`), decide the
-  isolation strategy first: either `EnterWorktree` up front and run the phases
-  inline (what worked here), or get explicit user opt-in to relax the guard. Do
-  not discover the collision at the first file edit.
+  isolation strategy first: either set up a worktree under `.claude/worktrees/` up
+  front (use the sprout skill) and run the phases inline (what worked here), or get
+  explicit user opt-in to relax the guard. Do not discover the collision at the
+  first file edit.
 - Batch `tatr new` calls with a small delay (or create sequentially and verify
   each ID) so same-second collisions cannot silently drop a task.
 - For a "make X playable on Y" goal, the survey-first habit is the win: prove
@@ -73,6 +75,7 @@ for what was built. This is about how the cycle went.
   and button feel, and the asteroids/overload touch responsiveness, want a pass on
   a real phone / browser touch-emulator -- same untuned-constants caveat the
   dropzone touch cycle left open. Group with that follow-up if one is filed.
-- [ ] Consider an AGENTS.md note that bg sessions cannot use sprout worktrees
-  (guard requires `.claude/worktrees/`), so /flow in a bg session should
-  `EnterWorktree` and run phases inline.
+- [ ] Consider an AGENTS.md note that bg sessions cannot use sprout's default
+  cache-dir worktrees (guard requires `.claude/worktrees/`), so /flow in a bg
+  session should set up a worktree under `.claude/worktrees/` (use the sprout
+  skill) and run phases inline.

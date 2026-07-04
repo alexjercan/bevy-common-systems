@@ -28,12 +28,12 @@ is about how the porting cycle went, not the diff (see TASK.md Resolution).
 
 ## What went wrong
 
-- Hit the `fresh`-worktree base pitfall again: my first `EnterWorktree name=...`
-  branched from `origin/master`, which lacks the unpushed camera/shake module, so
-  the worktree had no `src/camera/shake.rs` to port onto. Root cause: used the
-  name-form (origin base) when the work depends on unpushed local commits. Already
-  documented in memory from last cycle; I still reached for the wrong form first.
-  Fixed by `git worktree add ... HEAD` + `EnterWorktree path=`.
+- Hit the `fresh`-worktree base pitfall again: my first worktree branched from
+  `origin/master`, which lacks the unpushed camera/shake module, so the worktree had
+  no `src/camera/shake.rs` to port onto. Root cause: took the origin-base form when
+  the work depends on unpushed local commits. Already documented in memory from last
+  cycle; I still reached for the wrong form first. Fixed by `git worktree add ...
+  HEAD` + entering that worktree by path (use the sprout skill, based on local HEAD).
 - A subagent left a formatting artifact (a stray blank line where it deleted 07's
   test), caught by `cargo fmt --check` at the combined step. Harmless but avoidable:
   the port agents were told to build and clippy their file, not to `cargo fmt` it.
@@ -41,9 +41,10 @@ is about how the porting cycle went, not the diff (see TASK.md Resolution).
 ## What to improve next time
 
 - For a background worktree that must build on unpushed local commits, always
-  create it with `git worktree add <path> -b <branch> HEAD` and `EnterWorktree
-  path=<path>` -- never the `name=` form, which branches from origin and will be
-  missing the local work. (Standing rule now; it has bitten two cycles.)
+  create it from local HEAD (`git worktree add <path> -b <branch> HEAD`, or the
+  sprout skill based on HEAD) and enter it by path -- never an origin-based form,
+  which branches from origin and will be missing the local work. (Standing rule now;
+  it has bitten two cycles.)
 - When dispatching parallel edit subagents, tell them to run `cargo fmt` on their
   file before reporting, not just build/clippy. Formatting is cheap for them and
   saves a parent-side fixup.
