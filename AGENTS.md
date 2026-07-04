@@ -337,8 +337,13 @@ Examples:
   juggling act. While any gauge sits red the reactor's `Health` drains
   (`HealthApplyDamage` -> `HealthZeroMarker` ends the run) and an alarm beeps;
   difficulty ramps the climb rates over time. No 3D scene -- renders with a plain
-  `Camera2d`. Grows out of `04_status_item`, follows the `06_fruitninja` shape
-  (states, sounds, wasm). See `docs/2026-07-04-overload-example.md`.
+  `Camera2d`. Touch-playable like `08_dropzone`: an on-screen vent pad (a bottom
+  strip of four buttons, revealed on first touch) lets a phone tap-vent, and the
+  menu/meltdown screens take a tap; touch is an additive writer of the same
+  `apply_vent` path, keyboard unchanged. Grows out of `04_status_item`, follows
+  the `06_fruitninja` shape (states, sounds, wasm). See
+  `docs/2026-07-04-overload-example.md` and
+  `docs/2026-07-04-overload-touch-controls.md`.
 
 ## Workflow
 
@@ -401,6 +406,23 @@ Examples:
   (`tasks/20260703-213510`, `tasks/20260704-103544`). A hard `std::process::exit`
   in that harness segfaults on wgpu teardown -- harmless, but do not mistake it
   for a game crash.
+- Seeing the screen (do not treat "a background run cannot see the screen" as a
+  hard limit): when `$DISPLAY` is set, a background session CAN screenshot the
+  running app and verify the visual layer. `scrot` and ImageMagick `import` grab
+  the root window; `xdotool` (via `nix run nixpkgs#xdotool` when not on PATH)
+  finds/moves the app window so you can crop it precisely (`magick IN -crop
+  WxH+X+Y +repage OUT`), and `import`/`Read` the PNG to actually look. To capture
+  a specific state or viewport, add a TEMPORARY env-gated harness (same pattern
+  as the gameplay autopilot): force a window size with
+  `Window { resolution: WindowResolution::new(w, h), resizable: false, .. }` and
+  auto-advance the state machine, screenshot, then remove the harness before
+  commit. This caught a real 09_reactor layout regression -- at phone width four
+  of six shop buttons rendered below the fold, invisible to `cargo build`,
+  clippy and the boot check but obvious in a screenshot
+  (`docs/retros/20260704-143000-reactor-overload-mobile-touch.md`). For a
+  responsive Bevy 0.19 grid that must hold N columns at any width, use percentage
+  item widths, not fixed px + `flex_wrap` (flexbox wraps before it shrinks, so
+  fixed-px cards collapse to one column on a narrow frame).
 - Verifying builds: never judge a build/command by a piped `| tail`'s exit
   code -- the pipe reports `tail`'s status, so a failed `cargo build | tail`
   looks like it passed. Redirect to a file and check `$?` when pass/fail

@@ -759,16 +759,21 @@ fn pulse_menu_title(time: Res<Time>, mut q: Query<&mut TextColor, With<MenuTitle
     }
 }
 
-/// Any click or key press begins a run. Reading input here also satisfies the
-/// browser's audio-unlock gesture so the first sound plays on the web build.
+/// Any click, tap or key press begins a run. Reading input here also satisfies
+/// the browser's audio-unlock gesture so the first sound plays on the web build.
+/// The `touches` read makes the menu tappable on a phone: winit-on-web delivers
+/// taps as `Touch` events with no synthesized `MouseButton::Left`.
 fn menu_start(
     mut commands: Commands,
     sfx: Res<SfxAssets>,
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
+    touches: Res<Touches>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    let pressed = mouse.just_pressed(MouseButton::Left) || keys.get_just_pressed().next().is_some();
+    let pressed = mouse.just_pressed(MouseButton::Left)
+        || keys.get_just_pressed().next().is_some()
+        || touches.any_just_pressed();
     if pressed {
         commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
         next.set(GameState::Playing);
@@ -810,8 +815,8 @@ fn start_run(
 
 fn button_node() -> Node {
     Node {
-        padding: UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
-        margin: UiRect::all(Val::Px(4.0)),
+        padding: UiRect::axes(Val::Px(14.0), Val::Px(7.0)),
+        margin: UiRect::all(Val::Px(3.0)),
         justify_content: JustifyContent::Center,
         align_items: AlignItems::Center,
         border: UiRect::all(Val::Px(2.0)),
@@ -833,34 +838,46 @@ fn spawn_hud(mut commands: Commands) {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
                 justify_content: JustifyContent::Start,
-                padding: UiRect::all(Val::Px(24.0)),
-                row_gap: Val::Px(14.0),
+                // Extra top padding clears the telemetry status bar overlay
+                // (top-right corner) so the centred readouts never collide with
+                // it on a narrow phone frame.
+                padding: UiRect {
+                    left: Val::Px(10.0),
+                    right: Val::Px(10.0),
+                    top: Val::Px(34.0),
+                    bottom: Val::Px(8.0),
+                },
+                row_gap: Val::Px(5.0),
                 ..default()
             },
         ))
         .with_children(|root| {
-            // Big resource readouts.
+            // Big resource readouts. `Wrap` lets the two stack on a very narrow
+            // (phone-portrait) viewport instead of clipping off the sides.
             root.spawn(Node {
                 flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(48.0),
+                flex_wrap: FlexWrap::Wrap,
+                justify_content: JustifyContent::Center,
+                column_gap: Val::Px(24.0),
                 ..default()
             })
             .with_children(|row| {
                 row.spawn((
                     Readout::Energy,
-                    screen_text("ENERGY 0", 34.0, Color::srgb(0.6, 0.95, 1.0)),
+                    screen_text("ENERGY 0", 23.0, Color::srgb(0.6, 0.95, 1.0)),
                 ));
                 row.spawn((
                     Readout::Credits,
-                    screen_text("CREDITS 0", 34.0, Color::srgb(0.95, 0.85, 0.25)),
+                    screen_text("CREDITS 0", 23.0, Color::srgb(0.95, 0.85, 0.25)),
                 ));
             });
 
             // Heat bar: a track with a coloured fill whose width tracks HEAT.
             root.spawn((
                 Node {
-                    width: Val::Px(520.0),
-                    height: Val::Px(28.0),
+                    width: Val::Percent(96.0),
+                    max_width: Val::Px(520.0),
+                    height: Val::Px(24.0),
                     border: UiRect::all(Val::Px(2.0)),
                     border_radius: BorderRadius::all(Val::Px(6.0)),
                     ..default()
@@ -881,14 +898,15 @@ fn spawn_hud(mut commands: Commands) {
             });
             root.spawn((
                 HeatLabel,
-                screen_text("HEAT 0 / 100", 20.0, heat_color(0.0)),
+                screen_text("HEAT 0 / 100", 14.0, heat_color(0.0)),
             ));
 
-            // Manual controls.
+            // Manual controls: two wide, thumb-sized buttons kept on one row.
             root.spawn(Node {
                 flex_direction: FlexDirection::Row,
-                column_gap: Val::Px(16.0),
-                margin: UiRect::top(Val::Px(6.0)),
+                justify_content: JustifyContent::Center,
+                column_gap: Val::Px(12.0),
+                margin: UiRect::top(Val::Px(2.0)),
                 ..default()
             })
             .with_children(|row| {
@@ -899,7 +917,7 @@ fn spawn_hud(mut commands: Commands) {
                     BackgroundColor(Color::srgb(0.16, 0.3, 0.4)),
                     BorderColor::all(Color::srgb(0.5, 0.8, 1.0)),
                 ))
-                .with_child(screen_text("TAP  (+energy)", 22.0, Color::WHITE));
+                .with_child(screen_text("TAP +energy", 17.0, Color::WHITE));
                 row.spawn((
                     SellButton,
                     Button,
@@ -907,24 +925,27 @@ fn spawn_hud(mut commands: Commands) {
                     BackgroundColor(Color::srgb(0.32, 0.28, 0.12)),
                     BorderColor::all(Color::srgb(1.0, 0.85, 0.3)),
                 ))
-                .with_child(screen_text(
-                    "SELL  (energy->credits)",
-                    22.0,
-                    Color::WHITE,
-                ));
+                .with_child(screen_text("SELL ->credits", 17.0, Color::WHITE));
             });
 
-            // Shop grid: one card per part.
+            // Shop grid: one card per part. Each card is a PERCENTAGE of the
+            // shop width, so the six always form a fixed two-column grid that
+            // fits the viewport at any frame width without scrolling -- a fixed
+            // pixel width instead wraps to one column on a narrow phone (flexbox
+            // wraps before it shrinks), pushing cards below the fold. Every card
+            // stays on screen and tappable, which matters on touch where the
+            // keyboard digit-buy fallback is not available.
             root.spawn((
                 Name::new("Shop"),
                 Node {
+                    width: Val::Percent(100.0),
                     flex_direction: FlexDirection::Row,
                     flex_wrap: FlexWrap::Wrap,
                     justify_content: JustifyContent::Center,
-                    max_width: Val::Px(760.0),
-                    column_gap: Val::Px(8.0),
-                    row_gap: Val::Px(8.0),
-                    margin: UiRect::top(Val::Px(12.0)),
+                    max_width: Val::Px(520.0),
+                    column_gap: Val::Px(6.0),
+                    row_gap: Val::Px(5.0),
+                    margin: UiRect::top(Val::Px(2.0)),
                     ..default()
                 },
             ))
@@ -934,10 +955,10 @@ fn spawn_hud(mut commands: Commands) {
                         ShopCard(idx),
                         Button,
                         Node {
-                            width: Val::Px(240.0),
+                            width: Val::Percent(48.0),
                             flex_direction: FlexDirection::Column,
-                            row_gap: Val::Px(4.0),
-                            padding: UiRect::all(Val::Px(10.0)),
+                            row_gap: Val::Px(2.0),
+                            padding: UiRect::all(Val::Px(6.0)),
                             border: UiRect::all(Val::Px(2.0)),
                             border_radius: BorderRadius::all(Val::Px(8.0)),
                             ..default()
@@ -948,13 +969,13 @@ fn spawn_hud(mut commands: Commands) {
                     .with_children(|card| {
                         card.spawn(screen_text(
                             format!("{}  {}", idx + 1, part.name),
-                            22.0,
+                            16.0,
                             Color::srgb(0.9, 0.95, 1.0),
                         ));
-                        card.spawn(screen_text(part.desc, 15.0, Color::srgb(0.7, 0.75, 0.85)));
+                        card.spawn(screen_text(part.desc, 10.0, Color::srgb(0.7, 0.75, 0.85)));
                         card.spawn((
                             ShopCardStatus(idx),
-                            screen_text("cost 0   x0", 17.0, Color::srgb(0.95, 0.85, 0.25)),
+                            screen_text("cost 0   x0", 13.0, Color::srgb(0.95, 0.85, 0.25)),
                         ));
                     });
                 }
@@ -1262,12 +1283,18 @@ fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
     commands.play_sfx_volume(sfx.game_over.clone(), 0.8);
 }
 
+/// A click, tap or key press on the game-over screen returns to the menu, so a
+/// phone can dismiss the meltdown without a keyboard (winit-on-web sends taps as
+/// `Touch` events, not `MouseButton::Left`).
 fn gameover_dismiss(
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
+    touches: Res<Touches>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    let pressed = mouse.just_pressed(MouseButton::Left) || keys.get_just_pressed().next().is_some();
+    let pressed = mouse.just_pressed(MouseButton::Left)
+        || keys.get_just_pressed().next().is_some()
+        || touches.any_just_pressed();
     if pressed {
         next.set(GameState::Menu);
     }
