@@ -124,11 +124,9 @@ const STREAK_WINDOW: f32 = 1.6;
 const PICKUP_PITCH_STEP: f32 = 0.07;
 const PICKUP_PITCH_MAX: f32 = 1.7;
 
-/// How long a floating "+N" / "STREAK xN" popup lives before it despawns, and
-/// how fast it rises up the screen (pixels per second). Ported from
-/// `06_fruitninja`'s popup feel.
-const POPUP_LIFETIME: f32 = 0.8;
-const POPUP_RISE_SPEED: f32 = 70.0;
+/// Upward screen speed (px/s) of the "STREAK xN" banner. Slower than the crate
+/// `Popup` default so a hot streak lingers a beat longer than a "+N".
+const STREAK_RISE_SPEED: f32 = 28.0;
 
 /// Camera-shake feel on a hazard hit. `trauma` is 0..1; it decays at
 /// `SHAKE_DECAY` per second and, squared, scales a random camera offset up to
@@ -187,6 +185,8 @@ fn main() {
     app.add_plugins(HealthPlugin);
     app.add_plugins(SfxPlugin);
     app.add_plugins(StatusBarPlugin);
+    // Floating "+N" / streak popups rise and fade via the crate's PopupPlugin.
+    app.add_plugins(PopupPlugin);
 
     app.init_state::<GameState>();
 
@@ -227,7 +227,6 @@ fn main() {
             blink_runner,
             fade_damage_flash,
             update_hud,
-            animate_floating_text,
             giveup_on_escape,
         )
             .run_if(in_state(GameState::Playing)),
@@ -364,20 +363,6 @@ struct HealthBarFill;
 /// Marker for the pulsing menu title.
 #[derive(Component)]
 struct MenuTitle;
-
-/// A short-lived UI text that rises and fades out (a "+N" pickup popup or a
-/// "STREAK xN" banner). Ported from `06_fruitninja`.
-#[derive(Component)]
-struct FloatingText {
-    /// Seconds since the popup was spawned.
-    age: f32,
-    /// Total lifetime in seconds; the popup despawns once `age` reaches it.
-    lifetime: f32,
-    /// Upward screen speed in pixels per second.
-    rise_speed: f32,
-    /// Base color; its alpha is ramped down as the popup ages.
-    color: Color,
-}
 
 /// Marker for the single "STREAK xN" banner, so a fresh one can replace the
 /// previous banner instead of overprinting it during a fast chain.
@@ -1056,13 +1041,14 @@ fn resolve_collisions(
                 if let Ok(viewport_pos) =
                     camera.world_to_viewport(camera_transform, transform.translation)
                 {
-                    spawn_floating_text(
-                        &mut commands,
-                        viewport_pos,
-                        format!("+{points}"),
-                        34.0,
-                        Color::srgb(0.6, 0.95, 0.75),
-                    );
+                    commands
+                        .spawn(popup(
+                            viewport_pos,
+                            format!("+{points}"),
+                            34.0,
+                            Color::srgb(0.6, 0.95, 0.75),
+                        ))
+                        .insert(DespawnOnExit(GameState::Playing));
                 }
             }
             if count >= 2 {
@@ -1296,50 +1282,19 @@ fn tick_streak(time: Res<Time>, mut streak: ResMut<Streak>) {
     }
 }
 
-/// Spawn a floating popup at a viewport position, scoped to `Playing`. It rises
-/// and fades out via `animate_floating_text`.
-fn spawn_floating_text(
-    commands: &mut Commands,
-    viewport_pos: Vec2,
-    text: impl Into<String>,
-    size: f32,
-    color: Color,
-) {
-    commands.spawn((
-        Name::new("Floating Text"),
-        FloatingText {
-            age: 0.0,
-            lifetime: POPUP_LIFETIME,
-            rise_speed: POPUP_RISE_SPEED,
-            color,
-        },
-        DespawnOnExit(GameState::Playing),
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(viewport_pos.x),
-            top: Val::Px(viewport_pos.y),
-            ..default()
-        },
-    ));
-}
-
-/// Flash a "STREAK xN" banner high on the screen. It rises and fades like the
-/// "+N" popups but starts higher and brighter, so a hot streak is unmissable.
+/// Flash a "STREAK xN" banner high on the screen. It rises and fades via the
+/// crate `Popup` like the "+N" popups but starts higher, wider and slower, so a
+/// hot streak is unmissable. Built as a custom layout (centered, full width) on
+/// top of a `Popup` rather than the `popup()` helper.
 fn spawn_streak_banner(commands: &mut Commands, count: usize) {
+    let color = Color::srgb(1.0, 0.85, 0.35);
     commands.spawn((
         Name::new("Streak Banner"),
         StreakBanner,
-        FloatingText {
-            age: 0.0,
-            lifetime: POPUP_LIFETIME,
-            rise_speed: POPUP_RISE_SPEED * 0.4,
-            color: Color::srgb(1.0, 0.85, 0.35),
+        Popup {
+            rise_speed: STREAK_RISE_SPEED,
+            base_color: color,
+            ..default()
         },
         DespawnOnExit(GameState::Playing),
         Text::new(format!("STREAK x{count}")),
@@ -1347,7 +1302,7 @@ fn spawn_streak_banner(commands: &mut Commands, count: usize) {
             font_size: FontSize::Px(44.0),
             ..default()
         },
-        TextColor(Color::srgb(1.0, 0.85, 0.35)),
+        TextColor(color),
         TextLayout {
             justify: Justify::Center,
             ..default()
@@ -1359,31 +1314,6 @@ fn spawn_streak_banner(commands: &mut Commands, count: usize) {
             ..default()
         },
     ));
-}
-
-/// Advance floating popups: rise up the screen, fade out, and despawn at the
-/// end of their lifetime.
-fn animate_floating_text(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut q_text: Query<(Entity, &mut FloatingText, &mut Node, &mut TextColor)>,
-) {
-    let dt = time.delta_secs();
-
-    for (entity, mut floating, mut node, mut text_color) in q_text.iter_mut() {
-        floating.age += dt;
-        if floating.age >= floating.lifetime {
-            commands.entity(entity).despawn();
-            continue;
-        }
-
-        if let Val::Px(top) = node.top {
-            node.top = Val::Px(top - floating.rise_speed * dt);
-        }
-
-        let alpha = 1.0 - floating.age / floating.lifetime;
-        text_color.0 = floating.color.with_alpha(alpha);
-    }
 }
 
 // --- Impact feedback ------------------------------------------------------
