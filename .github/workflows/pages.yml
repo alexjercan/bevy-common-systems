@@ -51,9 +51,10 @@ jobs:
     # The Pages API sync (actions/deploy-pages) intermittently returns a
     # transient "Deployment failed, try again later." after "syncing_files",
     # even when the uploaded artifact is fine; re-running the job succeeds. Cap
-    # the job so a hung sync cannot run forever (the action's own timeout is
-    # 600s) while still leaving room for the automatic retry below.
-    timeout-minutes: 15
+    # the job so a hung sync cannot run forever. Each deploy-pages attempt has
+    # its own internal 600s (10 min) timeout, and we run it up to twice (see
+    # the retry below), so the job timeout must clear 2 x 10 min plus overhead.
+    timeout-minutes: 25
     environment:
       name: github-pages
       # Report the URL from whichever attempt actually deployed the site.

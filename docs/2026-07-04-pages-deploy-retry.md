@@ -50,9 +50,10 @@ deploy step once:
   deploy is still surfaced rather than hidden.
 - The environment URL is reported from whichever attempt deployed:
   `steps.deployment-retry.outputs.page_url || steps.deployment.outputs.page_url`.
-- Added `timeout-minutes: 15` to the job so a hung sync cannot run
-  indefinitely (the action's internal timeout is 600s; 15 min leaves room for
-  the retry).
+- Added `timeout-minutes: 25` to the job so a hung sync cannot run
+  indefinitely. Each `deploy-pages` attempt has its own internal 600s (10 min)
+  timeout and we run it up to twice, so the job cap is set above 2 x 10 min
+  plus overhead rather than a single attempt's worth.
 
 Validated with `actionlint` (clean).
 

@@ -31,7 +31,9 @@ One finding to address before merge:
   both attempts. Raise to `timeout-minutes: 25` (2 x 10 min action timeout +
   overhead), and adjust the accompanying comment so the number and the "leaving
   room for the retry" claim actually agree.
-  - Response:
+  - Response: Done. Raised `timeout-minutes` to 25 and rewrote the comment to
+    state the 2 x 600s reasoning explicitly. Updated the docs note to match.
+    actionlint still clean.
 
 Considered and explicitly NOT blocking:
 - No backoff/sleep before the retry. `deploy-pages` creates a fresh
