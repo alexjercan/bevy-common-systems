@@ -90,7 +90,8 @@ const BLADE_TRAIL_LEN: usize = 16;
 /// slice and the combo resets, so holding the button still cannot farm points.
 const MIN_SWIPE_SPEED: f32 = 6.0;
 
-/// Resting camera position; shake offsets are applied relative to this.
+/// Resting camera position. Camera shake (via the crate's `CameraShakePlugin`)
+/// offsets the camera relative to this and always re-centers here.
 const CAMERA_BASE: Vec3 = Vec3::new(0.0, 0.0, 22.0);
 
 /// How fast camera shake trauma decays, per second.
@@ -174,6 +175,9 @@ fn main() {
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
     app.add_plugins(HealthPlugin);
+    // Trauma-driven camera shake; the camera carries a `CameraShake` and game
+    // code adds trauma through its `CameraShakeInput`.
+    app.add_plugins(CameraShakePlugin);
     // Fire-and-forget sound effects (crate audio module). Game code just
     // triggers `PlaySfx` on events; this plugin spawns the players.
     app.add_plugins(SfxPlugin);
@@ -213,7 +217,6 @@ fn main() {
     app.init_resource::<CursorTrail>();
     app.init_resource::<BladeTrail>();
     app.init_resource::<Combo>();
-    app.init_resource::<CameraShake>();
     app.init_resource::<DyingTimer>();
     app.init_resource::<Elapsed>();
 
@@ -254,9 +257,6 @@ fn main() {
         )
             .run_if(in_state(GameState::Playing)),
     );
-
-    // Camera shake settles the camera in any state, so it always eases back.
-    app.add_systems(Update, apply_camera_shake);
 
     // Game over screen.
     app.add_systems(
@@ -456,21 +456,11 @@ fn tick_elapsed(time: Res<Time>, mut elapsed: ResMut<Elapsed>) {
     elapsed.0 += time.delta_secs();
 }
 
-/// Camera shake energy; decays to 0, offsetting the camera while positive.
-#[derive(Resource, Default)]
-struct CameraShake {
-    trauma: f32,
-}
-
 /// Countdown before the game-over screen after a bomb, for the red-flash beat.
 #[derive(Resource, Default)]
 struct DyingTimer {
     remaining: Option<f32>,
 }
-
-/// Marker for the main camera so the shake system can find it.
-#[derive(Component)]
-struct MainCamera;
 
 /// Full-screen red flash shown briefly when a bomb ends the run.
 #[derive(Component)]
@@ -695,12 +685,19 @@ fn setup(
         gold_material,
     });
 
-    // Static camera looking straight down the -Z axis at the play plane.
+    // Static camera looking straight down the -Z axis at the play plane. The
+    // `CameraShake` config drives the trauma shake; game code adds trauma via
+    // its `CameraShakeInput`. Offset only x/y (z left at 0) so the framing depth
+    // stays put.
     commands.spawn((
         Name::new("Main Camera"),
-        MainCamera,
         Camera3d::default(),
         Transform::from_translation(CAMERA_BASE).looking_at(Vec3::new(0.0, 0.0, PLAY_Z), Vec3::Y),
+        CameraShake {
+            decay: SHAKE_DECAY,
+            max_offset: Vec3::new(SHAKE_MAX_OFFSET, SHAKE_MAX_OFFSET, 0.0),
+            ..default()
+        },
     ));
 
     commands.spawn((
@@ -758,14 +755,16 @@ fn on_player_died(
     add: On<Add, HealthZeroMarker>,
     q_player: Query<(), With<Player>>,
     mut commands: Commands,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut dying: ResMut<DyingTimer>,
 ) {
     if !q_player.contains(add.entity) || dying.remaining.is_some() {
         return;
     }
 
-    shake.trauma = (shake.trauma + BOMB_TRAUMA).min(1.0);
+    if let Ok(mut input) = q_shake.single_mut() {
+        input.add_trauma += BOMB_TRAUMA;
+    }
     dying.remaining = Some(DYING_BEAT);
 
     commands.spawn((
@@ -783,35 +782,6 @@ fn on_player_died(
         },
         BackgroundColor(Color::srgba(0.9, 0.1, 0.1, 0.5)),
     ));
-}
-
-/// Ease the camera toward its base while applying a decaying random shake.
-fn apply_camera_shake(
-    time: Res<Time>,
-    mut shake: ResMut<CameraShake>,
-    mut q_camera: Query<&mut Transform, With<MainCamera>>,
-) {
-    let Ok(mut transform) = q_camera.single_mut() else {
-        return;
-    };
-
-    shake.trauma = (shake.trauma - SHAKE_DECAY * time.delta_secs()).max(0.0);
-
-    // Square the trauma so small residual energy fades to nothing quickly.
-    let amount = shake.trauma * shake.trauma;
-    if amount <= 0.0 {
-        transform.translation = CAMERA_BASE;
-        return;
-    }
-
-    let mut rng = rand::rng();
-    let offset = Vec3::new(
-        rng.random_range(-1.0..1.0),
-        rng.random_range(-1.0..1.0),
-        0.0,
-    ) * SHAKE_MAX_OFFSET
-        * amount;
-    transform.translation = CAMERA_BASE + offset;
 }
 
 /// Count down the post-bomb beat and switch to the game-over screen when done.
@@ -985,7 +955,7 @@ fn start_game(
     mut trail: ResMut<CursorTrail>,
     mut blade: ResMut<BladeTrail>,
     mut combo: ResMut<Combo>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut dying: ResMut<DyingTimer>,
     mut elapsed: ResMut<Elapsed>,
 ) {
@@ -998,7 +968,10 @@ fn start_game(
     combo.count = 0;
     combo.timer = 0.0;
     combo.points = 0;
-    shake.trauma = 0.0;
+    // Snap any lingering shake back to zero so it does not bleed into the run.
+    if let Ok(mut input) = q_shake.single_mut() {
+        input.reset = true;
+    }
     dying.remaining = None;
     elapsed.0 = 0.0;
     timer.set_duration(std::time::Duration::from_secs_f32(SPAWN_INTERVAL));
@@ -1240,7 +1213,7 @@ fn slice_objects(
     mut trail: ResMut<CursorTrail>,
     mut blade: ResMut<BladeTrail>,
     mut combo: ResMut<Combo>,
-    mut shake: ResMut<CameraShake>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     mut score: ResMut<Score>,
     sfx: Res<SfxAssets>,
     q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>, Has<Golden>)>,
@@ -1323,7 +1296,9 @@ fn slice_objects(
                 timer: SLICE_POP_TIME,
                 base_scale: transform.scale,
             });
-            shake.trauma = (shake.trauma + SLICE_TRAUMA).min(1.0);
+            if let Ok(mut input) = q_shake.single_mut() {
+                input.add_trauma += SLICE_TRAUMA;
+            }
 
             let viewport_pos = camera
                 .world_to_viewport(camera_transform, transform.translation)
