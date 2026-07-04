@@ -1,6 +1,6 @@
 # Share Web Audio unlock shim across all web games (fix mobile/iOS sound)
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: bug,web,audio
 
