@@ -1,6 +1,6 @@
 # CI: run example unit tests (cargo test --examples)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 60
 - TAGS: ci,tests
 
@@ -14,12 +14,13 @@ execute in CI and can silently rot.
 
 ## Steps
 
-- [ ] Add `cargo test --examples` (and `--examples --features debug` if it adds
-      example coverage) to `.github/workflows/ci.yml`, or fold `--examples` into
-      the existing `cargo test` invocations. Confirm the example tests run and
-      pass (`cargo test --example 06_fruitninja` = 19 tests today).
-- [ ] Update AGENTS.md "Build, Verify, Run" if the documented test command
-      changes.
+- [x] Added an "Example tests" step running `cargo test --examples` to
+      `.github/workflows/ci.yml` (after the two `cargo test` steps). No
+      `--features debug` variant: no example test is `#[cfg(feature = "debug")]`,
+      so it adds zero coverage (verified). 58 example tests now run
+      (06=19, 07=14, 08=7, 10=9, 11=9); `06_fruitninja` = 19 as expected.
+- [x] Updated AGENTS.md "Build, Verify, Run" (new `cargo test --examples` line)
+      and the CI-suite sentence.
 
 ## Notes
 
@@ -27,3 +28,13 @@ execute in CI and can silently rot.
   new `active_pointer_pos` tests pass under `cargo test --example
   06_fruitninja` but not under a plain `cargo test`. Pre-existing gap, not
   caused by that task.
+- Enabling `--examples` immediately caught a rotted, flaky test in
+  `10_asteroids` (`splitting_a_rock_spawns_smaller_physics_bodies`): it asserted
+  every shard keeps at least the parent's drift speed. That is false by design:
+  the outward burst is a 3D direction but `spawn_asteroid` zeroes z (the arena is
+  planar / `LockedAxes`), so a shard whose burst points out of plane can end up
+  slower than the parent. The assertion passed or failed depending on the random
+  slice geometry. Replaced it with the invariant that always holds -- the planar
+  velocity is the inherited parent drift plus a burst no larger than
+  `SPLIT_SPEED` (`|vel - drift| <= SPLIT_SPEED`). This is exactly the silent rot
+  the task set out to expose. Verified stable over 8 back-to-back runs.

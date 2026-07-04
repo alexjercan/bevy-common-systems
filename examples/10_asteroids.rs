@@ -1665,8 +1665,8 @@ mod tests {
             "the sliced rock should have despawned"
         );
 
-        // Its shards exist as generation-1 avian bodies with colliders, drifting
-        // at least as fast as the parent (inherited drift + outward burst).
+        // Its shards exist as generation-1 avian bodies with colliders, each
+        // carrying the parent's inherited drift plus an outward burst.
         let mut query = app
             .world_mut()
             .query::<(&Asteroid, &RigidBody, &Collider, &LinearVelocity)>();
@@ -1676,17 +1676,36 @@ mod tests {
             "expected at least two shard bodies, got {}",
             shards.len()
         );
-        for (asteroid, body, _collider, velocity) in shards {
+        for (asteroid, body, _collider, velocity) in &shards {
             assert_eq!(asteroid.generation, 1, "shards are the next generation");
             assert!(
                 matches!(body, RigidBody::Dynamic),
                 "shards are dynamic bodies"
             );
+            // Each shard inherits the parent's drift and adds an outward burst
+            // along its slice normal (`parent_vel + world_dir * SPLIT_SPEED`).
+            // The burst is a 3D direction but the arena is planar, so
+            // `spawn_asteroid` drops its z component -- a shard whose burst
+            // points mostly out of plane can therefore end up slower than the
+            // parent, so we cannot assert `speed >= parent`. What always holds
+            // is that the planar velocity is the parent drift plus a burst no
+            // larger than `SPLIT_SPEED`: the drift was inherited, not discarded.
             assert!(
-                velocity.0.length() >= drift.length() - 1e-3,
-                "a shard should keep at least the parent's drift, got {}",
-                velocity.0.length()
+                (velocity.0 - drift).length() <= SPLIT_SPEED + 1e-3,
+                "a shard should be the parent drift plus a bounded burst, got {} (delta {})",
+                velocity.0.length(),
+                (velocity.0 - drift).length()
             );
         }
+        // ...and the burst is actually applied: at least one shard has to differ
+        // from the bare parent drift, or the outward-burst term is dead. (A
+        // single shard could coincidentally land near the parent drift when its
+        // burst points nearly straight out of plane, so we only require one.)
+        assert!(
+            shards
+                .iter()
+                .any(|(_, _, _, velocity)| (velocity.0 - drift).length() > 1e-2),
+            "no shard carried an outward burst -- the split velocity is just the parent drift"
+        );
     }
 }

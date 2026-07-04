@@ -55,5 +55,14 @@ jobs:
       - name: Tests (debug feature)
         run: cargo test --features debug
 
+      # Plain `cargo test` compiles the examples but never runs the
+      # `#[cfg(test)]` tests inside them, so the example unit tests (geometry,
+      # combo/difficulty math, the headless split-into-physics-bodies path,
+      # ...) would silently rot. `cargo test --examples` runs only the example
+      # targets' tests. No `--features debug` variant: no example test is
+      # `#[cfg(feature = "debug")]`, so it would add zero coverage.
+      - name: Example tests
+        run: cargo test --examples
+
       - name: Plain-ASCII check
         run: ./scripts/check-ascii.sh

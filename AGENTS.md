@@ -197,6 +197,7 @@ cargo clippy --all-targets                   # lints; currently clean, keep it c
 cargo clippy --all-targets --features debug  # lints with the debug module
 cargo test                                   # unit tests + doctests
 cargo test --features debug                  # same, plus the debug module
+cargo test --examples                        # the #[cfg(test)] tests inside examples/
 ./scripts/check-ascii.sh                     # enforce the plain-ASCII rule
 cargo run --example 01_sphere                # opens a window
 cargo run --example 01_sphere --features debug   # same, with inspector UI
@@ -206,9 +207,10 @@ cargo run --example 01_sphere --features debug   # same, with inspector UI
 transitive `proc-macro-error2` dependency, not from this crate's code.)
 
 CI (`.github/workflows/ci.yml`) runs this whole suite - fmt, both clippy
-configs, both test configs, and `scripts/check-ascii.sh` - on every push
-and pull request. Keep it green; run the commands above locally before
-pushing.
+configs, both test configs, `cargo test --examples` (the in-example unit
+tests, which plain `cargo test` compiles but never runs), and
+`scripts/check-ascii.sh` - on every push and pull request. Keep it green; run
+the commands above locally before pushing.
 
 Testing convention: pure math and geometry functions get `#[cfg(test)]`
 unit tests next to the code (13 today, in `meth/sphere`, `mesh/builder`,
