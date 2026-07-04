@@ -1,6 +1,6 @@
 # persist: cross-platform save/load resource (Wave 2)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 28
 - TAGS: spike,feature,persist
 

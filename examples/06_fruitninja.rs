@@ -39,6 +39,7 @@ use bevy::prelude::*;
 use bevy_common_systems::prelude::*;
 use clap::Parser;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 #[command(name = "06_fruitninja")]
@@ -192,7 +193,9 @@ fn main() {
     app.init_state::<GameState>();
 
     app.init_resource::<Score>();
-    app.init_resource::<HighScore>();
+    // Persist the best score across launches (disk on native, localStorage on
+    // wasm). The plugin loads it on startup and saves it whenever it changes.
+    app.add_plugins(PersistPlugin::<HighScore>::new("06_fruitninja.high_score"));
     app.init_resource::<NewBest>();
     app.insert_resource(SpawnTimer(Timer::from_seconds(
         SPAWN_INTERVAL,
@@ -267,8 +270,9 @@ enum GameState {
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
 
-/// Best score across runs this session (not reset per run).
-#[derive(Resource, Default)]
+/// Best score across runs, persisted to disk/localStorage so it survives a
+/// restart (via the crate's `PersistPlugin`).
+#[derive(Resource, Default, Serialize, Deserialize)]
 struct HighScore(usize);
 
 /// Whether the most recent run set a new high score (for the game-over screen).
