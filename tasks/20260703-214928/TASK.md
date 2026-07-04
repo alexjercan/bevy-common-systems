@@ -26,3 +26,7 @@ Why this needs you: it means taking on a new dependency. Options:
 Decision needed: add a crate (which one) or build a small in-crate particle
 helper. Once you pick, this becomes a concrete implementation task (and, if a
 crate, a wasm-build verification step).
+
+> **__NOTE:__** If we add a dependency I would go with `bevy_hanabi`, however
+> we add it just as a dev dependency and it will be used only for the example
+> games, not internal stuff.
