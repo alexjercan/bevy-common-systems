@@ -1,6 +1,6 @@
 # progress: difficulty-ramp helper, sketch-then-decide (Wave B)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 18
 - TAGS: spike,feature,meth
 
