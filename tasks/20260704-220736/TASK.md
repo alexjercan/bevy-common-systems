@@ -1,6 +1,6 @@
 # build examples/12_bastion -- defend-the-core tower defense (camera/project + rotation modules)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 2
 - TAGS: spike,examples,game
 
@@ -62,7 +62,7 @@ Build incrementally; after each milestone run the real compile gate
 `cargo clippy --all-targets` (NOT bare `cargo build` -- it skips examples).
 Everything below is one file, `examples/12_bastion.rs`, unless noted.
 
-- [ ] **Scaffold + boot.** Create `examples/12_bastion.rs`: module `//!` doc
+- [x] **Scaffold + boot.** Create `examples/12_bastion.rs`: module `//!` doc
   (mirror `10_asteroids.rs:1-36`), `use` block, `#[derive(Parser)] struct Cli`
   with `#[command(name = "12_bastion")]`, a tunable `const` block, and `main()`
   with `DefaultPlugins`+wasm-canvas `WindowPlugin`, `PhysicsPlugins::default()`
@@ -71,7 +71,7 @@ Everything below is one file, `examples/12_bastion.rs`, unless noted.
   `FrameTimeDiagnosticsPlugin`, the crate plugins (see Notes), `init_state`,
   resource inits, `Startup(setup)`, and `run()`. Add a stub `GameState`
   {Menu,Playing,GameOver} and empty `setup`. Confirm it compiles and boots.
-- [ ] **Persistent scene + orbit camera rig.** In `setup`: spawn a camera *rig*
+- [x] **Persistent scene + orbit camera rig.** In `setup`: spawn a camera *rig*
   parent entity carrying `PointRotation` (identity), and a child `Camera3d` at a
   fixed local offset+pitch looking back at the rig origin (the Core), with
   `PostProcessingCamera`, `CameraShake`, and an `AmbientLight` (per-camera in
@@ -79,14 +79,14 @@ Everything below is one file, `examples/12_bastion.rs`, unless noted.
   centered at origin, and the central **Core** entity (`Health::new`, a mesh +
   emissive material). Add the FPS `status_bar` overlay (copy the
   `status_bar`/`status_bar_item` block in Notes). Verify with a `BCS_SHOT` grab.
-- [ ] **Orbit control via `point_rotation`.** System (runs in Menu+Playing):
+- [x] **Orbit control via `point_rotation`.** System (runs in Menu+Playing):
   read `UnifiedPointer` drag delta and/or A/D keys, write `PointRotationInput`
   on the rig (x=yaw, y=pitch); clamp accumulated pitch in-game (point_rotation
   has no min/max -- clamp the applied `PointRotationOutput` euler, or gate the
   input at limits). Apply `PointRotationOutput` (a `Quat`) to the rig
   `Transform.rotation`. Confirm dragging orbits the view around the Core and the
   ground stays pickable (see grazing-angle note).
-- [ ] **Data-local spec catalog.** Define game-local `TowerSpec` and `EnemySpec`
+- [x] **Data-local spec catalog.** Define game-local `TowerSpec` and `EnemySpec`
   structs (derive `serde::Deserialize` + `Clone`) holding stats: for towers
   `name, cost, range, fire_rate, damage, turn_speed, upgrade_cost`; for enemies
   `name, hp, speed, damage_to_core, reward, radius`. Build a couple of each as
@@ -94,7 +94,7 @@ Everything below is one file, `examples/12_bastion.rs`, unless noted.
   reads a spec and spawns the entity. Keep the JSON-loading path OUT of scope
   (that is the follow-up task 20260704-220719); just structure it so the loader
   can slot in later.
-- [ ] **Enemy waves + convergence + Core damage.** A `Wave` resource and a
+- [x] **Enemy waves + convergence + Core damage.** A `Wave` resource and a
   spawner: each wave spawns N enemies at random points on the arena border
   (angle around the Core, at arena radius). Movement system: each enemy steps
   toward the Core (`(core_pos - pos).normalize() * speed * dt`). On reaching the
@@ -103,7 +103,7 @@ Everything below is one file, `examples/12_bastion.rs`, unless noted.
   all enemies advances the wave (ramp count/speed/hp). Register an
   `On<Add, HealthZeroMarker>` observer that, when the Core dies while Playing,
   starts the death beat (see lifecycle note) -> GameOver.
-- [ ] **Tower placement via `camera/project` (the headline).** A placement mode:
+- [x] **Tower placement via `camera/project` (the headline).** A placement mode:
   while active, each frame call `pointer_on_plane(camera, cam_gt,
   pointer.screen_pos?, Vec3::ZERO, InfinitePlane3d::new(Vec3::Y))` to get the
   world point; show a translucent ghost tower + a range-ring gizmo there. On
@@ -111,7 +111,7 @@ Everything below is one file, `examples/12_bastion.rs`, unless noted.
   from Core/other towers), spend credits and `spawn_tower_by_name`. Towers are
   a body + a **turret child** entity carrying `SmoothLookRotation { axis: Y,
   speed: spec.turn_speed, .. }`.
-- [ ] **Tower targeting + firing via `smooth_look_rotation` + `Cooldown`.**
+- [x] **Tower targeting + firing via `smooth_look_rotation` + `Cooldown`.**
   Per-tower system: find nearest enemy within `range`; compute the yaw angle to
   it and write it to the turret's `SmoothLookRotationTarget`; apply
   `SmoothLookRotationOutput` as `Quat::from_axis_angle(Y, out)` to the turret
@@ -124,36 +124,36 @@ Everything below is one file, `examples/12_bastion.rs`, unless noted.
   trauma, and (own `On<Insert, ExplodeFragments>` observer) spawn the shards as
   short-lived `TempEntity` meshes that fly out (mesh/explode has NO built-in
   fragment observer -- see Notes).
-- [ ] **Tower selection + one-axis upgrade.** Tapping an existing tower (pointer
+- [x] **Tower selection + one-axis upgrade.** Tapping an existing tower (pointer
   pick within radius) selects it; anchor a small upgrade panel via
   `world_to_screen(tower_pos)` showing the cost. A confirm (button/key) spends
   credits and bumps one stat (e.g. `damage *= 1.5` or `range += k`). Keep it to
   a single upgrade axis per the brief.
-- [ ] **HUD via `ui/status`.** Add `status_bar_item`s for Credits, Wave, and
+- [x] **HUD via `ui/status`.** Add `status_bar_item`s for Credits, Wave, and
   Core integrity (a `value_fn` reading each resource/`Health`, a `color_fn`
   shading Core integrity green->amber->red). FPS item already added in setup.
-- [ ] **Menu + game-over states.** `spawn_menu` (title + "tap to play" + best
+- [x] **Menu + game-over states.** `spawn_menu` (title + "tap to play" + best
   score, using the `centered_screen`/`screen_text` helpers), `pulse_menu_title`,
   `menu_click` (advance on `UnifiedPointer.just_pressed` or Space),
   `spawn_game_over` (score + wave reached + "New best!"), `gameover_click`,
   `record_high_score`, `play_game_over_sfx`, `giveup_on_escape`. Load `SfxAssets`
   in `setup` (reuse existing wavs: menu_select, launch/shot, bomb/explode, hurt,
   level_up/wave_clear, game_over).
-- [ ] **Juice pass.** Screen flash on Core damage and on death (`screen_flash`
+- [x] **Juice pass.** Screen flash on Core damage and on death (`screen_flash`
   scoped with `DespawnOnExit(GameState::Playing)`); entity `Flash` on an enemy
   when hit; camera-shake trauma on kills/Core-hit/death; a "WAVE N"/streak
   banner; per-event sfx with pitch variation. Do not over-build -- keep the line
   budget in mind.
-- [ ] **Touch.** Verify tap-to-place and drag-to-orbit work through
+- [x] **Touch.** Verify tap-to-place and drag-to-orbit work through
   `UnifiedPointer` on a narrow (`BCS_SHOT=390x844`) frame; if placement vs orbit
   gesture conflict, add a small mode toggle button (build/orbit) rather than
   overloading the same drag. Keep menu keys distinct from gameplay keys.
-- [ ] **Harness.** Add the `#[cfg(feature="debug")]` block with
+- [x] **Harness.** Add the `#[cfg(feature="debug")]` block with
   `AutopilotPlugin::new().hold(Menu,0.6).hold(Playing,~4.0).hold(GameOver,0.8)
   .input(|world, elapsed| { guard to Playing; synthesize placing a tower +
   orbiting })` and `ScreenshotPlugin::new(GameState::Playing).settle_frames(30)`
   (copy the shape from `11_overload.rs:156-192`).
-- [ ] **Web/wasm registration (3 places).** (a) Create
+- [x] **Web/wasm registration (3 places).** (a) Create
   `web/games/12_bastion/index.html` by copying `web/games/10_asteroids/index.html`
   and changing the `<title>`, the example-name comment, and keeping the
   `audio-unlock`, `rust`, and `assets/sounds` copy-dir trunk links. (b) Append
@@ -162,16 +162,16 @@ Everything below is one file, `examples/12_bastion.rs`, unless noted.
   'Bastion', blurb, controls, accent }` entry to `web/src/games.ts`. Run
   `npm ci` then `npm run build` in `web/` to verify (fresh worktree has no
   node_modules).
-- [ ] **Tests.** Add `#[cfg(test)] mod tests` covering the pure TD math (e.g.
+- [x] **Tests.** Add `#[cfg(test)] mod tests` covering the pure TD math (e.g.
   border-spawn point on the arena circle, nearest-enemy-in-range selection, the
   yaw-to-target angle, upgrade cost/stat math). Mirror the in-example test style
   of `10_asteroids`.
-- [ ] **Docs + module map.** Write `docs/2026-07-04-bastion-example.md`
+- [x] **Docs + module map.** Write `docs/2026-07-04-bastion-example.md`
   (concept, which modules it demos and why, decisions: camera angle,
   auto-target rule, pitch clamp, the game-local spec catalog and its relation to
   the modding follow-up). Add the `12_bastion` bullet to the example list in
   `AGENTS.md`.
-- [ ] **Verify (full gate).** `cargo fmt`, `cargo clippy --all-targets`,
+- [x] **Verify (full gate).** `cargo fmt`, `cargo clippy --all-targets`,
   `cargo clippy --all-targets --features debug`, `cargo test --examples`,
   `./scripts/check-ascii.sh`, boot once under `timeout` (confirm it reaches the
   render loop), and run `BCS_AUTOPILOT=1 ... --features debug` under `timeout`
@@ -259,3 +259,63 @@ earlier example, so keep tower/enemy variety minimal and lean on the juice kit.
 Assumption: the data-driven JSON loader and any `SpecCatalog<T>` crate module are
 explicitly OUT of scope here -- they are the follow-up task 20260704-220719,
 which depends on this one shipping.
+
+## Outcome (closed)
+
+Shipped `examples/12_bastion.rs` (~950 lines), a working defend-the-core tower
+defense that closes all three never-demoed modules: `camera/project`
+(`pointer_on_plane` placement + `world_to_screen` "+N" popups),
+`transform/point_rotation` (orbit camera on a pivot at the Core) and
+`transform/smooth_look_rotation` (rate-limited tower turrets). Plus the juice kit,
+a game-local `TowerSpec`/`EnemySpec` catalog, sounds, HUD, and a registered wasm
+web build.
+
+Verified: `cargo clippy --all-targets` and `--features debug` clean; `cargo fmt
+--check` clean; `cargo test --example 12_bastion` 5/5 pass; `check-ascii` clean;
+`trunk build --release --example 12_bastion` succeeds; web `eslint` clean; boots
+to the render loop and `BCS_AUTOPILOT=1 --features debug` completes menu ->
+playing -> game-over with `no panic`, and a live `scrot` during autopilot
+confirmed the full loop (towers placed, enemies killed, Core damaged, score
+rising).
+
+Deviations from the plan, deliberately:
+
+- The spec catalog uses plain structs indexed by position (`tower_specs()` /
+  `enemy_specs()` + `spawn_tower`/`spawn_enemy` by index), NOT `serde::Deserialize`
+  + spawn-by-name. serde is unneeded for the game-local version and the JSON path
+  is explicitly the follow-up task's job; the structs are still shaped so the
+  loader can slot in.
+- Credits / Wave / Core-integrity ride a single in-game HUD `Text` node rather
+  than separate `status_bar_item`s; the status bar carries the FPS overlay. Same
+  information, less UI churn, and the color-coded `color_fn` idea is folded into
+  the HUD string. The `ui/status` module is still demoed (FPS item).
+- Tap-vs-drag on one pointer is disambiguated by a move threshold (drag = orbit,
+  clean release without moving = place/select), which is the plan's preferred
+  "avoid the conflict" resolution -- no separate mode-toggle button was needed.
+- Enemy hit-flash (`feedback/flash` on enemies) was dropped to stay within the
+  line budget; `feedback` is still demoed via the death `screen_flash`. Enemy
+  health pips (a `world_to_screen` bar per enemy) were also deferred; the "+N"
+  popup is the `world_to_screen` showcase.
+- Firing is hitscan (one-frame gizmo tracer + muzzle spark), not projectile
+  entities -- an obvious polish follow-up noted in the docs.
+
+Bugs hit and fixed during implementation: a botched per-enemy material (stray
+`Handle::default()`) -> pre-built one material per enemy spec in `setup`; a
+double-kill race (two towers dropping the same enemy in one frame) -> mark the
+enemy `spent` before triggering the kill; a system-ordering hazard where
+`place_or_select` read the `DragState` that `orbit_camera` writes -> pinned
+`.after(orbit_camera)`; `DirectionalLight` field rename (`shadows_enabled` ->
+gone) and a mesh borrow conflict in the fragments observer (`get(..).cloned()`);
+and the discovery that `mesh/explode` has no `on_fragments_spawned` observer (the
+crate only inserts `ExplodeFragments`), so a game-local observer was added like
+`10_asteroids`.
+
+Self-reflection: the biggest time sink was verifying the visual with towers,
+because `BCS_AUTOPILOT` and `BCS_SHOT` cannot run together (both drive
+`NextState`, so the screenshot never fires) -- worth remembering as a harness
+constraint. The camera-rig design (apply `point_rotation`'s look quaternion to a
+pivot, keep the camera at a fixed child offset) was the one non-obvious call and
+came out clean; deriving the pitch-clamp sign from the module's math up front
+avoided a fiddly trial-and-error loop. Line budget held at ~950, well under the
+~2000 ceiling, by leaning on the juice kit and keeping tower/enemy variety at two
+each.

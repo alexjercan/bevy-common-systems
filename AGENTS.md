@@ -352,6 +352,26 @@ Examples:
   the `06_fruitninja` shape (states, sounds, wasm). See
   `docs/2026-07-04-overload-example.md` and
   `docs/2026-07-04-overload-touch-controls.md`.
+- `12_bastion` - "Bastion": a defend-the-core tower defense and the headline demo
+  of `camera/project` plus the two aim/track halves of the `transform` family
+  that no other example showed. A glowing `Core` (a `Health` pool) sits at the
+  arena center; enemies spawn on the border and converge inward from every
+  bearing, and one that reaches the Core damages it (zero health ends the run).
+  Kills earn credits, spent to place and upgrade towers as waves ramp.
+  `camera/project`'s `pointer_on_plane` maps the tap/pointer to the ground point
+  where a tower is placed (ghost + range ring) and `world_to_screen` anchors the
+  "+N" credit popups; `transform/point_rotation` drives an orbit camera (a pivot
+  at the Core the player yaws/pitches by dragging, pitch clamped in-game);
+  `transform/smooth_look_rotation` drives each tower turret, rate-limited so a
+  fast enemy can out-slew a cheap turret until upgraded. Tower/enemy stats live in
+  a game-local `TowerSpec`/`EnemySpec` catalog shaped for a later data-driven task
+  (`tasks/20260704-220719`). Reuses `mesh/explode` (own `On<Insert,
+  ExplodeFragments>` observer -- the crate has no fragment observer), `ui/popup`,
+  `ui/status`, `camera/shake`, `feedback`, `scoring/streak`, `time/cooldown`,
+  `helpers/temp`, `input/pointer` and `audio`. One pointer does double duty (drag
+  = orbit, tap = place/select, disambiguated by a move threshold); Space is a
+  keyboard/autopilot placement path. Follows the `06_fruitninja` shape (states,
+  sounds, wasm). See `docs/2026-07-04-bastion-example.md`.
 
 ## Workflow
 

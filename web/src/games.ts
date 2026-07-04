@@ -68,6 +68,15 @@ export const GAMES: Game[] = [
       'Press 1 / 2 / 3 / 4 to vent HEAT / PRES / FLUX / CHRG. Keep every gauge out of the red or the hull melts down.',
     accent: '#ff7a3c',
   },
+  {
+    id: '12_bastion',
+    title: 'Bastion',
+    blurb:
+      'Defend the Core at the center of the arena: enemies close in from every side, so build towers around it and upgrade them to hold the line as the waves grow.',
+    controls:
+      'Drag (or A/D) to orbit the camera. Press 1 or 2 to pick a tower, then tap the ground (or Space) to build it. Tap a tower and press U to upgrade. Escape gives up.',
+    accent: '#5fd0ff',
+  },
 ];
 
 /** Path (relative to the site base) to a game's wasm page. */
