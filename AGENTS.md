@@ -260,6 +260,22 @@ Examples:
   `TriangleMeshBuilder::vertices_and_indices()`. Follows the `06_fruitninja`
   shape (states, sounds, wasm). See `docs/2026-07-03-dropzone-example.md`;
   the flight constants were play-tested and tuned in `tasks/20260703-213510`.
+- `10_asteroids` - a top-down "asteroids" shooter and the crate's physics-
+  fragments showcase, the counterpoint to `06_fruitninja`. You fly a ship around
+  a bounded, zero-gravity arena and shoot drifting octahedron rocks; a hit
+  inserts `ExplodeMesh` and the `on_fragments_spawned` observer respawns every
+  sliced shard as a real `RigidBody::Dynamic` avian body that keeps drifting,
+  bounces off the arena walls, and is a new smaller hazard -- unlike `06`, where
+  fragments are hand-integrated throwaways. Rocks split large -> medium -> small
+  (a `generation` cap keeps the field clearable); clear a wave to face a busier
+  one. Bumping a rock costs a hull point via `HealthPlugin` (with i-frames);
+  `camera/post` blooms the glowing bullets and thruster flame. Exercises a broad
+  slice of avian3d not seen elsewhere (kinematic ship, sensor bullets,
+  `CollisionLayers`, `Restitution`, `LockedAxes`, `CollisionStart` messages,
+  `Gravity::ZERO`). Controls are unified keyboard + pointer (A/D rotate, W
+  thrust, Space fire, or hold the mouse / a finger to fly toward it and
+  auto-fire) so the wasm build is touch-playable. Follows the `06_fruitninja`
+  shape (states, sounds, wasm). See `docs/2026-07-04-asteroids-example.md`.
 - `11_overload` - "Overload": a dashboard-survival game and the headline demo of
   `ui/status` as a game surface. The whole game lives on the `status_bar`: four
   gauges (HEAT/PRES/FLUX/CHRG) climb and random-walk on their own, each a

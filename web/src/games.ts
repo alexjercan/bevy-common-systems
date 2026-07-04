@@ -42,6 +42,15 @@ export const GAMES: Game[] = [
     accent: '#5ad1ff',
   },
   {
+    id: '10_asteroids',
+    title: 'Asteroids',
+    blurb:
+      'Shoot drifting rocks into real physics-body shards that keep bouncing around as new hazards, and clear each wave without getting hit.',
+    controls:
+      'A/D rotate, W thrust, Space fires -- or hold the mouse / a finger to fly toward it and auto-fire. Clear every rock; avoid bumping them.',
+    accent: '#7fd0ff',
+  },
+  {
     id: '11_overload',
     title: 'Overload',
     blurb:
