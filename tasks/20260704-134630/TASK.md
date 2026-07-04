@@ -1,6 +1,6 @@
 # tween: easing engine generalizing LerpSnap (Wave 2)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 30
 - TAGS: spike,feature,meth
 

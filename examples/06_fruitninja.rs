@@ -168,6 +168,8 @@ fn main() {
     app.add_plugins(ExplodeMeshPlugin);
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
+    // Duration-based value tweens (the slice-pop scale animates on this).
+    app.add_plugins(TweenPlugin);
     // Floating "+N" / combo popups rise and fade via the crate's PopupPlugin.
     app.add_plugins(PopupPlugin);
     // Full-screen red damage flash on a bomb death, via ScreenFlashPlugin.
@@ -226,7 +228,7 @@ fn main() {
             spawn_projectile,
             move_projectiles,
             slice_objects,
-            resolve_slice_pop,
+            apply_slice_pop.after(TweenSystems::Advance),
             move_fragments,
             update_score_text,
             update_combo_text,
@@ -247,6 +249,7 @@ fn main() {
 
     app.add_observer(on_fragments_spawned);
     app.add_observer(on_player_died);
+    app.add_observer(on_slice_pop_finished);
 
     app.run();
 }
@@ -381,40 +384,42 @@ struct DyingTimer {
     remaining: Option<f32>,
 }
 
-/// A sliced fruit mid-"pop": it scales up for a beat, then bursts.
+/// Marker for a sliced fruit mid-"pop": a `Tween<Vec3>` (added alongside) scales
+/// it up for a beat, then it bursts when the tween finishes.
 #[derive(Component)]
-struct SlicePop {
-    timer: f32,
-    base_scale: Vec3,
+struct SlicePop;
+
+/// Apply the pop scale tween to the fruit's transform each frame. The crate's
+/// `TweenPlugin` advances the `Tween<Vec3>`; this reads its current value.
+fn apply_slice_pop(mut q_pop: Query<(&mut Transform, &Tween<Vec3>), With<SlicePop>>) {
+    for (mut transform, tween) in q_pop.iter_mut() {
+        transform.scale = tween.value();
+    }
 }
 
-/// Grow a popping fruit, then trigger its explosion when the pop finishes.
-fn resolve_slice_pop(
-    time: Res<Time>,
+/// When a fruit's pop tween finishes ([`TweenFinished`] via `TweenOnComplete::Keep`),
+/// restore its base scale and burst it into fragments. Only fruit get a
+/// `SlicePop` (bombs explode instantly), so this never fires for a bomb.
+fn on_slice_pop_finished(
+    finished: On<Add, TweenFinished>,
     mut commands: Commands,
     sfx: Res<SfxAssets>,
-    mut q_pop: Query<(Entity, &mut Transform, &mut SlicePop)>,
+    mut q_pop: Query<(&mut Transform, &Tween<Vec3>), With<SlicePop>>,
 ) {
-    let dt = time.delta_secs();
-    for (entity, mut transform, mut pop) in q_pop.iter_mut() {
-        pop.timer -= dt;
-        if pop.timer <= 0.0 {
-            // Restore the base scale so fragments burst at the fruit's size.
-            transform.scale = pop.base_scale;
-            commands
-                .entity(entity)
-                .remove::<SlicePop>()
-                .insert(ExplodeMesh {
-                    fragment_count: FRAGMENT_COUNT,
-                });
-            // The juicy squish as the fruit bursts. Only fruit gets a SlicePop
-            // (bombs explode instantly), so this never fires for a bomb.
-            commands.play_sfx_volume(sfx.splat.clone(), 0.8);
-            continue;
-        }
-        let progress = 1.0 - (pop.timer / SLICE_POP_TIME).clamp(0.0, 1.0);
-        transform.scale = pop.base_scale * (1.0 + (SLICE_POP_SCALE - 1.0) * progress);
-    }
+    let entity = finished.entity;
+    let Ok((mut transform, tween)) = q_pop.get_mut(entity) else {
+        return;
+    };
+    // Restore the base scale (the tween's start) so fragments burst at the
+    // fruit's size, then drop the pop and explode.
+    transform.scale = tween.start;
+    commands
+        .entity(entity)
+        .remove::<(SlicePop, Tween<Vec3>, TweenFinished)>()
+        .insert(ExplodeMesh {
+            fragment_count: FRAGMENT_COUNT,
+        });
+    commands.play_sfx_volume(sfx.splat.clone(), 0.8);
 }
 
 /// Marker for the on-screen score HUD text.
@@ -1085,11 +1090,18 @@ fn slice_objects(
             });
         } else {
             // Fruit pops (scales up briefly) before it bursts, so the cut reads
-            // as impactful; `resolve_slice_pop` inserts ExplodeMesh when done.
-            commands.entity(entity).insert(SlicePop {
-                timer: SLICE_POP_TIME,
-                base_scale: transform.scale,
-            });
+            // as impactful. A `Tween<Vec3>` grows the scale; `on_slice_pop_finished`
+            // bursts it when the tween completes.
+            commands.entity(entity).insert((
+                SlicePop,
+                Tween::new(
+                    transform.scale,
+                    transform.scale * SLICE_POP_SCALE,
+                    SLICE_POP_TIME,
+                    EaseFunction::Linear,
+                )
+                .with_on_complete(TweenOnComplete::Keep),
+            ));
             if let Ok(mut input) = q_shake.single_mut() {
                 input.add_trauma += SLICE_TRAUMA;
             }

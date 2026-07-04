@@ -16,6 +16,7 @@ pub mod modding;
 pub mod physics;
 pub mod scoring;
 pub mod transform;
+pub mod tween;
 pub mod ui;
 
 pub use bevy_common_systems_macros;
@@ -29,6 +30,6 @@ pub mod prelude {
         audio::prelude::*, camera::prelude::*, feedback::prelude::*, health::prelude::*,
         helpers::prelude::*, input::prelude::*, mesh::prelude::*, meth::prelude::*, modding,
         modding::prelude::*, physics::prelude::*, scoring::prelude::*, transform::prelude::*,
-        ui::prelude::*,
+        tween::prelude::*, ui::prelude::*,
     };
 }
