@@ -1,6 +1,6 @@
 # 09_reactor: rules-as-gameplay incremental on the modding bus
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 20
 - TAGS: feature,example,modding
 

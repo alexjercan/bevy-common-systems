@@ -267,6 +267,7 @@ Examples:
   the PD controller torques the avian3d rigid body toward that attitude (this
   is the crate's first real physics sim, not just the debug renderer). Touch
   down slow and upright to score; hit too hard or too tilted and the hull
+
   breaks apart via `mesh/explode`. The descent is also hazardous: rock monoliths
   ring the pad (static colliders forming a gap to thread), asteroids drift the
   corridor on `RandomSphereOrbit`, and a time-varying wind shoves the ship
@@ -282,6 +283,25 @@ Examples:
   `docs/2026-07-03-dropzone-example.md`, `docs/2026-07-04-dropzone-tier-a-fun.md`
   and `docs/2026-07-04-dropzone-hazards.md`; the flight constants were
   play-tested and tuned in `tasks/20260703-213510`.
+- `09_reactor` - "Reactor": a rules-as-machine incremental and the headline demo
+  of `modding`. The whole simulation runs on the `03_modding` event bus, but the
+  player builds the machine at runtime: a `ReactorWorld` (an `EventWorld`) holds
+  ENERGY / HEAT / CREDITS, the engine `fire`s a `tick` every half second plus
+  `click`/`sell` on the controls, and every rule that reacts is a JSON-authored
+  `EventHandler` entity built through the `EventHandlerRegistry`. Built-in Manual
+  Tap and Sell handlers ship with the reactor; every shop part you buy spawns
+  another handler (fuel rods add energy AND heat, sinks/pumps/turbines shed heat,
+  market uplinks sell energy for credits). Compose them into an escalating loop,
+  but the grid heats up as you climb credit tiers, so HEAT hitting 100 is a
+  meltdown (game over); score is total credits earned. The shop palette is a
+  `HandlerSpec` list and buying is a `build_handler` call, so the gameplay and
+  the modding data are the same thing. Also exercises `ui/status` (a compact
+  telemetry HUD reading the `EventWorld`) and `SfxPlugin` one-shots (reuses
+  `pickup`/`golden`/`alarm`/`level_up` plus shared `menu_select`/`game_over`,
+  no new sound files). No 3D scene -- renders with a plain `Camera2d`. Follows
+  the `06_fruitninja` shape (states, sounds, wasm). Grows out of `03_modding`.
+  See `docs/2026-07-04-reactor-example.md`.
+
 - `10_asteroids` - a top-down "asteroids" shooter and the crate's physics-
   fragments showcase, the counterpoint to `06_fruitninja`. You fly a ship around
   a bounded, zero-gravity arena and shoot drifting octahedron rocks; a hit

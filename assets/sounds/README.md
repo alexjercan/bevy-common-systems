@@ -1,7 +1,7 @@
 # Example game sound effects
 
-The `06_fruitninja`, `07_orbit` and `11_overload` examples
-(`examples/06_fruitninja.rs`, `examples/07_orbit.rs`,
+The `06_fruitninja`, `07_orbit`, `09_reactor` and `11_overload` examples
+(`examples/06_fruitninja.rs`, `examples/07_orbit.rs`, `examples/09_reactor.rs`,
 `examples/11_overload.rs`) load one sound per gameplay event from this
 directory. The files committed here are **tiny generated placeholders** (short
 sine blips, one distinct pitch each) produced by
@@ -11,7 +11,10 @@ the box. They are not meant to be shipped as the final sound design.
 `menu_select.wav`, `game_over.wav` and `combo.wav` are shared between the
 games; the rest are per-game (`slice`/`splat`/`golden`/`bomb`/`launch` for fruit
 ninja, `pickup`/`hurt`/`level_up` for orbit runner, `vent`/`alarm` for
-overload, which also shares `menu_select`/`game_over`/`level_up`). Orbit runner
+overload, which also shares `menu_select`/`game_over`/`level_up`). The reactor
+game adds no new files: it reuses `pickup` (manual tap), `golden` (buying a
+part), `alarm` (heat critical) and `level_up` (grid tier up), plus the shared
+`menu_select`/`game_over`. Orbit runner
 plays
 `combo.wav` over the `pickup` blip once a collection streak reaches x2, pitched
 up with the chain, the same way fruit ninja uses it for slice combos.

@@ -42,6 +42,15 @@ export const GAMES: Game[] = [
     accent: '#5ad1ff',
   },
   {
+    id: '09_reactor',
+    title: 'Reactor',
+    blurb:
+      'A rules-as-machine incremental where the modding event bus is the game: tap for energy, sell it for credits, then buy handler "parts" that react to each reactor tick. Fuel rods make energy AND heat -- compose an escalating loop without melting down.',
+    controls:
+      'Click TAP (or Space) for energy, SELL (or Enter) for credits, and a shop card (or 1-6) to install a part. Keep HEAT under 100.',
+    accent: '#5ae0ff',
+  },
+  {
     id: '10_asteroids',
     title: 'Asteroids',
     blurb:
