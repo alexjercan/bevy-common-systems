@@ -1,6 +1,6 @@
 # Spike: make 08_dropzone more fun + mobile-playable
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 5
 - TAGS: spike,dropzone,research
 
@@ -315,3 +315,27 @@ multi-leg refuel) are intentionally left out for now.
 - Keep any eventual implementation faithful to AGENTS.md: one concern per
   slice, examples double as integration tests, run the example (not just build)
   before calling it done, keep it wasm/showcase-friendly.
+
+## Close-out
+
+Spike delivered (research only, no gameplay code):
+- Part 1 -- a tiered fun-mechanics menu (A/B/C) rating each idea Fun-vs-Cost and
+  mapping it to the crate systems it exercises, grounded in the example's real
+  controls, scoring function and flight constants.
+- Part 2 -- a ranked mobile touch-control study (two-thumb floating-stick lean
+  as default, tilt as opt-in, buttons as fallback), with the key
+  target-attitude-vs-rate insight and wasm/browser accelerometer constraints.
+
+Outcome, per user direction: implement all Tier-A now, take obstacles/hazards
+from Tier B (no bigger-game items), add the mobile virtual pad. Filed as three
+focused follow-up tasks and cut the rest:
+- 20260704-103544 -- Tier-A fun pass (landing pad + positional score, fuel
+  pickups, optional time term, landing/crash visuals).
+- 20260704-103553 -- hazards pass (obstacles, asteroids, wind, rough terrain,
+  ship structural integrity via HealthPlugin).
+- 20260704-103517 -- mobile virtual-pad touch controls (Part 2 option 1).
+- 20260704-102342 -- earlier combined follow-up, CLOSED/superseded by the split.
+
+Cut for now: the C proposals (multiple planets, leaderboards, upgrades, orbital
+phase) and the bigger B items (pickups beyond fuel, cargo/weight, multi-leg
+refuel runs). Spike ends at the plan; implementation is the three tasks above.
