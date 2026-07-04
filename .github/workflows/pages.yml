@@ -48,9 +48,27 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # The Pages API sync (actions/deploy-pages) intermittently returns a
+    # transient "Deployment failed, try again later." after "syncing_files",
+    # even when the uploaded artifact is fine; re-running the job succeeds. Cap
+    # the job so a hung sync cannot run forever (the action's own timeout is
+    # 600s) while still leaving room for the automatic retry below.
+    timeout-minutes: 15
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      # Report the URL from whichever attempt actually deployed the site.
+      url: ${{ steps.deployment-retry.outputs.page_url || steps.deployment.outputs.page_url }}
     steps:
+      # First attempt: do not fail the job on a transient Pages API error, so
+      # the retry step below gets a chance to run.
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      # Retry once on a transient "try again later" failure. Most transient
+      # Pages sync errors clear on a second attempt; this keeps the workflow
+      # green without a manual re-run. If this attempt also fails the job goes
+      # red, so a genuinely broken deploy is still surfaced.
+      - id: deployment-retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
