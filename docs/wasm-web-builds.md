@@ -115,8 +115,8 @@ The browsers then split on how the context comes back:
   gesture. This bit mobile Safari specifically (task 20260703-200005).
 
 Because Bevy hides its `AudioContext`, the fix lives in the host page, not in
-Rust. `web/games/06_fruitninja/index.html` ships a small inline unlock shim
-(before trunk's injected wasm loader, so it installs first):
+Rust. It is a single shared script, `web/games/_shared/audio-unlock.js`, that
+every game loads (before trunk's injected wasm loader, so it installs first):
 
 - it wraps the `AudioContext` / `webkitAudioContext` constructor to record
   every context Bevy/cpal builds;
@@ -126,9 +126,26 @@ Rust. `web/games/06_fruitninja/index.html` ships a small inline unlock shim
   its listeners once the context reaches `running`.
 
 It is a no-op on Chrome/Firefox (resuming a running context is harmless, the
-silent buffer is inaudible), so desktop audio is unchanged. Any future web
-game with sound should copy this shim (or a shared version of it) into its
-`index.html`.
+silent buffer is inaudible), so desktop audio is unchanged.
+
+Each game wires in the shared script with exactly two lines in its
+`index.html`'s `<head>`:
+
+```html
+<script src="audio-unlock.js"></script>
+<link data-trunk rel="copy-file" href="../_shared/audio-unlock.js" />
+```
+
+The `copy-file` link stages the shared file into the game's dist root (so the
+runtime `src="audio-unlock.js"` resolves under the game's `--public-url`), and
+the `<script>` must stay a plain, non-module, non-`defer` element: that runs
+synchronously before trunk's deferred `<script type="module">` wasm loader, so
+the constructor wrap is installed before Bevy builds its context. Any future
+web game with sound adds those same two lines -- do NOT re-inline the shim.
+It used to be copy-pasted into each `index.html` and drifted (06_fruitninja
+gained the iOS media-channel fix below while 07_orbit and 08_dropzone kept an
+older copy and stayed silent on iPhone, task 20260704-101920); the shared file
+is what stops that from recurring.
 
 **iOS ringer channel (WebKit bug 237322).** Resuming the context is necessary
 but not sufficient on iOS. WebKit routes Web Audio output to the *ringer*

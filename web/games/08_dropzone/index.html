@@ -8,76 +8,18 @@
     />
     <title>Drop Zone - bevy_common_systems</title>
     <!--
-      Web Audio autoplay unlock for WebKit (iOS + macOS Safari).
-
-      Bevy/cpal creates its AudioContext eagerly at startup, before any user
-      gesture, so it comes up "suspended". Chrome and Firefox auto-resume it
-      once the user interacts and a source node start()s, so no shim is needed
-      there. WebKit does NOT auto-resume on start(): it needs an explicit
-      resume() called inside a real user-gesture handler. Bevy does not expose
-      its AudioContext from Rust, so we capture every context at construction
-      (by wrapping the constructor) and resume them all on the first gesture.
-      Without this, every SFX is silent on mobile Safari.
-
-      This runs before trunk's injected wasm loader (it is earlier in <head>),
-      so the wrapper is installed before Bevy constructs its context. Shared
-      verbatim with 06_fruitninja; see docs/wasm-web-builds.md.
+      Web Audio unlock shim for mobile Safari/iOS, shared verbatim by every
+      web game from web/games/_shared/audio-unlock.js (the copy-file link below
+      stages it into this game's dist root as audio-unlock.js). It must stay a
+      plain, non-module, non-defer <script src>: that runs synchronously before
+      trunk's injected `<script type="module">` wasm loader, so it wraps the
+      AudioContext constructor before Bevy/cpal builds its context. Previously
+      this shim was inline-copied per game and drifted (07_orbit / 08_dropzone
+      lost the iOS media-channel fix and went silent on iPhone); the shared file
+      is what prevents that. See docs/wasm-web-builds.md.
     -->
-    <script>
-      (function () {
-        var Native = window.AudioContext || window.webkitAudioContext;
-        if (!Native) return;
-
-        // Every AudioContext Bevy/cpal builds gets recorded here.
-        var contexts = [];
-        function Wrapped() {
-          var ctx = new (Function.prototype.bind.apply(
-            Native,
-            [null].concat([].slice.call(arguments))
-          ))();
-          contexts.push(ctx);
-          return ctx;
-        }
-        Wrapped.prototype = Native.prototype;
-        window.AudioContext = Wrapped;
-        if (window.webkitAudioContext) window.webkitAudioContext = Wrapped;
-
-        var events = ['pointerdown', 'touchend', 'mousedown', 'keydown'];
-        function detachIfRunning() {
-          var running =
-            contexts.length > 0 &&
-            contexts.every(function (c) {
-              return c.state === 'running';
-            });
-          if (!running) return;
-          events.forEach(function (type) {
-            document.removeEventListener(type, unlock, true);
-          });
-        }
-        function unlock() {
-          contexts.forEach(function (ctx) {
-            if (ctx.state === 'suspended' && ctx.resume) {
-              ctx.resume().then(detachIfRunning, function () {});
-            }
-            // WebKit's stricter unlock wants an actual node start inside the
-            // gesture; a 1-sample silent buffer is inaudible and does it.
-            try {
-              var src = ctx.createBufferSource();
-              src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-              src.connect(ctx.destination);
-              src.start(0);
-            } catch (e) {}
-          });
-          detachIfRunning();
-        }
-        events.forEach(function (type) {
-          document.addEventListener(type, unlock, {
-            capture: true,
-            passive: true,
-          });
-        });
-      })();
-    </script>
+    <script src="audio-unlock.js"></script>
+    <link data-trunk rel="copy-file" href="../_shared/audio-unlock.js" />
     <!--
       Trunk builds the crate's `08_dropzone` example to wasm. The example is
       selected on the CLI with `--example 08_dropzone` (see build-games.sh);
