@@ -26,10 +26,8 @@
 //! from full intensity (it uses `On<Insert>`), which is exactly how the
 //! spike-and-decay shape re-triggers.
 //!
-//! The component split follows the crate convention:
-//!
-//! 1. [`ScreenFlash`] - config: peak alpha, decay rate, whether to despawn.
-//! 2. `ScreenFlashState` - private: the current intensity (1 at peak, 0 faded).
+//! [`ScreenFlash`] is the config (peak alpha, decay rate, whether to despawn);
+//! inserting it attaches a private `Tween<f32>` that owns the fade timing.
 //!
 //! ## Usage
 //!
@@ -42,10 +40,14 @@
 //! # }
 //! ```
 //!
-//! The fade is a linear ramp for now; once the `tween` module exists it should
-//! be backed by that instead.
+//! The fade is backed by the crate's [`tween`](crate::tween) module: inserting a
+//! [`ScreenFlash`] attaches a `Tween<f32>` that ramps the overlay alpha from the
+//! peak to zero (and re-inserting it rebuilds the tween -- the spike-and-decay
+//! re-trigger).
 
 use bevy::prelude::*;
+
+use crate::tween::prelude::*;
 
 pub mod prelude {
     pub use super::{
@@ -57,10 +59,9 @@ pub mod prelude {
 /// peak down to zero.
 ///
 /// Put it on a full-screen UI `Node` that carries a `BackgroundColor` (the
-/// [`screen_flash`] builder does both for you). [`ScreenFlashPlugin`] decays the
-/// intensity each frame and writes `peak_alpha * intensity` into the overlay's
-/// alpha, leaving the RGB untouched. Inserting (or re-inserting) it spikes the
-/// intensity back to full.
+/// [`screen_flash`] builder does both for you). [`ScreenFlashPlugin`] fades the
+/// overlay alpha from `peak_alpha` to zero via a `Tween`, leaving the RGB
+/// untouched. Inserting (or re-inserting) it rebuilds that tween from the peak.
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct ScreenFlash {
     /// The overlay alpha at full intensity (intensity 1). The alpha ramps from
@@ -87,19 +88,11 @@ impl Default for ScreenFlash {
     }
 }
 
-/// Private per-flash state: the current intensity, 1 at the peak and 0 when
-/// fully faded. Managed by the plugin.
-#[derive(Component, Default, Debug, Reflect)]
-struct ScreenFlashState {
-    /// Current intensity in `[0, 1]`; the overlay alpha is `peak_alpha * this`.
-    intensity: f32,
-}
-
 /// System set for [`ScreenFlashPlugin`].
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ScreenFlashSystems {
-    /// Decays each flash, drives the overlay alpha, and despawns finished
-    /// one-shot flashes.
+    /// Writes the fade `Tween`'s value into the overlay alpha. Runs after
+    /// [`TweenSystems::Advance`], since it reads the tween.
     Animate,
 }
 
@@ -110,78 +103,72 @@ impl Plugin for ScreenFlashPlugin {
     fn build(&self, app: &mut App) {
         debug!("ScreenFlashPlugin: build");
 
-        app.register_type::<ScreenFlash>()
-            .register_type::<ScreenFlashState>();
+        // The decay / despawn ride on a `Tween<f32>`; make sure it is advanced.
+        if !app.is_plugin_added::<TweenPlugin>() {
+            app.add_plugins(TweenPlugin);
+        }
+
+        app.register_type::<ScreenFlash>();
 
         app.add_observer(on_insert_screen_flash);
-
         app.add_systems(
             Update,
-            animate_screen_flash.in_set(ScreenFlashSystems::Animate),
+            animate_screen_flash
+                .after(TweenSystems::Advance)
+                .in_set(ScreenFlashSystems::Animate),
         );
     }
 }
 
-/// The overlay alpha at a given intensity: `peak_alpha * intensity`, with
-/// intensity clamped to `[0, 1]`.
-fn flash_alpha(intensity: f32, peak_alpha: f32) -> f32 {
-    peak_alpha * intensity.clamp(0.0, 1.0)
-}
-
-/// On [`ScreenFlash`] insert, spike the intensity to full. Uses `On<Insert>`
-/// (not `On<Add>`) so re-inserting on an already-flashing overlay re-triggers
-/// the flash instead of being ignored -- the spike-and-decay usage shape.
+/// On [`ScreenFlash`] insert, (re)attach the fade tween: ramp the overlay alpha
+/// from `peak_alpha` to zero over `1 / decay` seconds, despawning the overlay on
+/// completion when `despawn_on_end`. Uses `On<Insert>` (not `On<Add>`) so
+/// re-inserting on an already-flashing overlay rebuilds the tween from full --
+/// the spike-and-decay re-trigger.
 fn on_insert_screen_flash(
     insert: On<Insert, ScreenFlash>,
+    q_flash: Query<&ScreenFlash>,
     mut commands: Commands,
-    mut q_state: Query<&mut ScreenFlashState>,
 ) {
     let entity = insert.entity;
+    let Ok(flash) = q_flash.get(entity) else {
+        return;
+    };
     trace!("on_insert_screen_flash: entity {:?}", entity);
 
-    if let Ok(mut state) = q_state.get_mut(entity) {
-        state.intensity = 1.0;
+    // A zero (or negative) decay holds at the peak forever; an infinite duration
+    // makes the tween never advance off its start.
+    let duration = if flash.decay > 0.0 {
+        1.0 / flash.decay
     } else {
-        commands
-            .entity(entity)
-            .insert(ScreenFlashState { intensity: 1.0 });
-    }
+        f32::INFINITY
+    };
+    let on_complete = if flash.despawn_on_end {
+        TweenOnComplete::Despawn
+    } else {
+        TweenOnComplete::Keep
+    };
+
+    commands
+        .entity(entity)
+        .insert(
+            Tween::new(flash.peak_alpha, 0.0, duration, EaseFunction::Linear)
+                .with_on_complete(on_complete),
+        )
+        // Clear a finished marker from a previous decay so the fresh tween starts
+        // clean on a re-spike.
+        .remove::<TweenFinished>();
 }
 
-/// Decay each flash's intensity, drive the overlay's `BackgroundColor` alpha
-/// from it (preserving the RGB tint), and despawn a finished one-shot flash.
-///
-/// `BackgroundColor` is optional so the flash still decays (and a one-shot still
-/// despawns) even if the overlay is missing its background.
+/// Drive the overlay's `BackgroundColor` alpha from the fade tween's value,
+/// preserving the RGB tint. Decay and one-shot despawn are owned by the tween
+/// ([`TweenPlugin`]); `BackgroundColor` is optional so the flash still rides its
+/// tween even without a background.
 fn animate_screen_flash(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut q_flash: Query<(
-        Entity,
-        &ScreenFlash,
-        &mut ScreenFlashState,
-        Option<&mut BackgroundColor>,
-    )>,
+    mut q_flash: Query<(&Tween<f32>, &mut BackgroundColor), With<ScreenFlash>>,
 ) {
-    let dt = time.delta_secs();
-
-    for (entity, flash, mut state, background) in q_flash.iter_mut() {
-        trace!(
-            "animate_screen_flash: entity {:?} intensity {}",
-            entity,
-            state.intensity
-        );
-
-        state.intensity = (state.intensity - flash.decay * dt).max(0.0);
-
-        if let Some(mut background) = background {
-            let alpha = flash_alpha(state.intensity, flash.peak_alpha);
-            background.0 = background.0.with_alpha(alpha);
-        }
-
-        if state.intensity <= 0.0 && flash.despawn_on_end {
-            commands.entity(entity).despawn();
-        }
+    for (fade, mut background) in q_flash.iter_mut() {
+        background.0 = background.0.with_alpha(fade.value());
     }
 }
 
@@ -221,18 +208,6 @@ pub fn screen_flash(color: Color, peak_alpha: f32, decay: f32) -> impl Bundle {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn flash_alpha_scales_and_clamps() {
-        // Full intensity -> full peak alpha.
-        assert!((flash_alpha(1.0, 0.5) - 0.5).abs() < 1e-6);
-        // Half intensity -> half peak alpha.
-        assert!((flash_alpha(0.5, 0.5) - 0.25).abs() < 1e-6);
-        // Zero intensity -> transparent.
-        assert_eq!(flash_alpha(0.0, 0.5), 0.0);
-        // Intensity past 1 clamps to the peak (never brighter than the peak).
-        assert!((flash_alpha(2.0, 0.5) - 0.5).abs() < 1e-6);
-    }
 
     fn flash_app() -> App {
         let mut app = App::new();

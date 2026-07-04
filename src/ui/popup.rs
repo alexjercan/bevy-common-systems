@@ -17,10 +17,8 @@
 //!
 //! [`camera::project::world_to_screen`]: crate::camera::project::world_to_screen
 //!
-//! The component split follows the crate convention:
-//!
-//! 1. [`Popup`] - config: lifetime, rise speed, base color.
-//! 2. `PopupState` - private per-popup age.
+//! [`Popup`] is the config (lifetime, rise speed, base color); inserting it
+//! attaches a private `Tween<f32>` that owns the fade timing and the despawn.
 //!
 //! Spawn the common case with the [`popup`] bundle builder; for a custom layout
 //! (a centered banner, a different rise) put a [`Popup`] on your own `Text` /
@@ -37,10 +35,14 @@
 //! # }
 //! ```
 //!
-//! The rise/fade is a bespoke lerp for now; once the `tween` module exists it
-//! should be backed by that instead.
+//! The fade and lifetime are backed by the crate's [`tween`](crate::tween)
+//! module: inserting a [`Popup`] attaches a `Tween<f32>` that ramps the alpha to
+//! zero and despawns the popup when it completes. The rise stays a plain
+//! velocity, since it has no fixed end.
 
 use bevy::prelude::*;
+
+use crate::tween::prelude::*;
 
 pub mod prelude {
     pub use super::{popup, Popup, PopupPlugin, PopupSystems};
@@ -52,7 +54,6 @@ pub mod prelude {
 /// [`PopupPlugin`] will rise it up the screen, ramp its `TextColor` alpha to
 /// zero over `lifetime`, and despawn it when the lifetime is up.
 #[derive(Component, Debug, Clone, Reflect)]
-#[require(PopupState)]
 pub struct Popup {
     /// Total lifetime in seconds; the popup despawns once its age reaches this.
     pub lifetime: f32,
@@ -76,16 +77,11 @@ impl Default for Popup {
     }
 }
 
-/// Private per-popup age, in seconds since spawn. Managed by the plugin.
-#[derive(Component, Default, Debug, Reflect)]
-struct PopupState {
-    age: f32,
-}
-
 /// System set for [`PopupPlugin`].
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PopupSystems {
-    /// Advances popup age, rises and fades them, and despawns expired ones.
+    /// Rises the popup and applies the fade `Tween`'s value to its color. Runs
+    /// after [`TweenSystems::Advance`], since it reads the tween.
     Animate,
 }
 
@@ -96,49 +92,61 @@ impl Plugin for PopupPlugin {
     fn build(&self, app: &mut App) {
         debug!("PopupPlugin: build");
 
-        app.register_type::<Popup>().register_type::<PopupState>();
+        // The fade / despawn ride on a `Tween<f32>`; make sure it is advanced.
+        if !app.is_plugin_added::<TweenPlugin>() {
+            app.add_plugins(TweenPlugin);
+        }
 
-        app.add_systems(Update, animate_popups.in_set(PopupSystems::Animate));
+        app.register_type::<Popup>();
+
+        app.add_observer(on_insert_popup);
+        app.add_systems(
+            Update,
+            animate_popups
+                .after(TweenSystems::Advance)
+                .in_set(PopupSystems::Animate),
+        );
     }
 }
 
-/// The fade ramp: fraction of the base alpha remaining at `age` of `lifetime`.
-/// Linear from `base_alpha` at age 0 to 0 at (and past) the lifetime.
-fn popup_alpha(age: f32, lifetime: f32, base_alpha: f32) -> f32 {
-    if lifetime <= 0.0 {
-        return 0.0;
-    }
-    let ramp = (1.0 - age / lifetime).clamp(0.0, 1.0);
-    base_alpha * ramp
+/// On [`Popup`] insert, attach the alpha-fade tween: ramp the color's alpha from
+/// its base value to zero over the lifetime, then despawn the whole popup. Uses
+/// `On<Insert>` so re-inserting a `Popup` (a game overriding the feel) rebuilds
+/// the tween from the new config.
+fn on_insert_popup(insert: On<Insert, Popup>, q_popup: Query<&Popup>, mut commands: Commands) {
+    let entity = insert.entity;
+    let Ok(popup) = q_popup.get(entity) else {
+        return;
+    };
+    trace!("on_insert_popup: entity {:?}", entity);
+
+    commands.entity(entity).insert(
+        Tween::new(
+            popup.base_color.alpha(),
+            0.0,
+            popup.lifetime,
+            EaseFunction::Linear,
+        )
+        .with_on_complete(TweenOnComplete::Despawn),
+    );
 }
 
-/// Advance floating popups: age them, rise them up the screen, fade them out,
-/// and despawn them at the end of their lifetime.
-///
-/// `Node` and `TextColor` are optional so an expired popup is despawned even if
-/// it lacks either (rise needs the node, fade needs the text color).
+/// Rise floating popups up the screen and fade them by writing the fade tween's
+/// current alpha into their `TextColor`. Ageing and despawn are owned by the
+/// tween ([`TweenPlugin`]); `Node` / `TextColor` are optional so a popup missing
+/// either still rides its tween to the despawn.
 fn animate_popups(
-    mut commands: Commands,
     time: Res<Time>,
     mut q_popup: Query<(
-        Entity,
         &Popup,
-        &mut PopupState,
+        &Tween<f32>,
         Option<&mut Node>,
         Option<&mut TextColor>,
     )>,
 ) {
     let dt = time.delta_secs();
 
-    for (entity, popup, mut state, node, text_color) in q_popup.iter_mut() {
-        trace!("animate_popups: entity {:?} age {}", entity, state.age);
-
-        state.age += dt;
-        if state.age >= popup.lifetime {
-            commands.entity(entity).despawn();
-            continue;
-        }
-
+    for (popup, fade, node, text_color) in q_popup.iter_mut() {
         if let Some(mut node) = node {
             if let Val::Px(top) = node.top {
                 node.top = Val::Px(top - popup.rise_speed * dt);
@@ -146,8 +154,7 @@ fn animate_popups(
         }
 
         if let Some(mut text_color) = text_color {
-            let alpha = popup_alpha(state.age, popup.lifetime, popup.base_color.alpha());
-            text_color.0 = popup.base_color.with_alpha(alpha);
+            text_color.0 = popup.base_color.with_alpha(fade.value());
         }
     }
 }
@@ -183,29 +190,6 @@ pub fn popup(position: Vec2, text: impl Into<String>, font_size: f32, color: Col
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn popup_alpha_ramps_from_base_to_zero() {
-        // Full base alpha at birth.
-        assert!((popup_alpha(0.0, 1.0, 1.0) - 1.0).abs() < 1e-6);
-        // Half base alpha at half life.
-        assert!((popup_alpha(0.5, 1.0, 1.0) - 0.5).abs() < 1e-6);
-        // Zero at (and past) the lifetime, clamped.
-        assert_eq!(popup_alpha(1.0, 1.0, 1.0), 0.0);
-        assert_eq!(popup_alpha(2.0, 1.0, 1.0), 0.0);
-    }
-
-    #[test]
-    fn popup_alpha_respects_base_alpha() {
-        // A translucent base color fades from its own alpha, not from 1.0.
-        assert!((popup_alpha(0.0, 1.0, 0.6) - 0.6).abs() < 1e-6);
-        assert!((popup_alpha(0.5, 1.0, 0.6) - 0.3).abs() < 1e-6);
-    }
-
-    #[test]
-    fn popup_alpha_handles_zero_lifetime() {
-        assert_eq!(popup_alpha(0.0, 0.0, 1.0), 0.0);
-    }
 
     fn step(app: &mut App, dt_ms: u64) {
         app.world_mut()

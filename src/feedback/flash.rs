@@ -38,10 +38,13 @@
 //! # }
 //! ```
 //!
-//! The ease-back is a linear lerp for now; once the `tween` module exists it
-//! should be backed by that instead.
+//! The ease-back is backed by the crate's [`tween`](crate::tween) module: a
+//! `Tween<f32>` drives the mix fraction from full flash to the original over the
+//! duration, and a completion observer restores the original material.
 
 use bevy::prelude::*;
+
+use crate::tween::prelude::*;
 
 pub mod prelude {
     pub use super::{Flash, FlashChannel, FlashPlugin, FlashSystems};
@@ -88,22 +91,21 @@ impl Default for Flash {
     }
 }
 
-/// Private per-flash state: the original (shared) material handle to restore,
-/// the per-entity clone being animated, and elapsed time.
+/// Private per-flash state: the original (shared) material handle to restore and
+/// the per-entity clone being animated. The timing lives in a `Tween<f32>`.
 #[derive(Component, Debug, Reflect)]
 struct FlashState {
     /// The material the entity had before the flash; restored on completion.
     original: Handle<StandardMaterial>,
     /// The per-entity clone being animated; freed when the flash ends.
     clone: Handle<StandardMaterial>,
-    /// Seconds since the flash started.
-    elapsed: f32,
 }
 
 /// System set for [`FlashPlugin`].
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FlashSystems {
-    /// Advances the flash, eases the clone back, and restores/cleans up.
+    /// Mixes the clone material from the fade `Tween`'s value. Runs after
+    /// [`TweenSystems::Advance`], since it reads the tween.
     Animate,
 }
 
@@ -114,15 +116,33 @@ impl Plugin for FlashPlugin {
     fn build(&self, app: &mut App) {
         debug!("FlashPlugin: build");
 
+        // The ease-back / completion ride on a `Tween<f32>`; make sure it runs.
+        if !app.is_plugin_added::<TweenPlugin>() {
+            app.add_plugins(TweenPlugin);
+        }
+
         app.register_type::<Flash>()
             .register_type::<FlashChannel>()
             .register_type::<FlashState>();
 
         app.add_observer(on_insert_flash);
+        app.add_observer(on_flash_finished);
         app.add_observer(on_remove_flash_state);
 
-        app.add_systems(Update, animate_flash.in_set(FlashSystems::Animate));
+        app.add_systems(
+            Update,
+            animate_flash
+                .after(TweenSystems::Advance)
+                .in_set(FlashSystems::Animate),
+        );
     }
+}
+
+/// The mix-fraction tween for a flash: from `1` (full flash) to `0` (original)
+/// over `duration`, held in place ([`TweenOnComplete::Keep`]) so
+/// [`on_flash_finished`] can restore the material when it lands.
+fn flash_tween(duration: f32) -> Tween<f32> {
+    Tween::new(1.0, 0.0, duration, EaseFunction::Linear).with_on_complete(TweenOnComplete::Keep)
 }
 
 /// Linearly mix from `original` toward `flash` by `k` (`k = 1` is fully the
@@ -161,15 +181,24 @@ fn on_insert_flash(
     insert: On<Insert, Flash>,
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut q_state: Query<&mut FlashState>,
+    q_state: Query<&FlashState>,
+    q_flash: Query<&Flash>,
     q_material: Query<&MeshMaterial3d<StandardMaterial>>,
 ) {
     let entity = insert.entity;
     trace!("on_insert_flash: entity {:?}", entity);
 
-    // Already flashing: re-pop from full using the existing clone/original.
-    if let Ok(mut state) = q_state.get_mut(entity) {
-        state.elapsed = 0.0;
+    let Ok(flash) = q_flash.get(entity) else {
+        return;
+    };
+
+    // Already flashing: re-pop from full by rebuilding the tween, reusing the
+    // existing clone/original (and clearing any finished marker).
+    if q_state.contains(entity) {
+        commands
+            .entity(entity)
+            .insert(flash_tween(flash.duration))
+            .remove::<TweenFinished>();
         return;
     }
 
@@ -189,12 +218,29 @@ fn on_insert_flash(
     let clone = materials.add(source);
     commands.entity(entity).insert((
         MeshMaterial3d(clone.clone()),
-        FlashState {
-            original,
-            clone,
-            elapsed: 0.0,
-        },
+        FlashState { original, clone },
+        flash_tween(flash.duration),
     ));
+}
+
+/// When a flash's tween lands ([`TweenFinished`]), restore the shared original
+/// material and drop the flash; removing [`FlashState`] frees the clone via
+/// [`on_remove_flash_state`].
+fn on_flash_finished(
+    finished: On<Add, TweenFinished>,
+    mut commands: Commands,
+    q_state: Query<&FlashState, With<Flash>>,
+) {
+    let entity = finished.entity;
+    let Ok(state) = q_state.get(entity) else {
+        return;
+    };
+    trace!("on_flash_finished: restoring {:?}", entity);
+
+    commands
+        .entity(entity)
+        .try_insert(MeshMaterial3d(state.original.clone()))
+        .remove::<(Flash, FlashState, Tween<f32>, TweenFinished)>();
 }
 
 /// When a flash ends (or the entity despawns), free the per-entity clone so it
@@ -213,37 +259,16 @@ fn on_remove_flash_state(
     }
 }
 
-/// Ease each flashing material's clone from the flash color back to the original
-/// over the duration; on completion restore the original handle and drop the
-/// flash (which frees the clone via [`on_remove_flash_state`]).
+/// Mix each flashing material's clone from the flash color back to the original,
+/// using the fade tween's value as the mix fraction `k` (1 at the start, 0 at
+/// the end). Completion (restoring the original) is owned by the tween via
+/// [`on_flash_finished`].
 fn animate_flash(
-    mut commands: Commands,
-    time: Res<Time>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut q_flash: Query<(Entity, &Flash, &mut FlashState)>,
+    q_flash: Query<(&Flash, &FlashState, &Tween<f32>)>,
 ) {
-    let dt = time.delta_secs();
-
-    for (entity, flash, mut state) in q_flash.iter_mut() {
-        trace!(
-            "animate_flash: entity {:?} elapsed {}",
-            entity,
-            state.elapsed
-        );
-
-        state.elapsed += dt;
-
-        if flash.duration <= 0.0 || state.elapsed >= flash.duration {
-            // Restore the shared original; removing FlashState frees the clone.
-            commands
-                .entity(entity)
-                .try_insert(MeshMaterial3d(state.original.clone()))
-                .remove::<(Flash, FlashState)>();
-            continue;
-        }
-
-        // Fraction of the flash remaining: 1 at the start, 0 at the end.
-        let k = 1.0 - state.elapsed / flash.duration;
+    for (flash, state, fade) in q_flash.iter() {
+        let k = fade.value();
 
         // Read the original channel value first (a Copy), then mutate the clone,
         // so the two Assets borrows do not overlap.

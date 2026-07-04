@@ -1,6 +1,6 @@
 # ui/popup + feedback: consume tween::Tween for fade/decay (realize foundation)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 20
 - TAGS: feature,tween,ui,feedback
 
