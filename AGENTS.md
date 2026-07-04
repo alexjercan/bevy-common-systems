@@ -296,10 +296,14 @@ Examples:
   `FontSize::Px(..)` (not a bare `f32`), `TextLayout` is built as a struct
   literal (`TextLayout { justify: Justify::Center, ..default() }`, no
   `new_with_justify`), and `AmbientLight` is a per-camera component, not a
-  global resource. Grepping `06_fruitninja`/`08_dropzone` for `font_size:`,
-  `TextLayout` and `AmbientLight` up front avoids a batch of compile errors
-  (this has bitten two cycles now: `docs/retros/20260703-150200-bevy-019-migration.md`
-  and `docs/retros/20260703-165432-dropzone-example.md`).
+  global resource. Rounded UI corners are a `Node` field, not a component:
+  `Node { border_radius: BorderRadius::MAX, .. }` (whereas `BorderColor` *is* a
+  component) - spawning `BorderRadius` in the bundle fails the `Bundle` bound.
+  Grepping `06_fruitninja`/`08_dropzone` for `font_size:`, `TextLayout`,
+  `AmbientLight` and `border_radius:` up front avoids a batch of compile errors
+  (this has bitten three cycles now: `docs/retros/20260703-150200-bevy-019-migration.md`,
+  `docs/retros/20260703-165432-dropzone-example.md` and
+  `docs/retros/20260704-103517-dropzone-touch-controls.md`).
 - Running examples: the examples open a window and are the de facto integration
   tests, so a new or changed example is not "done" until it has actually been
   run once - `cargo build` only proves it compiles, not that it boots. Even a
