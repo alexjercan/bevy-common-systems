@@ -251,7 +251,7 @@ fn main() {
     app.insert_resource(ClearColor(Color::srgb(0.04, 0.05, 0.08)));
     app.init_resource::<Shop>();
     app.init_resource::<Progress>();
-    app.init_resource::<HighScore>();
+    app.init_resource::<HighScore<f64>>();
     app.insert_resource(TickTimer(Timer::from_seconds(
         TICK_INTERVAL,
         TimerMode::Repeating,
@@ -286,13 +286,12 @@ fn main() {
             .run_if(in_state(GameState::Playing)),
     );
 
-    // Meltdown / game over.
-    // `spawn_game_over` reads the still-old best to decide "New best!", then
-    // `record_high_score` updates it -- so a run that only ties the best is not
-    // announced as a new best.
+    // Meltdown / game over. `record_high_score` runs first so `spawn_game_over`
+    // can read `HighScore::is_new_best()` (a run that only ties the best is not a
+    // new best, since `record` uses a strict `>`).
     app.add_systems(
         OnEnter(GameState::GameOver),
-        (spawn_game_over, record_high_score, play_game_over_sfx).chain(),
+        (record_high_score, spawn_game_over, play_game_over_sfx).chain(),
     );
     app.add_systems(
         Update,
@@ -506,9 +505,8 @@ impl Progress {
     }
 }
 
-/// Best score (total credits earned) seen this process.
-#[derive(Resource, Default)]
-struct HighScore(f64);
+// Best score (total credits earned) this session is the crate's generic
+// `HighScore<f64>`, which also tracks the "new best" flag.
 
 /// Keys into the crate's `SoundBank` of one-shot sound effects. The semantic key
 /// is decoupled from the file: several reuse shared placeholder `.wav`s (see the
@@ -712,7 +710,7 @@ fn best_line(best: f64) -> String {
 
 // --- Menu -------------------------------------------------------------------
 
-fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
+fn spawn_menu(mut commands: Commands, high: Res<HighScore<f64>>) {
     commands
         .spawn((
             Name::new("Menu"),
@@ -745,7 +743,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
                 Color::srgb(0.6, 0.65, 0.75),
             ));
             parent.spawn(screen_text(
-                best_line(high.0),
+                best_line(high.best()),
                 22.0,
                 Color::srgb(0.95, 0.85, 0.25),
             ));
@@ -1227,23 +1225,19 @@ fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<
 
 // --- Game over --------------------------------------------------------------
 
-fn record_high_score(world: Res<ReactorWorld>, shop: Res<Shop>, mut high: ResMut<HighScore>) {
-    let s = score(&world, &shop);
-    if s > high.0 {
-        high.0 = s;
-    }
+fn record_high_score(world: Res<ReactorWorld>, shop: Res<Shop>, mut high: ResMut<HighScore<f64>>) {
+    high.record(score(&world, &shop));
 }
 
 fn spawn_game_over(
     mut commands: Commands,
     world: Res<ReactorWorld>,
     shop: Res<Shop>,
-    high: Res<HighScore>,
+    high: Res<HighScore<f64>>,
 ) {
     let final_score = score(&world, &shop);
-    // `high.0` is still the pre-run best here (this runs before `record_high_score`
-    // in the chain), so a strict `>` means only beating it -- not tying -- counts.
-    let new_best = final_score > high.0;
+    // `record_high_score` ran first in the chain, so the flag reflects this run.
+    let new_best = high.is_new_best();
     let melted = world.heat >= HEAT_MAX;
 
     commands
@@ -1272,7 +1266,7 @@ fn spawn_game_over(
                 ));
             } else {
                 parent.spawn(screen_text(
-                    best_line(high.0),
+                    best_line(high.best()),
                     24.0,
                     Color::srgb(0.8, 0.8, 0.85),
                 ));

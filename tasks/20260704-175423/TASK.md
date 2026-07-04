@@ -1,6 +1,6 @@
 # HighScore<T> generic best-score resource + record + New best (Wave 2)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 50
 - TAGS: spike,feature
 

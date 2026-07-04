@@ -39,7 +39,6 @@ use bevy::prelude::*;
 use bevy_common_systems::prelude::*;
 use clap::Parser;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 #[command(name = "06_fruitninja")]
@@ -195,8 +194,9 @@ fn main() {
     app.init_resource::<Score>();
     // Persist the best score across launches (disk on native, localStorage on
     // wasm). The plugin loads it on startup and saves it whenever it changes.
-    app.add_plugins(PersistPlugin::<HighScore>::new("06_fruitninja.high_score"));
-    app.init_resource::<NewBest>();
+    app.add_plugins(PersistPlugin::<HighScore<usize>>::new(
+        "06_fruitninja.high_score",
+    ));
     app.insert_resource(SpawnTimer(Timer::from_seconds(
         SPAWN_INTERVAL,
         TimerMode::Repeating,
@@ -270,14 +270,9 @@ enum GameState {
 #[derive(Resource, Default, Deref, DerefMut)]
 struct Score(usize);
 
-/// Best score across runs, persisted to disk/localStorage so it survives a
-/// restart (via the crate's `PersistPlugin`).
-#[derive(Resource, Default, Serialize, Deserialize)]
-struct HighScore(usize);
-
-/// Whether the most recent run set a new high score (for the game-over screen).
-#[derive(Resource, Default)]
-struct NewBest(bool);
+// Best score across runs (plus the "new best" flag) is the crate's generic
+// `HighScore<usize>`, persisted to disk/localStorage via the crate's
+// `PersistPlugin` so it survives a restart.
 
 /// Ticks between fruit launches.
 #[derive(Resource, Deref, DerefMut)]
@@ -709,7 +704,7 @@ fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle 
 }
 
 /// Spawn the main menu (title + prompt), scoped to the `Menu` state.
-fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
+fn spawn_menu(mut commands: Commands, high: Res<HighScore<usize>>) {
     commands.spawn((
         Name::new("Main Menu"),
         DespawnOnExit(GameState::Menu),
@@ -721,7 +716,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
             ),
             screen_text("Tap or click to play", 32.0, Color::WHITE),
             screen_text(
-                format!("Best: {}", high.0),
+                format!("Best: {}", high.best()),
                 24.0,
                 Color::srgb(0.95, 0.85, 0.25),
             ),
@@ -848,12 +843,7 @@ fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<
 }
 
 /// Spawn the game-over screen with the final score, scoped to `GameOver`.
-fn spawn_game_over(
-    mut commands: Commands,
-    score: Res<Score>,
-    high: Res<HighScore>,
-    new_best: Res<NewBest>,
-) {
+fn spawn_game_over(mut commands: Commands, score: Res<Score>, high: Res<HighScore<usize>>) {
     commands
         .spawn((
             Name::new("Game Over"),
@@ -867,11 +857,11 @@ fn spawn_game_over(
                 40.0,
                 Color::srgb(0.95, 0.85, 0.25),
             ));
-            if new_best.0 {
+            if high.is_new_best() {
                 parent.spawn(screen_text("New best!", 32.0, Color::srgb(0.4, 0.95, 0.5)));
             } else {
                 parent.spawn(screen_text(
-                    format!("Best: {}", high.0),
+                    format!("Best: {}", high.best()),
                     28.0,
                     Color::srgb(0.7, 0.7, 0.7),
                 ));
@@ -892,13 +882,8 @@ fn play_game_over_sfx(mut commands: Commands, sfx: Res<SoundBank<Sfx>>) {
 }
 
 /// Record the run's score into the session high score, flagging a new best.
-fn record_high_score(
-    score: Res<Score>,
-    mut high: ResMut<HighScore>,
-    mut new_best: ResMut<NewBest>,
-) {
-    new_best.0 = score.0 > high.0;
-    high.0 = high.0.max(score.0);
+fn record_high_score(score: Res<Score>, mut high: ResMut<HighScore<usize>>) {
+    high.record(score.0);
 }
 
 /// Return to the menu on a tap / click from the game-over screen.
