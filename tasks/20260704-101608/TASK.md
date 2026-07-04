@@ -1,6 +1,6 @@
 # Make GitHub Pages deploy resilient to transient 'try again later' failures
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: bug,ci,web
 
