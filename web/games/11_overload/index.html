@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, user-scalable=no"
+    />
+    <title>Overload - bevy_common_systems</title>
+    <!--
+      Web Audio unlock shim for mobile Safari/iOS, shared verbatim by every
+      web game from web/games/_shared/audio-unlock.js (the copy-file link below
+      stages it into this game's dist root as audio-unlock.js). It must stay a
+      plain, non-module, non-defer <script src>: that runs synchronously before
+      trunk's injected `<script type="module">` wasm loader, so it wraps the
+      AudioContext constructor before Bevy/cpal builds its context. Previously
+      this shim was inline-copied per game and drifted (07_orbit / 08_dropzone
+      lost the iOS media-channel fix and went silent on iPhone); the shared file
+      is what prevents that. See docs/wasm-web-builds.md.
+    -->
+    <script src="audio-unlock.js"></script>
+    <link data-trunk rel="copy-file" href="../_shared/audio-unlock.js" />
+    <!--
+      Trunk builds the crate's `11_overload` example to wasm. The example is
+      selected on the CLI with `--example 11_overload` (see build-games.sh);
+      this link just points trunk at the crate root.
+    -->
+    <link data-trunk rel="rust" href="../../../Cargo.toml" data-wasm-opt="z" />
+    <!--
+      The game loads its sound effects with `asset_server.load("sounds/*.wav")`,
+      which on wasm fetches `<public-url>assets/sounds/*.wav` at runtime. Trunk
+      copies nothing by default, so stage the crate's `assets/sounds/` into the
+      dist under `assets/sounds/` (data-target-path is relative to the dist
+      dir; href is relative to this index.html -- `../../../` is the repo root).
+      Without this the fetches 404 and every sound is silent. The whole game is
+      the status-bar UI, so no image asset is needed. See docs/wasm-web-builds.md.
+    -->
+    <link
+      data-trunk
+      rel="copy-dir"
+      href="../../../assets/sounds"
+      data-target-path="assets/sounds"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #0b0f1a;
+        overflow: hidden;
+      }
+      /* The game targets this canvas and fits it to the parent (the body =
+         the embedding iframe), so it renders at the iframe's aspect. */
+      #game-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        outline: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+  </body>
+</html>

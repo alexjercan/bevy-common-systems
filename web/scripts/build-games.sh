@@ -27,6 +27,7 @@ games=(
   "06_fruitninja web/games/06_fruitninja"
   "07_orbit web/games/07_orbit"
   "08_dropzone web/games/08_dropzone"
+  "11_overload web/games/11_overload"
 )
 
 for entry in "${games[@]}"; do

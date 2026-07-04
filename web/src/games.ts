@@ -41,6 +41,15 @@ export const GAMES: Game[] = [
       'Space/Up to thrust, W/S to pitch, A/D to roll. Land slow and level, or crash into fragments.',
     accent: '#5ad1ff',
   },
+  {
+    id: '11_overload',
+    title: 'Overload',
+    blurb:
+      'Run a failing reactor whose gauges climb on their own. Vent them back to green before the console goes critical -- but every vent pushes another gauge up.',
+    controls:
+      'Press 1 / 2 / 3 / 4 to vent HEAT / PRES / FLUX / CHRG. Keep every gauge out of the red or the hull melts down.',
+    accent: '#ff7a3c',
+  },
 ];
 
 /** Path (relative to the site base) to a game's wasm page. */

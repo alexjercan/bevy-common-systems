@@ -260,6 +260,16 @@ Examples:
   `TriangleMeshBuilder::vertices_and_indices()`. Follows the `06_fruitninja`
   shape (states, sounds, wasm). See `docs/2026-07-03-dropzone-example.md`;
   the flight constants were play-tested and tuned in `tasks/20260703-213510`.
+- `11_overload` - "Overload": a dashboard-survival game and the headline demo of
+  `ui/status` as a game surface. The whole game lives on the `status_bar`: four
+  gauges (HEAT/PRES/FLUX/CHRG) climb and random-walk on their own, each a
+  `status_bar_item` whose `color_fn` goes green -> amber -> red; press 1/2/3/4 to
+  vent one back down, but each vent pushes a coupled neighbour up, so it is a
+  juggling act. While any gauge sits red the reactor's `Health` drains
+  (`HealthApplyDamage` -> `HealthZeroMarker` ends the run) and an alarm beeps;
+  difficulty ramps the climb rates over time. No 3D scene -- renders with a plain
+  `Camera2d`. Grows out of `04_status_item`, follows the `06_fruitninja` shape
+  (states, sounds, wasm). See `docs/2026-07-04-overload-example.md`.
 
 ## Workflow
 

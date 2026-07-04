@@ -36,6 +36,9 @@ SOUNDS = {
     "pickup": (1046.0, 0.10, 0.20),
     "hurt": (196.0, 0.22, 0.26),
     "level_up": (784.0, 0.20, 0.20),
+    # 11_overload events (menu_select, game_over and level_up are shared).
+    "vent": (330.0, 0.12, 0.18),
+    "alarm": (1200.0, 0.18, 0.22),
 }
 
 

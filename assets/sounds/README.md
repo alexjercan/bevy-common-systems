@@ -1,15 +1,18 @@
 # Example game sound effects
 
-The `06_fruitninja` and `07_orbit` examples
-(`examples/06_fruitninja.rs`, `examples/07_orbit.rs`) load one sound per
-gameplay event from this directory. The files committed here are **tiny
-generated placeholders** (short sine blips, one distinct pitch each) produced by
+The `06_fruitninja`, `07_orbit` and `11_overload` examples
+(`examples/06_fruitninja.rs`, `examples/07_orbit.rs`,
+`examples/11_overload.rs`) load one sound per gameplay event from this
+directory. The files committed here are **tiny generated placeholders** (short
+sine blips, one distinct pitch each) produced by
 `scripts/gen-placeholder-sounds.py` so the examples run and are audible out of
 the box. They are not meant to be shipped as the final sound design.
 
-`menu_select.wav`, `game_over.wav` and `combo.wav` are shared between the two
+`menu_select.wav`, `game_over.wav` and `combo.wav` are shared between the
 games; the rest are per-game (`slice`/`splat`/`golden`/`bomb`/`launch` for fruit
-ninja, `pickup`/`hurt`/`level_up` for orbit runner). Orbit runner plays
+ninja, `pickup`/`hurt`/`level_up` for orbit runner, `vent`/`alarm` for
+overload, which also shares `menu_select`/`game_over`/`level_up`). Orbit runner
+plays
 `combo.wav` over the `pickup` blip once a collection streak reaches x2, pitched
 up with the chain, the same way fruit ninja uses it for slice combos.
 
@@ -42,6 +45,8 @@ audio module (`SfxPlugin`) plays whatever handle it is given.
 | `launch.wav` | A fruit or bomb is launched from below | soft airy whoosh, ~0.2 s (played quietly) |
 | `pickup.wav` | `07_orbit`: an orb is collected | bright blip / chime, ~0.1 s |
 | `hurt.wav` | `07_orbit`: a hazard is touched (damage taken) | low thud / buzz, ~0.2 s |
+| `vent.wav` | `11_overload`: a gauge is vented back toward green | soft relief hiss, ~0.1-0.2 s |
+| `alarm.wav` | `11_overload`: a gauge is in the red (beeps while critical) | sharp warning beep, ~0.15-0.3 s |
 | `level_up.wav` | `07_orbit`: a new difficulty level is reached | rising ding, ~0.2 s |
 
 ## Web (wasm) builds
