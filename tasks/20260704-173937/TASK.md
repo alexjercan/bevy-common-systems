@@ -1,6 +1,6 @@
 # helpers: bevy_enhanced_input bridge to UnifiedPointer (retire 06 local Pointer)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 25
 - TAGS: feature,input,helpers
 
