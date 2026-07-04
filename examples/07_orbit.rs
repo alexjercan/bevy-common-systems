@@ -225,7 +225,7 @@ fn main() {
             tick_streak,
             blink_runner,
             update_hud,
-            giveup_on_escape,
+            set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
             .run_if(in_state(GameState::Playing)),
     );
@@ -420,22 +420,21 @@ fn setup(
         runner_mesh: meshes.add(TriangleMeshBuilder::new_octahedron(2).build()),
         hazard_mesh: meshes.add(TriangleMeshBuilder::new_octahedron(1).build()),
         orb_mesh: meshes.add(TriangleMeshBuilder::new_octahedron(2).build()),
-        runner_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.95, 0.95, 1.0),
-            emissive: LinearRgba::rgb(0.5, 0.7, 1.0),
-            ..default()
-        }),
+        runner_material: materials.add(glowing_material(
+            Color::srgb(0.95, 0.95, 1.0),
+            LinearRgba::rgb(0.5, 0.7, 1.0),
+        )),
         hazard_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.85, 0.12, 0.12),
-            emissive: LinearRgba::rgb(0.35, 0.02, 0.02),
             perceptual_roughness: 0.5,
-            ..default()
+            ..glowing_material(
+                Color::srgb(0.85, 0.12, 0.12),
+                LinearRgba::rgb(0.35, 0.02, 0.02),
+            )
         }),
-        orb_material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.3, 0.95, 0.7),
-            emissive: LinearRgba::rgb(0.1, 0.7, 0.45),
-            ..default()
-        }),
+        orb_material: materials.add(glowing_material(
+            Color::srgb(0.3, 0.95, 0.7),
+            LinearRgba::rgb(0.1, 0.7, 0.45),
+        )),
     });
 
     // Chase camera. It is spawned once and follows whatever the game writes into
@@ -480,13 +479,7 @@ fn setup(
 
     // Status bar: FPS only. The score / health live in the in-game HUD.
     commands.spawn((status_bar(StatusBarRootConfig::default()),));
-    commands.spawn((status_bar_item(StatusBarItemConfig {
-        icon: None,
-        value_fn: status_fps_value_fn(),
-        color_fn: status_fps_color_fn(),
-        prefix: "".to_string(),
-        suffix: "fps".to_string(),
-    }),));
+    commands.spawn(status_bar_with_fps());
 }
 
 // --- Pure helpers (unit-tested below) -------------------------------------
@@ -643,19 +636,6 @@ fn read_steer(
     steer.clamp(-1.0, 1.0)
 }
 
-/// True on the frame a "continue" press begins: a click, a tap, Space or Enter.
-/// Used by the menu and game-over screens.
-fn advance_pressed(
-    mouse: &ButtonInput<MouseButton>,
-    keys: &ButtonInput<KeyCode>,
-    touches: &Touches,
-) -> bool {
-    mouse.just_pressed(MouseButton::Left)
-        || keys.just_pressed(KeyCode::Space)
-        || keys.just_pressed(KeyCode::Enter)
-        || touches.iter_just_pressed().next().is_some()
-}
-
 // --- Menu -----------------------------------------------------------------
 
 /// Spawn the main menu (title + prompt), scoped to the `Menu` state.
@@ -687,13 +667,11 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
 /// Start the game on a click / tap from the menu.
 fn advance_from_menu(
     mut commands: Commands,
-    mouse: Res<ButtonInput<MouseButton>>,
-    keys: Res<ButtonInput<KeyCode>>,
-    touches: Res<Touches>,
+    start: AnyStartPress,
     sfx: Res<SfxAssets>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    if advance_pressed(&mouse, &keys, &touches) {
+    if start.just_pressed() {
         commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
         next.set(GameState::Playing);
     }
@@ -1199,13 +1177,6 @@ fn update_hud(
     }
 }
 
-/// Give up the current run with Escape.
-fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
-    if keys.just_pressed(KeyCode::Escape) {
-        next.set(GameState::GameOver);
-    }
-}
-
 // --- Streak & floating popups ---------------------------------------------
 
 /// Count the streak window down; when it lapses the streak resets to zero so the
@@ -1321,13 +1292,8 @@ fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
 }
 
 /// Return to the menu on a tap / click from the game-over screen.
-fn advance_from_game_over(
-    mouse: Res<ButtonInput<MouseButton>>,
-    keys: Res<ButtonInput<KeyCode>>,
-    touches: Res<Touches>,
-    mut next: ResMut<NextState<GameState>>,
-) {
-    if advance_pressed(&mouse, &keys, &touches) {
+fn advance_from_game_over(start: AnyStartPress, mut next: ResMut<NextState<GameState>>) {
+    if start.just_pressed() {
         next.set(GameState::Menu);
     }
 }

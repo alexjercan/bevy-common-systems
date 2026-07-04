@@ -245,7 +245,7 @@ fn main() {
             draw_arena_border,
             update_hud,
             advance_dying,
-            giveup_on_escape,
+            set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
             .run_if(in_state(GameState::Playing)),
     );
@@ -458,16 +458,13 @@ fn setup(
         ..default()
     });
 
-    // Bullets glow hot so bloom streaks them.
+    // Bullets glow hot so bloom streaks them. `glowing_material` keeps the
+    // material lit (never `unlit`) so the HDR emissive is applied and blooms.
     let bullet_mesh = meshes.add(Sphere::new(BULLET_RADIUS).mesh().ico(2).unwrap());
-    // Emissive HDR (not `unlit`): `unlit` would skip the lighting pass where
-    // emissive is applied, so the bullet would not bloom. Left lit, the HDR
-    // emissive dominates and streaks under `camera/post` bloom.
-    let bullet_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.7, 0.95, 1.0),
-        emissive: LinearRgba::rgb(1.0, 5.0, 8.0),
-        ..default()
-    });
+    let bullet_material = materials.add(glowing_material(
+        Color::srgb(0.7, 0.95, 1.0),
+        LinearRgba::rgb(1.0, 5.0, 8.0),
+    ));
 
     commands.insert_resource(GameAssets {
         rock_meshes,
@@ -526,13 +523,7 @@ fn setup(
 
     // Status bar: FPS only (score / wave / hull live in the in-game HUD).
     commands.spawn((status_bar(StatusBarRootConfig::default()),));
-    commands.spawn((status_bar_item(StatusBarItemConfig {
-        icon: None,
-        value_fn: status_fps_value_fn(),
-        color_fn: status_fps_color_fn(),
-        prefix: "".to_string(),
-        suffix: "fps".to_string(),
-    }),));
+    commands.spawn(status_bar_with_fps());
 }
 
 /// Spawn the four static wall colliders that contain the arena.
@@ -670,12 +661,11 @@ fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<Men
 
 fn menu_click(
     mut commands: Commands,
-    pointer: Res<UnifiedPointer>,
-    keys: Res<ButtonInput<KeyCode>>,
+    start: AnyStartPress,
     sfx: Res<SfxAssets>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    if pointer.just_pressed || keys.just_pressed(KeyCode::Space) {
+    if start.just_pressed() {
         commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
         next.set(GameState::Playing);
     }
@@ -711,22 +701,19 @@ fn spawn_ship(
         radius: 0.6,
         height: 1.7,
     });
-    let hull_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.85, 0.9, 1.0),
-        emissive: LinearRgba::rgb(0.1, 0.25, 0.5),
-        ..default()
-    });
+    let hull_material = materials.add(glowing_material(
+        Color::srgb(0.85, 0.9, 1.0),
+        LinearRgba::rgb(0.1, 0.25, 0.5),
+    ));
     let flame_mesh = meshes.add(Cone {
         radius: 0.32,
         height: 1.0,
     });
-    // Emissive HDR, left lit so the emissive is actually applied and blooms
-    // (see the bullet material note on why `unlit` would suppress it).
-    let flame_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(1.0, 0.6, 0.1),
-        emissive: LinearRgba::rgb(8.0, 3.0, 0.4),
-        ..default()
-    });
+    // Emissive HDR, left lit so the emissive is actually applied and blooms.
+    let flame_material = materials.add(glowing_material(
+        Color::srgb(1.0, 0.6, 0.1),
+        LinearRgba::rgb(8.0, 3.0, 0.4),
+    ));
 
     commands
         .spawn((
@@ -1356,13 +1343,6 @@ fn advance_dying(
     }
 }
 
-/// Give up the current run with Escape.
-fn giveup_on_escape(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
-    if keys.just_pressed(KeyCode::Escape) {
-        next.set(GameState::GameOver);
-    }
-}
-
 fn record_high_score(
     score: Res<Score>,
     mut high: ResMut<HighScore>,
@@ -1413,12 +1393,8 @@ fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
     commands.play_sfx_volume(sfx.game_over.clone(), 0.9);
 }
 
-fn gameover_click(
-    pointer: Res<UnifiedPointer>,
-    keys: Res<ButtonInput<KeyCode>>,
-    mut next: ResMut<NextState<GameState>>,
-) {
-    if pointer.just_pressed || keys.just_pressed(KeyCode::Space) {
+fn gameover_click(start: AnyStartPress, mut next: ResMut<NextState<GameState>>) {
+    if start.just_pressed() {
         next.set(GameState::Menu);
     }
 }

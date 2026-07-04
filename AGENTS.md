@@ -488,6 +488,14 @@ Examples:
   it had to become `UnifiedPointer`. Check new prelude names against
   `bevy::prelude` before committing to them
   (`docs/retros/20260704-161508-input-pointer.md`).
+- Doctests that construct and configure an `App` are runtime tests, not just
+  compile checks -- `cargo test --doc` actually runs them. `init_state` /
+  `NextState` / any state transition panics at runtime without the state
+  machinery, so a doctest built on `MinimalPlugins` alone compiles green then
+  panics with "The `StateTransition` schedule is missing. Did you forget to add
+  StatesPlugin or DefaultPlugins?". Give such doctests
+  `(MinimalPlugins, bevy::state::app::StatesPlugin)` (or `DefaultPlugins`), the
+  plugins the real app would have (`docs/retros/20260704-175425-leaf-helpers.md`).
 - Web/wasm builds: `trunk` must run from the repo root (it fails with
   `Unable to find any Trunk configuration` from a subdir like `web/`), and
   `rand` on wasm needs the getrandom `wasm_js` backend. Both are handled in

@@ -11,6 +11,7 @@
 //! ```
 
 pub mod pointer;
+pub mod state;
 
 /// Re-exports the commonly used input types for convenience.
 ///
@@ -18,5 +19,5 @@ pub mod pointer;
 /// use bevy_common_systems::input::prelude::*;
 /// ```
 pub mod prelude {
-    pub use super::pointer::prelude::*;
+    pub use super::{pointer::prelude::*, state::prelude::*};
 }

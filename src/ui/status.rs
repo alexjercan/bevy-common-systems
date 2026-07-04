@@ -8,7 +8,7 @@ use bevy::{platform::collections::HashMap, prelude::*};
 
 pub mod prelude {
     pub use super::{
-        status_bar, status_bar_item, status_fps_color_fn, status_fps_value_fn,
+        status_bar, status_bar_item, status_bar_with_fps, status_fps_color_fn, status_fps_value_fn,
         status_version_color_fn, status_version_value_fn, StatusBarItemConfig, StatusBarItemMarker,
         StatusBarPlugin, StatusBarPluginSystems, StatusBarRootConfig, StatusBarRootMarker,
         StatusValue,
@@ -255,6 +255,34 @@ fn insert_status_bar_item(
             ],
         ));
     });
+}
+
+/// A ready-made "NN fps" status bar item, wiring [`status_fps_value_fn`] and
+/// [`status_fps_color_fn`] with a `fps` suffix.
+///
+/// The FPS item is copied verbatim into every game; this collapses the
+/// eight-line [`status_bar_item`] spawn to one call. Spawn it as a child (or
+/// sibling) of a [`status_bar`] root:
+///
+/// ```rust
+/// # use bevy::prelude::*;
+/// # use bevy_common_systems::prelude::*;
+/// fn setup(mut commands: Commands) {
+///     commands.spawn(status_bar(StatusBarRootConfig::default()));
+///     commands.spawn(status_bar_with_fps());
+/// }
+/// ```
+///
+/// The reading needs Bevy's `FrameTimeDiagnosticsPlugin` added, same as the
+/// hand-rolled item.
+pub fn status_bar_with_fps() -> impl Bundle {
+    status_bar_item(StatusBarItemConfig {
+        icon: None,
+        value_fn: status_fps_value_fn(),
+        color_fn: status_fps_color_fn(),
+        prefix: "".to_string(),
+        suffix: "fps".to_string(),
+    })
 }
 
 pub fn status_fps_value_fn(

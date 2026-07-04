@@ -1,6 +1,6 @@
 # input AnyStartPress + adopt UnifiedPointer; leaf helpers giveup_on_escape/status_bar_with_fps/glowing_material (Wave 2)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: spike,feature
 
@@ -29,3 +29,18 @@ lines:
 Prove each by refactoring the affected games. This task is stepless on purpose
 (spike output); run /plan to break it into steps before /work. Split into
 smaller tasks at plan time if the cluster is too broad for one branch.
+
+## Close-out
+
+Shipped all four helpers in one branch (each is a few lines, as the cluster
+intended): `AnyStartPress` SystemParam + `any_start_pressed` run condition in
+`input/pointer`; `set_state_on_key(key, target)` system factory in a new
+`input/state`; `status_bar_with_fps()` in `ui/status`; `glowing_material(base,
+emissive)` in a new `material` module (with a unit test pinning `!unlit`).
+
+Proved them by refactoring 07_orbit and 10_asteroids onto all four (07 dropped
+its local `advance_pressed`/`giveup_on_escape`; 10 dropped its pointer+keys
+advance checks and `giveup_on_escape`). Reviewed APPROVE in one round (three
+informational NITs). Migration of the remaining games (06/08/09/11/12) onto
+these helpers + `UnifiedPointer` folds into the Wave 2 migration follow-up
+(20260704-223846).

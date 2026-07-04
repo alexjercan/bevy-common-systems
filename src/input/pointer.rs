@@ -36,11 +36,12 @@
 //! }
 //! ```
 
-use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::{ecs::system::SystemParam, prelude::*, window::PrimaryWindow};
 
 pub mod prelude {
     pub use super::{
-        active_pointer_pos, UnifiedPointer, UnifiedPointerPlugin, UnifiedPointerSystems,
+        active_pointer_pos, any_start_pressed, AnyStartPress, UnifiedPointer, UnifiedPointerPlugin,
+        UnifiedPointerSystems,
     };
 }
 
@@ -95,6 +96,50 @@ pub struct UnifiedPointer {
 /// ```
 pub fn active_pointer_pos(touch_pos: Option<Vec2>, cursor_pos: Option<Vec2>) -> Option<Vec2> {
     touch_pos.or(cursor_pos)
+}
+
+/// "Did the player press anything to advance this frame" -- a left click, a
+/// tap, or `Space` / `Enter`.
+///
+/// A [`SystemParam`] bundling the raw mouse, keyboard and touch state so the
+/// "advance on any press" check every menu / game-over screen does is one call
+/// instead of the copy-pasted three-way `||`. It reads raw Bevy input (not
+/// [`UnifiedPointer`]) so it needs no plugin and works in any game.
+///
+/// ```rust
+/// # use bevy::prelude::*;
+/// # use bevy_common_systems::prelude::*;
+/// # #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
+/// # enum GameState { #[default] Menu, Playing }
+/// fn dismiss_menu(start: AnyStartPress, mut next: ResMut<NextState<GameState>>) {
+///     if start.just_pressed() {
+///         next.set(GameState::Playing);
+///     }
+/// }
+/// ```
+#[derive(SystemParam)]
+pub struct AnyStartPress<'w> {
+    mouse: Res<'w, ButtonInput<MouseButton>>,
+    keys: Res<'w, ButtonInput<KeyCode>>,
+    touches: Res<'w, Touches>,
+}
+
+impl AnyStartPress<'_> {
+    /// True on the frame the player begins a press meant to advance: a left
+    /// mouse click, a `Space` / `Enter` key, or a fresh touch.
+    pub fn just_pressed(&self) -> bool {
+        self.mouse.just_pressed(MouseButton::Left)
+            || self.keys.just_pressed(KeyCode::Space)
+            || self.keys.just_pressed(KeyCode::Enter)
+            || self.touches.any_just_pressed()
+    }
+}
+
+/// Run-condition form of [`AnyStartPress::just_pressed`], for gating a system on
+/// "any advance press this frame":
+/// `system.run_if(any_start_pressed)`.
+pub fn any_start_pressed(start: AnyStartPress) -> bool {
+    start.just_pressed()
 }
 
 /// Maintains the unified [`UnifiedPointer`] resource each frame.
