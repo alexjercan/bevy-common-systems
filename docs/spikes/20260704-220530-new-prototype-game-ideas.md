@@ -155,43 +155,106 @@ unrepresented. Low upside to deferring; these are cheap, on-charter examples.
 
 ## Recommendation
 
-Build **two** games, in this order:
+**(Revised 20260704-2213 after user steer.)** The original recommendation was
+two separate games (a top-down click-defense for `camera/project`, a
+first-person turret for the two rotation modules). The user pointed out these
+merge cleanly into **one** unconventional tower-defense prototype, which is a
+strictly better call: a single ~2000-line game closes all three never-demoed
+modules at once, avoids the two-games' redundant juice-kit boilerplate, and
+carries a natural `modding` hook the separate games did not. Options A-D above
+remain the research trail; this is where they converge.
 
-1. **`12_warden`** (Option A) -- top-down click-defense. It is the canonical,
-   first, validating demo of `camera/project`, the biggest never-showcased gap;
-   it is touch-native; and it reuses the whole juice kit, so the risk and the
-   net-new code are both low. This is the clear #1.
+### The merged game: `12_bastion` -- defend-the-core tower defense
 
-2. **`13_turret`** (Option B) -- first-person turret defense. It is the only
-   concept that homes BOTH `point_rotation` and `smooth_look_rotation`, and the
-   instant-aim-vs-smooth-track contrast teaches the two APIs against each other
-   in one screen. Accept the touch/pointer-lock work as the cost of closing two
-   gaps at once; `ui/touchpad` (proven in 08/11) is the mitigation.
+Unconventional TD framing: instead of enemies walking a fixed lane to an exit,
+a **Core** (the thing you defend, a `Health` pool) sits at the center of a
+circular play plane and **enemies spawn all around the border and converge
+inward** from every bearing. You earn credits from kills and spend them to
+**place towers on the plane around the Core** and to **upgrade** them. An enemy
+that reaches the Core damages it (`HealthApplyDamage`); Core health zero ends
+the run. Waves ramp count/speed/HP.
 
-Together these two close all three never-demoed modules. **Drop `14_tank`
-(Option C)** as a redundant second demo of modules A+B already cover, and
-**defer `15_corridors` (Option D)** as the lowest-payoff (its module isn't a
-real gap) -- keep it as a backlog note, not a task.
+How it homes each gap module (this is the point):
 
-Each stays within the ~2000-line budget by cloning the `06_fruitninja` shape
-(states, sounds, wasm, HUD) and spending the new lines only on the one
-interaction primitive being showcased.
+- **`camera/project` (headline).** `pointer_on_plane` turns the mouse/tap into
+  the world point where a tower is placed (and shows a ghost + range ring
+  there); `world_to_screen` anchors floating UI -- enemy health pips, "+N"
+  credit popups on kill, the click-to-upgrade panel over a selected tower.
+- **`transform/smooth_look_rotation` (tower turrets).** Each tower auto-targets
+  the nearest enemy in range and its turret rotates toward it with
+  `SmoothLookRotation` -- rate-limited on purpose, so a fast enemy crossing a
+  tower's arc can out-slew a cheap turret until upgraded. That turn-rate is a
+  real, tunable stat, not just cosmetics, which is exactly what the module is
+  for.
+- **`transform/point_rotation` (orbit camera).** The camera rides a rig aimed at
+  the Core; mouse-drag (or A/D) feeds `PointRotationInput` to accumulate the
+  rig's yaw/pitch, orbiting the view around the battlefield. This is the "camera
+  with orbit and point rotation" the user described, and it gives
+  `point_rotation` a genuine home without a manual-aim mechanic that would fight
+  the auto-targeting towers.
+
+Kept simple for the first cut (the "just a few towers, simple upgrades, simple
+enemies" brief): 2-3 tower archetypes (e.g. fast/weak, slow/heavy, maybe a
+slow-field), a one-axis upgrade per tower (damage or range or fire-rate),
+one or two enemy types, hand-authored waves. Reuses the full established shape
+and juice kit: menu/playing/game-over `States`, `SfxPlugin`, `ui/status` HUD
+(credits/wave/Core integrity), `mesh/explode` on kills, `ui/popup`,
+`camera/shake`, `feedback`, `tween`, `scoring/streak`, `time/cooldown` (per-
+tower fire cadence), `input/pointer`, and a wasm/trunk build. Touch-native:
+tap-to-place, drag-to-orbit.
+
+### Follow-up: data-driven towers/enemies (the `modding` hook)
+
+The user's stretch goal -- add new towers/enemies with different HP/damage
+without recompiling -- is a real second showcase, but a different shape from the
+crate's existing `modding`. Today `modding` is an **event bus** (`EventWorld` +
+`EventHandler` + `registry`, demoed by 03/09); a TD wants a **stat catalog**
+(`TowerSpec`/`EnemySpec`: HP, damage, range, fire-rate, turn-rate, speed, cost)
+loaded from JSON and spawned by name. That is closer to how `registry` maps
+name-strings to constructors than to the event bus. Recommended path: build the
+catalog game-local first inside `12_bastion` (serde structs + a spawn-by-name
+table), ship the game on it, then evaluate in a later spike whether it
+generalizes into a crate module (a `SpecCatalog<T>` sibling to
+`EventHandlerRegistry`). Do NOT block the MVP on the crate-level abstraction.
+
+### What is dropped / deferred
+
+- **`14_tank`** and **`15_corridors`** (Options C, D) -- still dropped/deferred
+  as before; the merged game supersedes the need for a second rotation demo, and
+  the FP-locomotion example remains the lowest-payoff backlog note.
+- The separate `13_turret` first-person concept is **folded into** the orbit
+  camera + smooth-look towers of `12_bastion`; there is no standalone turret
+  game.
+
+Line budget: the merged game is more mechanic than any single Option (placement
++ upgrades + auto-targeting + waves + orbit camera), so ~2000 lines is the
+target ceiling, not a floor -- keep tower/enemy variety minimal for the first
+cut and lean hard on the juice kit to stay under it.
 
 ## Open questions
 
-- **Warden camera:** orthographic vs high-perspective for the plane pick.
-  Resolve at implementation with a `ScreenshotPlugin` grab; both are supported
-  by `pointer_on_plane`. Non-blocking.
-- **Turret touch/pointer-lock:** does `point_rotation`'s mouse-delta input feel
-  right under a wasm drag / `ui/touchpad` look pad? This is the one real risk;
-  prototype the aim control first and fall back to drag-to-aim if lock is bad.
-- **Shared spawner:** both games spawn waves of edge-in enemies; check whether
-  the wave/spawner logic is yet another cross-game duplication worth harvesting
-  (a future spike, not this one).
+- **Camera:** angled perspective looking in at the Core (reads best with
+  `camera/post` bloom) vs a steeper top-down. Both support `pointer_on_plane`;
+  pick with a `ScreenshotPlugin` grab at implementation. The orbit via
+  `point_rotation` needs a sensible pitch clamp (`SmoothLookRotation`-style min/
+  max is on that module, but `point_rotation` has none -- clamp in the game, or
+  note it as a possible `point_rotation` enhancement to harvest back).
+- **Placement UX under orbit:** `pointer_on_plane` picks the ground point fine
+  at any camera angle, but a grazing angle makes placement imprecise. Constrain
+  the orbit pitch, or snap placement to a grid/ring, to keep it usable on touch.
+- **Auto-target selection:** nearest-in-range is the simple default; note if it
+  feels bad (first-in-range / most-progressed toward Core are the usual
+  alternatives) -- a tuning question, not a blocker.
+- **Data-catalog generality:** does the `TowerSpec`/`EnemySpec` catalog want to
+  become a crate module, and can it reuse anything from `modding/registry`?
+  Deferred to a follow-up spike after the game-local version exists.
+- **Shared wave-spawner:** edge-in wave spawning is likely another cross-game
+  duplication (06/07/08/10) worth harvesting later; note it, do not build it
+  here.
 
 ## Next steps
 
 Direction-level tasks seeded for `/plan` to break into steps:
 
-- tatr 20260704-220736: build `examples/12_warden` -- top-down click-defense, canonical demo of `camera/project`
-- tatr 20260704-220719: build `examples/13_turret` -- first-person turret defense, demo of `point_rotation` + `smooth_look_rotation`
+- tatr 20260704-220736: build `examples/12_bastion` -- defend-the-core tower defense; canonical demo of `camera/project` (placement + UI anchoring), with `smooth_look_rotation` tower turrets and a `point_rotation` orbit camera. MVP: a few towers, simple upgrades, simple enemies, game-local tower/enemy stat catalog.
+- tatr 20260704-220719: follow-up -- data-driven tower/enemy catalog for `12_bastion` and evaluate promoting a `SpecCatalog<T>` module (the `modding` hook). Depends on the MVP shipping first.

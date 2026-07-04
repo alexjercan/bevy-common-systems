@@ -1,38 +1,39 @@
-# build examples/13_turret -- first-person turret defense, demo of point_rotation + smooth_look_rotation
+# data-driven towers/enemies for 12_bastion + evaluate a SpecCatalog module (modding hook)
 
 - STATUS: OPEN
 - PRIORITY: 1
-- TAGS: spike,examples,game
+- TAGS: spike,examples,modding
 
 > Spike: docs/spikes/20260704-220530-new-prototype-game-ideas.md (read first).
-> Recommended game #2 (Option B). Build after 12_warden (tasks/20260704-220736).
+> Follow-up to the tower-defense game; DEPENDS ON 12_bastion shipping first
+> (tasks/20260704-220736).
 
 ## Goal
 
-A small (~2000 line) first-person turret-defense prototype -- the only concept
-that homes **both** remaining transform gaps: `transform/point_rotation` (player
-aim) and `transform/smooth_look_rotation` (enemy tracking). Neither is exercised
-by any example today; the instant-aim-vs-smooth-track contrast teaches the two
-APIs against each other on one screen.
+Make `12_bastion`'s towers and enemies **data-driven** so new tower/enemy types
+(different HP, damage, range, fire-rate, turn-rate, speed, cost) can be added
+without recompiling -- the user's `modding` stretch goal -- and decide whether
+the mechanism should become a crate module.
 
-Concept: you are a stationary turret at the origin. Mouse movement feeds
-`PointRotationInput` to swing the barrel (snappy, free 360 aim -- exactly what
-`point_rotation` is for); click fires a ray/tracer along the barrel forward.
-Enemies advance from all bearings; rotate to prioritize and shoot them before
-they reach the base (base `Health`). Distant enemy emplacements use
-`SmoothLookRotation` to slowly, visibly track the player and fire telegraphed
-shots -- rate-limited, clamped tracking as the deliberate contrast to the
-player's instant aim. Kills insert `ExplodeMesh`; `ui/status` shows base
-integrity / wave / score.
+Shape note (important): the crate's existing `modding` is an **event bus**
+(`EventWorld` + `EventHandler` + `registry`, demoed by 03/09). A tower-defense
+wants a **stat catalog** (TowerSpec / EnemySpec loaded from JSON, spawned by
+name), which is closer to how `modding/registry` maps name-strings to
+constructors than to the event bus. So this is NOT just "add the event bus to
+the TD".
 
-Reuse the established example shape: menu/playing/game-over `States`, `SfxPlugin`
-one-shots, wasm/trunk build, and the juice kit (`ui/popup`, `camera/shake`,
-`feedback`, `tween`, `scoring/streak`).
+Path:
 
-Main risk (from the spike): mouse-look wants pointer lock, fiddly on wasm and
-awkward for touch. Prototype the aim control FIRST; provide a touch fallback
-(drag-to-aim, or an on-screen look pad via `ui/touchpad`, proven in 08/11) and
-fall back to drag-to-aim if pointer lock feels bad.
+1. Start from the game-local serde catalog that 12_bastion ships with; move the
+   tower/enemy stat tables to an external JSON file loaded at startup, spawned
+   by name. Prove it by adding a new tower and a new enemy purely in JSON.
+2. Then evaluate (this is the spike-y half): does this generalize into a crate
+   module -- a `SpecCatalog<T>` sibling to `EventHandlerRegistry` -- and can it
+   reuse anything from `modding/registry`? If yes, that likely wants its own
+   plan/spike; if it stays game-shaped, say so and keep it local.
+
+Do not over-build the abstraction before two concrete users exist; the reactor
+(09) and this game are the candidate pair to compare.
 
 This task is stepless on purpose (spike output); run /plan to break it into
 steps before /work.
