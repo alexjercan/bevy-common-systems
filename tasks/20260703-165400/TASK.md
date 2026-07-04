@@ -1,6 +1,6 @@
 # 11_overload: dashboard-survival game on the status bar
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 20
 - TAGS: feature,example
 
