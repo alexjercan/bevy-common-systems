@@ -172,6 +172,7 @@ fn main() {
     app.add_plugins(TweenPlugin);
     // Floating "+N" / combo popups rise and fade via the crate's PopupPlugin.
     app.add_plugins(PopupPlugin);
+    app.add_plugins(MenuPlugin);
     // Full-screen red damage flash on a bomb death, via ScreenFlashPlugin.
     app.add_plugins(ScreenFlashPlugin);
     app.add_plugins(HealthPlugin);
@@ -213,10 +214,7 @@ fn main() {
 
     // Main menu.
     app.add_systems(OnEnter(GameState::Menu), spawn_menu);
-    app.add_systems(
-        Update,
-        (menu_click, pulse_menu_title).run_if(in_state(GameState::Menu)),
-    );
+    app.add_systems(Update, menu_click.run_if(in_state(GameState::Menu)));
 
     // Playing: reset the run, spawn the player + HUD, then run the gameplay loop.
     app.add_systems(
@@ -428,10 +426,6 @@ struct ScoreText;
 /// Marker for the live combo HUD text.
 #[derive(Component)]
 struct ComboText;
-
-/// Marker for the menu title text, so it can be pulsed.
-#[derive(Component)]
-struct MenuTitle;
 
 /// A slice-able object (fruit or bomb) flying through the scene.
 #[derive(Component)]
@@ -677,32 +671,6 @@ fn advance_dying(
     }
 }
 
-/// A full-screen, centered UI column used by the menu and game-over screens.
-fn centered_screen() -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        justify_content: JustifyContent::Center,
-        row_gap: Val::Px(16.0),
-        ..default()
-    }
-}
-
-/// One line of menu / game-over text at the given size and color.
-fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle {
-    (
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-    )
-}
-
 /// Spawn the main menu (title + prompt), scoped to the `Menu` state.
 fn spawn_menu(mut commands: Commands, high: Res<HighScore<usize>>) {
     commands.spawn((
@@ -712,7 +680,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore<usize>>) {
         children![
             (
                 screen_text("FRUIT NINJA", 72.0, Color::srgb(0.95, 0.85, 0.25)),
-                MenuTitle,
+                TitlePulse::new(Color::srgb(0.95, 0.85, 0.25)),
             ),
             screen_text("Tap or click to play", 32.0, Color::WHITE),
             screen_text(
@@ -730,14 +698,6 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore<usize>>) {
 }
 
 /// Start the game on a click from the menu.
-/// Gently pulse the menu title's alpha so the menu breathes.
-fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<MenuTitle>>) {
-    let alpha = 0.65 + 0.35 * (time.elapsed_secs() * 2.5).sin();
-    for mut color in q_title.iter_mut() {
-        color.0 = Color::srgba(0.95, 0.85, 0.25, alpha);
-    }
-}
-
 fn menu_click(
     mut commands: Commands,
     pointer: Res<UnifiedPointer>,

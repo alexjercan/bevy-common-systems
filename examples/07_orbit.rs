@@ -187,6 +187,7 @@ fn main() {
     app.add_plugins(StatusBarPlugin);
     // Floating "+N" / streak popups rise and fade via the crate's PopupPlugin.
     app.add_plugins(PopupPlugin);
+    app.add_plugins(MenuPlugin);
     // Full-screen red damage overlay spiked on a hazard hit, via ScreenFlashPlugin.
     app.add_plugins(ScreenFlashPlugin);
 
@@ -206,10 +207,7 @@ fn main() {
 
     // Main menu.
     app.add_systems(OnEnter(GameState::Menu), spawn_menu);
-    app.add_systems(
-        Update,
-        (advance_from_menu, pulse_menu_title).run_if(in_state(GameState::Menu)),
-    );
+    app.add_systems(Update, advance_from_menu.run_if(in_state(GameState::Menu)));
 
     // Playing: reset the run, spawn the marker + HUD, then run the gameplay loop.
     app.add_systems(
@@ -344,10 +342,6 @@ struct LevelText;
 /// Marker for the health-bar fill node (its width tracks current health).
 #[derive(Component)]
 struct HealthBarFill;
-
-/// Marker for the pulsing menu title.
-#[derive(Component)]
-struct MenuTitle;
 
 /// Marker for the single "STREAK xN" banner, so a fresh one can replace the
 /// previous banner instead of overprinting it during a fast chain.
@@ -664,32 +658,6 @@ fn advance_pressed(
 
 // --- Menu -----------------------------------------------------------------
 
-/// A full-screen, centered UI column used by the menu and game-over screens.
-fn centered_screen() -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        width: Val::Percent(100.0),
-        height: Val::Percent(100.0),
-        flex_direction: FlexDirection::Column,
-        align_items: AlignItems::Center,
-        justify_content: JustifyContent::Center,
-        row_gap: Val::Px(16.0),
-        ..default()
-    }
-}
-
-/// One line of menu / game-over text at the given size and color.
-fn screen_text(text: impl Into<String>, size: f32, color: Color) -> impl Bundle {
-    (
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-    )
-}
-
 /// Spawn the main menu (title + prompt), scoped to the `Menu` state.
 fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
     commands.spawn((
@@ -699,7 +667,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
         children![
             (
                 screen_text("ORBIT RUNNER", 68.0, Color::srgb(0.5, 0.8, 1.0)),
-                MenuTitle,
+                TitlePulse::new(Color::srgb(0.5, 0.8, 1.0)),
             ),
             screen_text("Tap or click to play", 32.0, Color::WHITE),
             screen_text(
@@ -714,14 +682,6 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore>) {
             ),
         ],
     ));
-}
-
-/// Gently pulse the menu title's alpha so the menu breathes.
-fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<MenuTitle>>) {
-    let alpha = 0.65 + 0.35 * (time.elapsed_secs() * 2.5).sin();
-    for mut color in q_title.iter_mut() {
-        color.0 = Color::srgba(0.5, 0.8, 1.0, alpha);
-    }
 }
 
 /// Start the game on a click / tap from the menu.
