@@ -59,6 +59,10 @@
         width: 100%;
         height: 100%;
         outline: none;
+        /* Let the game consume touch drags for the virtual pad instead of the
+           browser scrolling / pinch-zooming the page. Pairs with the
+           user-scalable=no viewport above. */
+        touch-action: none;
       }
     </style>
   </head>

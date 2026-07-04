@@ -32,10 +32,16 @@
 //! - A / D: roll the target attitude left / right (leans thrust to strafe).
 //! - Release the steering keys and the ship self-levels back to upright.
 //! - Space to start, and to retry from the result screen; Esc for the menu.
+//!
+//! Touch (mobile): hold the left side of the screen to thrust; drag a floating
+//! stick on the right side to lean (deflection = lean angle, release to level).
+//! Touch is an additional writer of the same steering state, so the keyboard
+//! keeps working unchanged.
 
 use avian3d::prelude::*;
 use bevy::{
     asset::RenderAssetUsages,
+    input::touch::Touch,
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
@@ -130,6 +136,18 @@ const FUEL_CAN_SPREAD: f32 = 0.55;
 /// How far above the ship the diegetic guide arrow hovers (world units).
 const GUIDE_ARROW_HEIGHT: f32 = 2.6;
 
+// --- Touch controls (mobile) -----------------------------------------------
+
+/// Fraction of the window width given to the left thrust zone; the rest is the
+/// right steer zone. A touch is routed by the zone its first contact lands in.
+const THRUST_ZONE_FRAC: f32 = 0.4;
+/// Radius (logical px) of the steer stick: a full-deflection drag from the touch
+/// origin to this distance maps to `MAX_LEAN`.
+const STEER_RADIUS_PX: f32 = 110.0;
+/// Dead zone (logical px) around the steer origin where no lean is applied, so
+/// a resting thumb reads as "level".
+const STEER_DEAD_PX: f32 = 16.0;
+
 // --- Descent timer ---------------------------------------------------------
 
 /// "Par" descent time (seconds). Landing faster earns a time bonus that decays
@@ -193,6 +211,35 @@ struct ShipInput {
     lean_pitch: f32,
     lean_roll: f32,
 }
+
+/// Touch state distilled from `Touches` each frame, merged into `ShipInput` by
+/// `read_input` as an additional writer alongside the keyboard. A left-zone
+/// touch drives thrust; a right-zone touch is a floating steer stick whose
+/// deflection sets the lean target (see [`touch_lean`]). Both act at once.
+#[derive(Resource, Default)]
+struct TouchControl {
+    /// A thrust-zone touch is currently held.
+    thrust: bool,
+    /// A steer-zone touch is currently held (its lean target is `lean`, which is
+    /// zero inside the dead zone).
+    steering: bool,
+    /// Steer lean target as `(roll, pitch)` radians, already clamped to
+    /// `MAX_LEAN`.
+    lean: Vec2,
+    /// Pointer id of the steer touch currently driving the stick, if any.
+    steer_id: Option<u64>,
+    /// Floating origin of the steer stick (logical px); slides to keep the
+    /// finger within `STEER_RADIUS_PX`.
+    steer_origin: Vec2,
+    /// Current steer finger position (logical px), for the HUD knob.
+    steer_pos: Vec2,
+}
+
+/// Set true the first time any touch is seen, and never cleared. The virtual pad
+/// is only shown once this is set, so a keyboard/PC session never sees it while a
+/// phone reveals it the instant a thumb lands - no platform detection needed.
+#[derive(Resource, Default)]
+struct TouchSeen(bool);
 
 /// Remaining fuel for the current run.
 #[derive(Resource, Deref, DerefMut)]
@@ -314,6 +361,21 @@ struct GuideArrow;
 #[derive(Component)]
 struct MainCamera;
 
+/// Root of the touch-HUD overlay; its visibility is gated on [`TouchSeen`] so the
+/// pad only appears once the device is actually touched.
+#[derive(Component)]
+struct TouchHud;
+
+/// Marker for the steer-stick ring node of the touch HUD (moves to the live
+/// origin while steering).
+#[derive(Component)]
+struct SteerRingUi;
+
+/// Marker for the steer-stick knob node of the touch HUD (follows the finger
+/// while steering, hidden otherwise).
+#[derive(Component)]
+struct SteerKnobUi;
+
 /// A short-lived UI text that rises and fades out (the "+FUEL" pickup popup).
 /// Ported from `07_orbit`.
 #[derive(Component)]
@@ -409,6 +471,8 @@ fn main() {
 
     app.init_state::<GameState>();
     app.init_resource::<ShipInput>();
+    app.init_resource::<TouchControl>();
+    app.init_resource::<TouchSeen>();
     app.init_resource::<Telemetry>();
     app.init_resource::<Outcome>();
     app.init_resource::<CameraShake>();
@@ -423,10 +487,12 @@ fn main() {
     app.add_systems(Update, menu_input.run_if(in_state(GameState::Menu)));
 
     // Playing.
-    app.add_systems(OnEnter(GameState::Playing), start_run);
+    app.add_systems(OnEnter(GameState::Playing), (start_run, spawn_touch_hud));
     app.add_systems(
         Update,
         (
+            // Distil touches into TouchControl before read_input merges them.
+            update_touch_control.before(read_input),
             read_input,
             update_telemetry,
             update_thruster_flame,
@@ -434,6 +500,7 @@ fn main() {
             maintain_fuel_cans,
             collect_fuel_cans,
             update_guide_arrow,
+            update_touch_hud.after(update_touch_control),
             resolve_landing,
         )
             .run_if(in_state(GameState::Playing)),
@@ -790,9 +857,15 @@ fn spawn_menu(mut commands: Commands) {
 fn menu_input(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
+    touches: Res<Touches>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    if keys.just_pressed(KeyCode::Space) || mouse.just_pressed(MouseButton::Left) {
+    // A tap also starts, so the wasm build is enterable on a phone (winit-on-web
+    // delivers taps as touches, not synthesized mouse clicks).
+    if keys.just_pressed(KeyCode::Space)
+        || mouse.just_pressed(MouseButton::Left)
+        || touches.any_just_pressed()
+    {
         next.set(GameState::Playing);
     }
 }
@@ -809,6 +882,7 @@ fn start_run(
     mut timer: ResMut<RunTimer>,
     mut shake: ResMut<CameraShake>,
     mut spawner: ResMut<FuelSpawner>,
+    mut touch: ResMut<TouchControl>,
     noise: Res<PlanetNoise>,
     can_assets: Res<FuelCanAssets>,
     sfx: Res<SfxAssets>,
@@ -819,6 +893,7 @@ fn start_run(
     shake.trauma = 0.0;
     spawner.timer = 0.0;
     *input = ShipInput::default();
+    *touch = TouchControl::default();
     commands.play_sfx(sfx.start.clone());
 
     // Roll a fresh landing pad somewhere in the reachable cap around the pole,
@@ -987,28 +1062,44 @@ fn move_toward(current: f32, target: f32, max_delta: f32) -> f32 {
     }
 }
 
-fn read_input(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut input: ResMut<ShipInput>) {
+fn read_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    touch: Res<TouchControl>,
+    time: Res<Time>,
+    mut input: ResMut<ShipInput>,
+) {
     let dt = time.delta_secs();
 
-    input.thrust = keys.pressed(KeyCode::Space) || keys.pressed(KeyCode::ArrowUp);
+    // Thrust is either input; touch is an additive writer alongside the keyboard.
+    input.thrust = keys.pressed(KeyCode::Space) || keys.pressed(KeyCode::ArrowUp) || touch.thrust;
 
-    // W leans the nose forward (thrust pushes forward), S back.
-    let mut target_pitch = 0.0;
-    if keys.pressed(KeyCode::KeyW) {
-        target_pitch -= MAX_LEAN;
-    }
-    if keys.pressed(KeyCode::KeyS) {
-        target_pitch += MAX_LEAN;
-    }
-    // A/D roll to strafe.
-    let mut target_roll = 0.0;
-    if keys.pressed(KeyCode::KeyA) {
-        target_roll += MAX_LEAN;
-    }
-    if keys.pressed(KeyCode::KeyD) {
-        target_roll -= MAX_LEAN;
-    }
+    // Lean target: while a steer touch is held the touch stick fully preempts the
+    // keyboard (not additive) -- including the dead zone, where a resting thumb
+    // reads as "level" and so suppresses A/D/W/S. Releasing the stick falls back
+    // to the keyboard, which self-levels when nothing is pressed.
+    let (target_roll, target_pitch) = if touch.steering {
+        (touch.lean.x, touch.lean.y)
+    } else {
+        // W leans the nose forward (thrust pushes forward), S back; A/D roll.
+        let mut pitch = 0.0;
+        if keys.pressed(KeyCode::KeyW) {
+            pitch -= MAX_LEAN;
+        }
+        if keys.pressed(KeyCode::KeyS) {
+            pitch += MAX_LEAN;
+        }
+        let mut roll = 0.0;
+        if keys.pressed(KeyCode::KeyA) {
+            roll += MAX_LEAN;
+        }
+        if keys.pressed(KeyCode::KeyD) {
+            roll -= MAX_LEAN;
+        }
+        (roll, pitch)
+    };
 
+    // Ease toward the target, self-levelling faster when the target is centred
+    // (shared by both input paths -- "released = level").
     let pitch_rate = if target_pitch != 0.0 {
         LEAN_RATE
     } else {
@@ -1021,6 +1112,206 @@ fn read_input(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut input: ResMu
     };
     input.lean_pitch = move_toward(input.lean_pitch, target_pitch, pitch_rate * dt);
     input.lean_roll = move_toward(input.lean_roll, target_roll, roll_rate * dt);
+}
+
+/// Map a steer-stick deflection (finger offset from the floating origin, logical
+/// px) to a lean target `(roll, pitch)` in radians, clamped to `MAX_LEAN`, with
+/// a dead zone. Screen +x (drag right) rolls right (like `D`), and screen +y
+/// (drag down, since UI y grows downward) pitches back (like `S`). The combined
+/// deflection *vector* is clamped to `MAX_LEAN`, so a diagonal drag tops out at
+/// `MAX_LEAN` total -- slightly less than the keyboard, which reaches `MAX_LEAN`
+/// on each axis independently (~1.41x on the diagonal). Pure, unit-tested below.
+fn touch_lean(offset: Vec2, radius: f32, dead: f32) -> Vec2 {
+    let len = offset.length();
+    if len <= dead {
+        return Vec2::ZERO;
+    }
+    let dir = offset / len;
+    let mag = ((len - dead) / (radius - dead)).clamp(0.0, 1.0);
+    let deflect = dir * mag;
+    // drag right (+x) -> roll like D (negative roll); drag down (+y) -> pitch
+    // back like S (positive pitch).
+    Vec2::new(-deflect.x * MAX_LEAN, deflect.y * MAX_LEAN)
+}
+
+/// Distil the raw `Touches` into `TouchControl`: route each touch by the zone its
+/// first contact landed in (never re-checked as it moves), so a lean drag that
+/// wanders into the thrust zone never misfires thrust and vice versa.
+fn update_touch_control(
+    touches: Res<Touches>,
+    windows: Query<&Window>,
+    mut ctl: ResMut<TouchControl>,
+    mut seen: ResMut<TouchSeen>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    // The first touch marks this as a touch device and reveals the pad.
+    if touches.any_just_pressed() {
+        seen.0 = true;
+    }
+    let split_x = window.width() * THRUST_ZONE_FRAC;
+    let in_thrust_zone = |t: &Touch| t.start_position().x < split_x;
+
+    // State is derived fresh from the currently-pressed touches each frame (keyed
+    // by where each STARTED), not latched to one id. So a second finger in a zone
+    // and a finger held across a run restart both keep working, and lifting one
+    // finger never cuts input while another is still down.
+    ctl.thrust = touches.iter().any(in_thrust_zone);
+
+    // Steer: keep the tracked touch while it is pressed and still a steer-zone
+    // touch, otherwise adopt another pressed steer-zone touch (re-centring the
+    // floating origin on it).
+    let steer = ctl
+        .steer_id
+        .and_then(|id| touches.get_pressed(id))
+        .filter(|t| !in_thrust_zone(t))
+        .or_else(|| touches.iter().find(|t| !in_thrust_zone(t)));
+    if let Some(touch) = steer {
+        let pos = touch.position();
+        if ctl.steer_id != Some(touch.id()) {
+            // Newly adopted stick: origin starts under the finger.
+            ctl.steer_id = Some(touch.id());
+            ctl.steer_origin = pos;
+        }
+        // Slide the origin so the finger never leaves the stick radius.
+        let offset = pos - ctl.steer_origin;
+        if offset.length() > STEER_RADIUS_PX {
+            ctl.steer_origin = pos - offset.normalize() * STEER_RADIUS_PX;
+        }
+        ctl.steer_pos = pos;
+        ctl.lean = touch_lean(pos - ctl.steer_origin, STEER_RADIUS_PX, STEER_DEAD_PX);
+        ctl.steering = true;
+    } else {
+        ctl.steer_id = None;
+        ctl.steering = false;
+        ctl.lean = Vec2::ZERO;
+    }
+}
+
+// --- Playing: touch HUD ----------------------------------------------------
+
+/// Spawn the on-screen virtual-pad overlay for the run: a faint left thrust zone
+/// and a right-side steer stick (ring + knob). Spawned hidden and revealed by
+/// `update_touch_hud` once a touch is seen ([`TouchSeen`]), so a PC session never
+/// shows it and a phone reveals it the instant a thumb lands -- no platform
+/// detection needed.
+fn spawn_touch_hud(mut commands: Commands) {
+    let ring_d = STEER_RADIUS_PX * 2.0;
+    commands
+        .spawn((
+            Name::new("Touch HUD"),
+            TouchHud,
+            DespawnOnExit(GameState::Playing),
+            // Hidden until the first touch reveals it (see `TouchSeen`), so a PC
+            // session never shows the pad.
+            Visibility::Hidden,
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..default()
+            },
+        ))
+        .with_children(|parent| {
+            // Left thrust zone, labelled.
+            parent
+                .spawn((
+                    Name::new("Thrust Zone"),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: Val::Px(0.0),
+                        top: Val::Px(0.0),
+                        width: Val::Percent(THRUST_ZONE_FRAC * 100.0),
+                        height: Val::Percent(100.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::FlexEnd,
+                        padding: UiRect::bottom(Val::Px(48.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgba(0.4, 0.7, 1.0, 0.05)),
+                ))
+                .with_children(|zone| {
+                    zone.spawn((
+                        Text::new("THRUST"),
+                        TextFont {
+                            font_size: FontSize::Px(20.0),
+                            ..default()
+                        },
+                        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.35)),
+                    ));
+                });
+            // Steer stick ring (repositioned each frame by `update_touch_hud`).
+            parent.spawn((
+                Name::new("Steer Ring"),
+                SteerRingUi,
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: Val::Px(ring_d),
+                    height: Val::Px(ring_d),
+                    border: UiRect::all(Val::Px(3.0)),
+                    border_radius: BorderRadius::MAX,
+                    ..default()
+                },
+                BorderColor::all(Color::srgba(1.0, 1.0, 1.0, 0.22)),
+                BackgroundColor(Color::srgba(0.4, 0.7, 1.0, 0.04)),
+            ));
+            // Steer stick knob (follows the finger while steering).
+            parent.spawn((
+                Name::new("Steer Knob"),
+                SteerKnobUi,
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: Val::Px(34.0),
+                    height: Val::Px(34.0),
+                    border_radius: BorderRadius::MAX,
+                    ..default()
+                },
+                BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.35)),
+                Visibility::Hidden,
+            ));
+        });
+}
+
+/// Position the steer ring at the live floating origin (or a resting spot in the
+/// steer zone when idle) and the knob at the finger, hidden when not steering.
+fn update_touch_hud(
+    ctl: Res<TouchControl>,
+    seen: Res<TouchSeen>,
+    windows: Query<&Window>,
+    mut q_root: Query<&mut Visibility, (With<TouchHud>, Without<SteerKnobUi>)>,
+    mut q_ring: Query<&mut Node, (With<SteerRingUi>, Without<SteerKnobUi>)>,
+    mut q_knob: Query<(&mut Node, &mut Visibility), (With<SteerKnobUi>, Without<TouchHud>)>,
+) {
+    // Reveal the whole overlay only once a touch has been seen.
+    if let Ok(mut vis) = q_root.single_mut() {
+        *vis = if seen.0 {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let ring_center = if ctl.steering {
+        ctl.steer_origin
+    } else {
+        Vec2::new(window.width() * 0.72, window.height() * 0.72)
+    };
+    if let Ok(mut node) = q_ring.single_mut() {
+        node.left = Val::Px(ring_center.x - STEER_RADIUS_PX);
+        node.top = Val::Px(ring_center.y - STEER_RADIUS_PX);
+    }
+    if let Ok((mut node, mut vis)) = q_knob.single_mut() {
+        if ctl.steering {
+            *vis = Visibility::Inherited;
+            node.left = Val::Px(ctl.steer_pos.x - 17.0);
+            node.top = Val::Px(ctl.steer_pos.y - 17.0);
+        } else {
+            *vis = Visibility::Hidden;
+        }
+    }
 }
 
 // --- Playing: physics ------------------------------------------------------
@@ -1657,8 +1948,14 @@ fn spawn_result(mut commands: Commands, outcome: Res<Outcome>) {
         });
 }
 
-fn result_input(keys: Res<ButtonInput<KeyCode>>, mut next: ResMut<NextState<GameState>>) {
-    if keys.just_pressed(KeyCode::Space) {
+fn result_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    touches: Res<Touches>,
+    mut next: ResMut<NextState<GameState>>,
+) {
+    // Space or a tap retries; Esc returns to the menu (keyboard only, since a tap
+    // is reserved for the common "retry" action on a phone).
+    if keys.just_pressed(KeyCode::Space) || touches.any_just_pressed() {
         next.set(GameState::Playing);
     } else if keys.just_pressed(KeyCode::Escape) {
         next.set(GameState::Menu);
@@ -1761,6 +2058,46 @@ mod tests {
                 (PAD_ANGLE_MIN - 1e-4..=PAD_ANGLE_MAX + 1e-4).contains(&polar),
                 "pad polar angle {polar} should be in [{PAD_ANGLE_MIN}, {PAD_ANGLE_MAX}]"
             );
+        }
+    }
+
+    /// The touch steer stick is a self-centring, deflection-to-position mapping:
+    /// inside the dead zone it is level, at/over the radius it is full `MAX_LEAN`,
+    /// and it never exceeds `MAX_LEAN` on either axis.
+    #[test]
+    fn touch_lean_maps_deflection_to_clamped_target() {
+        let r = STEER_RADIUS_PX;
+        let d = STEER_DEAD_PX;
+
+        // Dead zone -> level.
+        assert_eq!(touch_lean(Vec2::new(d * 0.5, 0.0), r, d), Vec2::ZERO);
+        assert_eq!(touch_lean(Vec2::ZERO, r, d), Vec2::ZERO);
+
+        // Full deflection right (+x) rolls right like `D` (negative roll), at
+        // exactly MAX_LEAN; a drag past the radius stays clamped.
+        let right = touch_lean(Vec2::new(r, 0.0), r, d);
+        assert!((right.x - -MAX_LEAN).abs() < 1e-4, "{right:?}");
+        assert!(right.y.abs() < 1e-4);
+        let past = touch_lean(Vec2::new(r * 3.0, 0.0), r, d);
+        assert!((past.x - -MAX_LEAN).abs() < 1e-4, "clamped: {past:?}");
+
+        // Full deflection down (+y, UI y grows downward) pitches back like `S`
+        // (positive pitch).
+        let down = touch_lean(Vec2::new(0.0, r), r, d);
+        assert!((down.y - MAX_LEAN).abs() < 1e-4, "{down:?}");
+
+        // Linear ramp: an offset halfway between the dead zone and the radius
+        // yields half of MAX_LEAN (catches a broken magnitude formula).
+        let mid = touch_lean(Vec2::new(d + (r - d) * 0.5, 0.0), r, d);
+        assert!(
+            (mid.x - -MAX_LEAN * 0.5).abs() < 1e-4,
+            "half deflection: {mid:?}"
+        );
+
+        // Never exceeds MAX_LEAN on either axis for any offset.
+        for &(x, y) in &[(r, r), (-r, r), (r * 5.0, -r * 5.0), (d + 1.0, d + 1.0)] {
+            let lean = touch_lean(Vec2::new(x, y), r, d);
+            assert!(lean.x.abs() <= MAX_LEAN + 1e-4 && lean.y.abs() <= MAX_LEAN + 1e-4);
         }
     }
 }

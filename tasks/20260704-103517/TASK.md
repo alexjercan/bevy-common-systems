@@ -1,6 +1,6 @@
 # 08_dropzone: mobile virtual-pad touch controls
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 3
 - TAGS: feature,dropzone,mobile
 
@@ -27,7 +27,7 @@ literally a 2-axis absolute controller and maps 1:1 onto the existing input.
 
 ## Steps
 
-- [ ] Touch lean -- right-side floating stick / origin-drag. On touch-down in the
+- [x] Touch lean -- right-side floating stick / origin-drag. On touch-down in the
       steer zone, capture the origin; each frame map the finger offset
       `(dx, dy)` from that origin to `(lean_roll, lean_pitch)` target, magnitude
       clamped to a max radius mapped to `MAX_LEAN`, with a small dead zone at the
@@ -35,24 +35,24 @@ literally a 2-axis absolute controller and maps 1:1 onto the existing input.
       "released = level" convention with the keyboard path). Use a
       floating/draggable origin (re-centers on touch, slides at the extents) so
       the thumb never runs out of room during the flare.
-- [ ] Touch thrust -- left-side hold zone. A dedicated thrust region (e.g. left
+- [x] Touch thrust -- left-side hold zone. A dedicated thrust region (e.g. left
       third, or a labeled bottom-left pedal): touch/hold in it sets
       `input.thrust = true`. Boolean, trivial.
-- [ ] Touch routing (no gesture conflict). Track touches by pointer id via Bevy's
+- [x] Touch routing (no gesture conflict). Track touches by pointer id via Bevy's
       `Touches` (works under wasm). Route each touch by the zone it STARTED in
       and never re-evaluate a moving touch against zone boundaries, so a lean
       drag that crosses into the thrust zone does not misfire thrust, and vice
       versa. Both thumbs act simultaneously (thrust + steer at once, as a lander
       needs).
-- [ ] HUD. Draw the virtual pad: a ghost stick ring at the steer origin (drawn
+- [x] HUD. Draw the virtual pad: a ghost stick ring at the steer origin (drawn
       even for the drag variant, for discoverability + feedback) and a visible
       thrust zone/pedal. Keep it unobtrusive; it is harmless on desktop so it can
       always show, or gate it on a touch device being present (decide + note).
-- [ ] Web/showcase. Ensure the `web/` build exposes a mobile-friendly viewport
+- [x] Web/showcase. Ensure the `web/` build exposes a mobile-friendly viewport
       (meta viewport, canvas sizing) so the example is actually usable on a
       phone. Verify through the real entry point (`npm run build`), not a hand-run
       of trunk (AGENTS.md gotcha); fresh worktrees need `npm ci` in `web/` first.
-- [ ] Verify: `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test`,
+- [x] Verify: `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test`,
       `./scripts/check-ascii.sh`, then RUN the example on desktop and confirm the
       render loop plus that keyboard STILL works and the touch HUD renders. If a
       touch device / emulation is available, sanity-check thrust+lean via touch.
@@ -72,3 +72,37 @@ literally a 2-axis absolute controller and maps 1:1 onto the existing input.
   integration test (run it), wasm-friendly, plain ASCII.
 - Independent of the fun/hazard tasks (`20260704-103544`, `20260704-103553`);
   can be done in any order relative to them.
+
+## Close-out
+
+Implemented the spike's option-1 virtual pad on branch `feature/08-dropzone-touch`
+(`examples/08_dropzone.rs`), documented in
+`docs/2026-07-04-dropzone-touch-controls.md`:
+
+- Left 40% = thrust hold zone; right side = a floating steer stick
+  (deflection-to-position via `touch_lean`, dead zone, slides at the radius).
+- `read_input` refactored to merge keyboard + a new `TouchControl` resource
+  (`update_touch_control` runs before it); one smoothing/self-level path, so the
+  keyboard is unchanged when no touch is active.
+- Routing by starting zone tracked by pointer id, so lean/thrust never cross-fire;
+  `TouchControl` reset per run in `start_run`.
+- HUD hidden until first touch (reveal-on-first-touch via `TouchSeen`), so a PC
+  session never shows the pad; a phone reveals it instantly. Faint styling.
+- Web: added `touch-action: none` to the canvas (viewport meta already present).
+
+Verified: 7 unit tests (incl. `touch_lean` mapping); fmt/clippy(--all-targets)/
+ascii clean; example boots to the render loop, HUD spawns, touch systems run
+without panic/query-conflict, keyboard still flies to a clean landing (temporary
+autopilot, since removed); web showcase rebuilt.
+
+Not verified headlessly: real finger gestures (no touch-injection tool);
+touch-feel constants (`STEER_RADIUS_PX` etc.) want a pass on a phone / browser
+touch-emulator. Physics/PD/scoring untouched; tilt and A/D/W/S-button modes left
+out of scope as noted.
+
+Review (REVIEW.md): round 1 REQUEST_CHANGES, round 2 APPROVE. Round 1 fixed two
+MAJORs -- menu/result now start/retry on a tap (winit-on-web gives no synthesized
+mouse, so this is what makes it actually phone-playable), and touch routing is
+derived from the currently-pressed touches each frame (no id latch, so a second
+finger or a finger held across a restart no longer cuts input) -- plus a
+ramp-assertion test, two doc notes, and a HUD ordering nit.
