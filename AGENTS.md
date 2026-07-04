@@ -297,7 +297,16 @@ Examples:
   `cargo run --example NN_name` under a `timeout` and confirm it reaches the
   render loop (a `bevy_render::view::window` swap-chain log line means startup
   finished). Not doing this shipped a startup hang in 08_dropzone
-  (`docs/retros/20260703-165432-dropzone-example.md`).
+  (`docs/retros/20260703-165432-dropzone-example.md`). Booting only reaches the
+  menu, though; to exercise a stateful example's actual gameplay
+  (menu -> playing -> result) headlessly when no input-injection tool
+  (`xdotool`) is around, add a TEMPORARY env-gated autopilot system that drives
+  the state machine and controls the ship, run it under `timeout`, confirm the
+  log shows the cycle completing with no panic, then remove the harness before
+  commit. Used to verify 07/08 gameplay twice now
+  (`tasks/20260703-213510`, `tasks/20260704-103544`). A hard `std::process::exit`
+  in that harness segfaults on wgpu teardown -- harmless, but do not mistake it
+  for a game crash.
 - Verifying builds: never judge a build/command by a piped `| tail`'s exit
   code -- the pipe reports `tail`'s status, so a failed `cargo build | tail`
   looks like it passed. Redirect to a file and check `$?` when pass/fail
