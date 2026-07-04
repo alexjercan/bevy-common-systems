@@ -58,6 +58,14 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
   - `inspector` - `InspectorDebugPlugin`: bevy-inspector-egui world
     inspector plus avian physics gizmos and diagnostics UI, also toggled
     with F11, starts enabled.
+  - `harness` - env-gated headless verification tooling: `AutopilotPlugin`
+    (force-drives a game's `States` machine on a `.hold(state, seconds)`
+    timeline with an optional per-frame input closure, then exits via
+    `AppExit`; activated by `BCS_AUTOPILOT`) and `ScreenshotPlugin` (forces a
+    window size, advances to a state, waits N frames, writes a PNG; activated by
+    `BCS_SHOT="WxH"`). Both are inert unless their env var is set, so a game
+    adds them permanently. Replaces the throwaway harness the Gotchas used to
+    prescribe; demoed by `08_dropzone` and `11_overload`.
 - `health` - `HealthPlugin`: `Health` component, `HealthApplyDamage` entity
   event (propagates up the hierarchy), `HealthZeroMarker` inserted when
   health hits zero. Trigger damage with `commands.trigger(...)`.
@@ -399,24 +407,35 @@ Examples:
   (`docs/retros/20260703-165432-dropzone-example.md`). Booting only reaches the
   menu, though; to exercise a stateful example's actual gameplay
   (menu -> playing -> result) headlessly when no input-injection tool
-  (`xdotool`) is around, add a TEMPORARY env-gated autopilot system that drives
-  the state machine and controls the ship, run it under `timeout`, confirm the
-  log shows the cycle completing with no panic, then remove the harness before
-  commit. Used to verify 07/08 gameplay twice now
-  (`tasks/20260703-213510`, `tasks/20260704-103544`). A hard `std::process::exit`
-  in that harness segfaults on wgpu teardown -- harmless, but do not mistake it
-  for a game crash.
+  (`xdotool`) is around, do NOT hand-roll a throwaway autopilot any more (it was
+  re-invented and deleted 7 times). Add the reusable `AutopilotPlugin`
+  (`debug/harness`, behind `#[cfg(feature = "debug")]` like `InspectorDebugPlugin`):
+  give it a `.hold(state, seconds)` timeline and an optional `.input(|world,
+  elapsed| ...)` closure that pokes the game's input, then run
+  `BCS_AUTOPILOT=1 cargo run --example NN_name --features debug` under `timeout`
+  and confirm the log shows each `autopilot: -> State` transition and the final
+  `autopilot: cycle complete, no panic` line. It is inert unless `BCS_AUTOPILOT`
+  is set, so it stays in the example permanently -- no add/remove churn. It exits
+  via `AppExit::Success`, not `std::process::exit` (the latter segfaults on wgpu
+  teardown -- harmless, but do not mistake it for a game crash). See
+  `docs/dev-harness.md`; 08_dropzone and 11_overload are wired up as the
+  reference. (History, for context: verified 07/08 gameplay via the old
+  hand-rolled harness in `tasks/20260703-213510`, `tasks/20260704-103544`.)
 - Seeing the screen (do not treat "a background run cannot see the screen" as a
   hard limit): when `$DISPLAY` is set, a background session CAN screenshot the
   running app and verify the visual layer. `scrot` and ImageMagick `import` grab
   the root window; `xdotool` (via `nix run nixpkgs#xdotool` when not on PATH)
   finds/moves the app window so you can crop it precisely (`magick IN -crop
   WxH+X+Y +repage OUT`), and `import`/`Read` the PNG to actually look. To capture
-  a specific state or viewport, add a TEMPORARY env-gated harness (same pattern
-  as the gameplay autopilot): force a window size with
-  `Window { resolution: WindowResolution::new(w, h), resizable: false, .. }` and
-  auto-advance the state machine, screenshot, then remove the harness before
-  commit. This caught a real 09_reactor layout regression -- at phone width four
+  a specific state or viewport, do NOT hand-roll the window-size + auto-advance
+  harness (it was re-invented twice). Add the reusable `ScreenshotPlugin`
+  (`debug/harness`, behind `#[cfg(feature = "debug")]`): `ScreenshotPlugin::new(
+  TargetState).settle_frames(n).path("shot.png")`, then run
+  `BCS_SHOT=390x844 cargo run --example NN_name --features debug` under `timeout`
+  -- the `WxH` env value forces the window resolution, the plugin advances to the
+  target state, waits `n` settled frames, writes the PNG and exits via
+  `AppExit::Success`. It is inert unless `BCS_SHOT` is set, so it stays in the
+  example permanently. This caught a real 09_reactor layout regression -- at phone width four
   of six shop buttons rendered below the fold, invisible to `cargo build`,
   clippy and the boot check but obvious in a screenshot
   (`docs/retros/20260704-143000-reactor-overload-mobile-touch.md`). For a

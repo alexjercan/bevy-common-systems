@@ -555,6 +555,34 @@ fn main() {
     #[cfg(feature = "debug")]
     app.add_plugins(InspectorDebugPlugin);
 
+    // Headless verification harness (dev tooling, `debug` feature). Inert unless
+    // BCS_AUTOPILOT / BCS_SHOT is set, so a normal run pays nothing. This
+    // replaces the temporary hand-rolled autopilot the earlier tune cycles
+    // added and deleted around this example; see `docs/dev-harness.md`.
+    #[cfg(feature = "debug")]
+    {
+        app.add_plugins(
+            AutopilotPlugin::new()
+                .hold(GameState::Menu, 0.6)
+                .hold(GameState::Playing, 3.0)
+                .hold(GameState::Result, 0.8)
+                .input(|world, _elapsed| {
+                    // Only drive the ship while airborne; pressing keys in the
+                    // menu would trip its "any key to start" transition early.
+                    if *world.resource::<State<GameState>>().get() != GameState::Playing {
+                        return;
+                    }
+                    // Fly the ship by holding thrust: `read_input` turns the
+                    // held Space key into `ShipInput.thrust`, so the PD
+                    // controller and force systems run under real input.
+                    world
+                        .resource_mut::<ButtonInput<KeyCode>>()
+                        .press(KeyCode::Space);
+                }),
+        );
+        app.add_plugins(ScreenshotPlugin::new(GameState::Playing).settle_frames(30));
+    }
+
     // Feeds the status bar's FPS item.
     if !app.is_plugin_added::<bevy::diagnostic::FrameTimeDiagnosticsPlugin>() {
         app.add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default());

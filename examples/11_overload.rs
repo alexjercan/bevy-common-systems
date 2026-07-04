@@ -156,6 +156,41 @@ fn main() {
     #[cfg(feature = "debug")]
     app.add_plugins(InspectorDebugPlugin);
 
+    // Headless verification harness (dev tooling, `debug` feature). Inert unless
+    // BCS_AUTOPILOT / BCS_SHOT is set. Replaces the temporary `OVERLOAD_SMOKE`
+    // autopilot the earlier cycles hand-rolled and deleted; see
+    // `docs/dev-harness.md`.
+    #[cfg(feature = "debug")]
+    {
+        app.add_plugins(
+            AutopilotPlugin::new()
+                .hold(GameState::Menu, 0.6)
+                .hold(GameState::Playing, 3.0)
+                .hold(GameState::GameOver, 0.8)
+                .input(|world, elapsed| {
+                    // Only vent while playing; tapping keys in the menu or
+                    // game-over screen would trip their "any key" transitions.
+                    if *world.resource::<State<GameState>>().get() != GameState::Playing {
+                        return;
+                    }
+                    // Tap one vent key per half-second to drive the keyboard
+                    // vent path. `vent_input` reads `just_pressed`, so reset the
+                    // input each frame to re-trigger a fresh press.
+                    let beat = (elapsed * 2.0) as u32;
+                    let key = [
+                        KeyCode::Digit1,
+                        KeyCode::Digit2,
+                        KeyCode::Digit3,
+                        KeyCode::Digit4,
+                    ][(beat % 4) as usize];
+                    let mut keys = world.resource_mut::<ButtonInput<KeyCode>>();
+                    keys.reset_all();
+                    keys.press(key);
+                }),
+        );
+        app.add_plugins(ScreenshotPlugin::new(GameState::Playing).settle_frames(30));
+    }
+
     if !app.is_plugin_added::<bevy::diagnostic::FrameTimeDiagnosticsPlugin>() {
         app.add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default());
     }

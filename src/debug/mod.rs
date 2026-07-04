@@ -3,6 +3,8 @@
 //! This module groups optional debugging tools such as:
 //! - **WireframeDebugPlugin** - toggles global wireframe rendering.
 //! - **InspectorDebugPlugin** - enables the Bevy inspector (if enabled).
+//! - **harness** - env-gated autopilot / screenshot plugins for headless
+//!   verification (`AutopilotPlugin`, `ScreenshotPlugin`).
 //!
 //! ## Usage
 //! Add whichever plugins you want, or pull them all via the `prelude`:
@@ -22,6 +24,7 @@
 //!
 //! The `prelude` module re-exports the most commonly used debug plugins.
 
+pub mod harness;
 pub mod inspector;
 pub mod wireframe;
 
@@ -31,5 +34,7 @@ pub mod wireframe;
 /// use bevy_common_systems::debug::prelude::*;
 /// ```
 pub mod prelude {
-    pub use super::{inspector::InspectorDebugPlugin, wireframe::WireframeDebugPlugin};
+    pub use super::{
+        harness::prelude::*, inspector::InspectorDebugPlugin, wireframe::WireframeDebugPlugin,
+    };
 }
