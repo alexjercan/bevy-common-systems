@@ -182,9 +182,6 @@ const CRASH_TRAUMA: f32 = 0.75;
 /// Camera-shake feel: peak jolt offset (world units) and trauma decay per sec.
 const SHAKE_MAX_OFFSET: f32 = 0.9;
 const SHAKE_DECAY: f32 = 1.6;
-/// Floating "+FUEL" popup feel: lifetime (seconds) and rise speed (px/s).
-const POPUP_LIFETIME: f32 = 0.9;
-const POPUP_RISE_SPEED: f32 = 60.0;
 
 // --- Hazards ----------------------------------------------------------------
 
@@ -505,20 +502,6 @@ struct SteerRingUi;
 #[derive(Component)]
 struct SteerKnobUi;
 
-/// A short-lived UI text that rises and fades out (the "+FUEL" pickup popup).
-/// Ported from `07_orbit`.
-#[derive(Component)]
-struct FloatingText {
-    /// Seconds since the popup was spawned.
-    age: f32,
-    /// Total lifetime in seconds; the popup despawns once `age` reaches it.
-    lifetime: f32,
-    /// Upward screen speed in pixels per second.
-    rise_speed: f32,
-    /// Base color; its alpha ramps down as the popup ages.
-    color: Color,
-}
-
 /// The ship's speed captured once per render frame in `PreUpdate`, before the
 /// fixed-physics loop runs. On the frame the ship touches down avian's solver
 /// has already killed most of the impact velocity, so judging the landing by the
@@ -597,6 +580,7 @@ fn main() {
     app.add_plugins(ExplodeMeshPlugin);
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
+    app.add_plugins(PopupPlugin);
     app.add_plugins(SfxPlugin);
     // Hazards: drifting asteroids ride the random-orbit driver, and a graze routes
     // through the ship's integrity Health pool.
@@ -671,10 +655,7 @@ fn main() {
     // These run in every state: fragments and dust keep animating into the
     // result screen, popups fade, the camera frames the planet on menu/result
     // too, and the shake settles wherever it was last kicked.
-    app.add_systems(
-        Update,
-        (move_fragments, animate_floating_text, drive_chase_camera),
-    );
+    app.add_systems(Update, (move_fragments, drive_chase_camera));
     // Copy each asteroid's random-orbit position onto its Transform, after the
     // orbit driver has advanced it (same handoff as `07_orbit`).
     app.add_systems(
@@ -1862,13 +1843,18 @@ fn collect_fuel_cans(
         if let Ok((camera, cam_transform)) = q_camera.single() {
             if let Ok(viewport_pos) = camera.world_to_viewport(cam_transform, transform.translation)
             {
-                spawn_floating_text(
-                    &mut commands,
-                    viewport_pos,
-                    "+FUEL",
-                    30.0,
-                    Color::srgb(0.6, 1.0, 0.7),
-                );
+                // Use the crate's `popup` builder but override its `Popup` to
+                // keep 08's slower, longer-lived feel (0.9s / 60px/s), which
+                // differs from the `PopupPlugin` defaults (0.8s / 70px/s).
+                let color = Color::srgb(0.6, 1.0, 0.7);
+                commands
+                    .spawn(popup(viewport_pos, "+FUEL", 30.0, color))
+                    .insert(Popup {
+                        lifetime: 0.9,
+                        rise_speed: 60.0,
+                        base_color: color,
+                    })
+                    .insert(DespawnOnExit(GameState::Playing));
             }
         }
     }
@@ -1895,61 +1881,6 @@ fn update_guide_arrow(
     arrow.translation = ship.translation + up * GUIDE_ARROW_HEIGHT;
     // The cone's axis is +Y; aim it along the tangent so it points to the pad.
     arrow.rotation = Quat::from_rotation_arc(Vec3::Y, tangent);
-}
-
-/// Spawn a floating "+FUEL" popup at a viewport position, scoped to `Playing`.
-/// It rises and fades via `animate_floating_text`. Ported from `07_orbit`.
-fn spawn_floating_text(
-    commands: &mut Commands,
-    viewport_pos: Vec2,
-    text: impl Into<String>,
-    size: f32,
-    color: Color,
-) {
-    commands.spawn((
-        Name::new("Floating Text"),
-        FloatingText {
-            age: 0.0,
-            lifetime: POPUP_LIFETIME,
-            rise_speed: POPUP_RISE_SPEED,
-            color,
-        },
-        DespawnOnExit(GameState::Playing),
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(viewport_pos.x),
-            top: Val::Px(viewport_pos.y),
-            ..default()
-        },
-    ));
-}
-
-/// Advance floating popups: rise up the screen, fade out, and despawn at the end
-/// of their lifetime. Ported from `07_orbit`.
-fn animate_floating_text(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut q_text: Query<(Entity, &mut FloatingText, &mut Node, &mut TextColor)>,
-) {
-    let dt = time.delta_secs();
-    for (entity, mut floating, mut node, mut text_color) in q_text.iter_mut() {
-        floating.age += dt;
-        if floating.age >= floating.lifetime {
-            commands.entity(entity).despawn();
-            continue;
-        }
-        if let Val::Px(top) = node.top {
-            node.top = Val::Px(top - floating.rise_speed * dt);
-        }
-        let alpha = 1.0 - floating.age / floating.lifetime;
-        text_color.0 = floating.color.with_alpha(alpha);
-    }
 }
 
 // --- Playing: landing / crash ----------------------------------------------

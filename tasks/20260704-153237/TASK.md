@@ -1,6 +1,6 @@
 # ui/popup: port 06 and 08 onto the module, delete local copies
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 34
 - TAGS: feature,ui,cleanup
 
@@ -21,15 +21,15 @@ same `FloatingText` component + spawn/animate systems and should be ported:
 
 ## Steps
 
-- [ ] Port `06_fruitninja`: add `PopupPlugin`, route the "+N"/combo popups
+- [x] Port `06_fruitninja`: add `PopupPlugin`, route the "+N"/combo popups
       through `popup(...)` (or a hand-built `Popup` for any custom-layout
       banner), delete the local `FloatingText` + `spawn_floating_text` +
       `animate_floating_text` + `POPUP_*` consts. Keep the world_to_viewport
       projection in the example.
-- [ ] Port `08_dropzone`: same, but its popup feel is lifetime 0.9 / rise 60 --
+- [x] Port `08_dropzone`: same, but its popup feel is lifetime 0.9 / rise 60 --
       set those on the `Popup` (override the module defaults) so the "+FUEL"
       feel is preserved, or decide the default is close enough and note it.
-- [ ] Verify: full check suite + boot both examples to the render loop. Net line
+- [x] Verify: full check suite + boot both examples to the render loop. Net line
       count should drop across the two files.
 
 ## Note
@@ -38,3 +38,14 @@ same `FloatingText` component + spawn/animate systems and should be ported:
 to pass an explicit `Popup { lifetime: 0.9, rise_speed: 60.0, .. }` (preserves
 feel exactly) or accept the default. Preserving feel is the safer default for a
 pure refactor.
+
+## Resolution
+
+Ported both examples onto `PopupPlugin` via parallel agents. 06 (4 "+N"/COMBO
+sites) uses the `popup()` builder directly -- its consts equalled the module
+defaults (0.8/70) and none of its popups is a custom-layout banner (its COMBO xN
+is a normal viewport popup, unlike 07's centered STREAK). 08 (1 "+FUEL" site)
+spawns the builder then `.insert(Popup { lifetime: 0.9, rise_speed: 60.0, .. })`
+to preserve its distinct 0.9/60 feel exactly. Both delete their local
+`FloatingText` + `spawn_floating_text` + `animate_floating_text` + `POPUP_*`
+consts. Net -141 lines across the two files; full suite green; both boot.

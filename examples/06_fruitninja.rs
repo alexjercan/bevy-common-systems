@@ -122,12 +122,6 @@ const GOLDEN_CHANCE: f64 = 0.08;
 const GOLDEN_POINTS: usize = 5;
 const COMBO_WINDOW_GOLDEN: f32 = 2.5;
 
-/// How long a floating "+N" popup lives before it despawns, in seconds.
-const POPUP_LIFETIME: f32 = 0.8;
-
-/// How fast a floating popup rises up the screen, in pixels per second.
-const POPUP_RISE_SPEED: f32 = 70.0;
-
 /// Chance a launched object is a bomb: starts at `BOMB_CHANCE_START` and ramps
 /// up to `BOMB_CHANCE_CAP` over `DIFFICULTY_RAMP_SECS`.
 const BOMB_CHANCE_START: f64 = 0.2;
@@ -174,6 +168,8 @@ fn main() {
     app.add_plugins(ExplodeMeshPlugin);
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
+    // Floating "+N" / combo popups rise and fade via the crate's PopupPlugin.
+    app.add_plugins(PopupPlugin);
     app.add_plugins(HealthPlugin);
     // Trauma-driven camera shake; the camera carries a `CameraShake` and game
     // code adds trauma through its `CameraShakeInput`.
@@ -250,7 +246,6 @@ fn main() {
             update_combo_text,
             draw_blade_trail,
             draw_cursor_indicator,
-            animate_floating_text,
             fade_red_flash,
             advance_dying,
             giveup_on_escape,
@@ -417,13 +412,14 @@ fn tick_combo(
     if combo.count >= 2 {
         // Centered-ish tally near the top of the screen.
         let pos = Vec2::new(window.width() * 0.5 - 110.0, window.height() * 0.3);
-        spawn_floating_text(
-            &mut commands,
-            pos,
-            format!("COMBO x{} +{}", combo.count, combo.points),
-            52.0,
-            Color::srgb(1.0, 0.75, 0.2),
-        );
+        commands
+            .spawn(popup(
+                pos,
+                format!("COMBO x{} +{}", combo.count, combo.points),
+                52.0,
+                Color::srgb(1.0, 0.75, 0.2),
+            ))
+            .insert(DespawnOnExit(GameState::Playing));
     }
 
     combo.count = 0;
@@ -516,19 +512,6 @@ struct ComboText;
 /// Marker for the menu title text, so it can be pulsed.
 #[derive(Component)]
 struct MenuTitle;
-
-/// A short-lived UI text that rises and fades out (a "+N" or combo popup).
-#[derive(Component)]
-struct FloatingText {
-    /// Seconds since the popup was spawned.
-    age: f32,
-    /// Total lifetime in seconds; the popup despawns once `age` reaches it.
-    lifetime: f32,
-    /// Upward screen speed in pixels per second.
-    rise_speed: f32,
-    /// Base color; its alpha is ramped down as the popup ages.
-    color: Color,
-}
 
 /// A slice-able object (fruit or bomb) flying through the scene.
 #[derive(Component)]
@@ -814,64 +797,6 @@ fn fade_red_flash(
         if flash.age >= flash.lifetime {
             commands.entity(entity).despawn();
         }
-    }
-}
-
-/// Spawn a floating "+N" / combo popup at a viewport position, scoped to
-/// `Playing`. It rises and fades out via `animate_floating_text`.
-fn spawn_floating_text(
-    commands: &mut Commands,
-    viewport_pos: Vec2,
-    text: impl Into<String>,
-    size: f32,
-    color: Color,
-) {
-    commands.spawn((
-        Name::new("Floating Text"),
-        FloatingText {
-            age: 0.0,
-            lifetime: POPUP_LIFETIME,
-            rise_speed: POPUP_RISE_SPEED,
-            color,
-        },
-        DespawnOnExit(GameState::Playing),
-        Text::new(text.into()),
-        TextFont {
-            font_size: FontSize::Px(size),
-            ..default()
-        },
-        TextColor(color),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(viewport_pos.x),
-            top: Val::Px(viewport_pos.y),
-            ..default()
-        },
-    ));
-}
-
-/// Advance floating popups: rise up the screen, fade out, and despawn at the
-/// end of their lifetime.
-fn animate_floating_text(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut q_text: Query<(Entity, &mut FloatingText, &mut Node, &mut TextColor)>,
-) {
-    let dt = time.delta_secs();
-
-    for (entity, mut floating, mut node, mut text_color) in q_text.iter_mut() {
-        floating.age += dt;
-        if floating.age >= floating.lifetime {
-            commands.entity(entity).despawn();
-            continue;
-        }
-
-        if let Val::Px(top) = node.top {
-            node.top = Val::Px(top - floating.rise_speed * dt);
-        }
-
-        let alpha = 1.0 - floating.age / floating.lifetime;
-        text_color.0 = floating.color.with_alpha(alpha);
     }
 }
 
@@ -1317,13 +1242,14 @@ fn slice_objects(
                 }
                 combo.timer = combo.timer.max(COMBO_WINDOW_GOLDEN);
                 if let Some(viewport_pos) = viewport_pos {
-                    spawn_floating_text(
-                        &mut commands,
-                        viewport_pos,
-                        format!("+{GOLDEN_POINTS}"),
-                        48.0,
-                        Color::srgb(1.0, 0.85, 0.2),
-                    );
+                    commands
+                        .spawn(popup(
+                            viewport_pos,
+                            format!("+{GOLDEN_POINTS}"),
+                            48.0,
+                            Color::srgb(1.0, 0.85, 0.2),
+                        ))
+                        .insert(DespawnOnExit(GameState::Playing));
                 }
             } else {
                 // A crisp blade whoosh on every plain-fruit slice.
@@ -1348,23 +1274,25 @@ fn slice_objects(
                 if let Some(viewport_pos) = viewport_pos {
                     // The "+N" grows a little with the combo for extra punch.
                     let size = (30.0 + (points as f32 - 1.0) * 5.0).min(60.0);
-                    spawn_floating_text(
-                        &mut commands,
-                        viewport_pos,
-                        format!("+{points}"),
-                        size,
-                        Color::srgb(0.95, 0.85, 0.25),
-                    );
+                    commands
+                        .spawn(popup(
+                            viewport_pos,
+                            format!("+{points}"),
+                            size,
+                            Color::srgb(0.95, 0.85, 0.25),
+                        ))
+                        .insert(DespawnOnExit(GameState::Playing));
 
                     // A multi-fruit combo reads as special: a flashy banner.
                     if combo.count >= 2 {
-                        spawn_floating_text(
-                            &mut commands,
-                            viewport_pos - Vec2::Y * 44.0,
-                            format!("COMBO x{}", combo.count),
-                            48.0,
-                            Color::srgb(1.0, 0.55, 0.1),
-                        );
+                        commands
+                            .spawn(popup(
+                                viewport_pos - Vec2::Y * 44.0,
+                                format!("COMBO x{}", combo.count),
+                                48.0,
+                                Color::srgb(1.0, 0.55, 0.1),
+                            ))
+                            .insert(DespawnOnExit(GameState::Playing));
                     }
                 }
             }
