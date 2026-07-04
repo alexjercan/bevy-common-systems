@@ -313,3 +313,11 @@ Examples:
   checkout), so the first `npm run build` fails its webpack half with
   `webpack: command not found` (exit 127) even though the trunk half succeeds.
   Run `npm ci` in the worktree's `web/` before the first web build.
+- GitHub Actions workflow changes: validate them locally with
+  `nix run nixpkgs#actionlint -- .github/workflows/<file>.yml` (exit 0, no
+  output means clean) instead of pushing and watching the run. The devshell has
+  no `actionlint` or `python3-yaml` on PATH, but the `nix run` form works. The
+  Pages deploy (`pages.yml`) also retries `actions/deploy-pages` once because
+  that step intermittently returns a transient "Deployment failed, try again
+  later." -- do not remove the retry as redundant
+  (`docs/2026-07-04-pages-deploy-retry.md`).
