@@ -1,6 +1,6 @@
 # docs: bump bevy_enhanced_input 0.25 -> 0.26 in AGENTS.md
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 30
 - TAGS: docs
 
@@ -12,9 +12,9 @@ other staleness while there.
 
 ## Steps
 
-- [ ] Update the `bevy_enhanced_input` version in AGENTS.md to 0.26 (matching
+- [x] Update the `bevy_enhanced_input` version in AGENTS.md to 0.26 (matching
       Cargo.toml).
-- [ ] Quick pass for other stale version numbers in the same section.
+- [x] Quick pass for other stale version numbers in the same section.
 
 ## Notes
 

@@ -163,7 +163,7 @@ Key dependencies and why they are here:
   (observers, `EntityEvent`, required components).
 - `avian3d` 0.6 - 3D physics; used by the PD controller, the debug
   diagnostics and the examples.
-- `bevy_enhanced_input` 0.25 - input contexts/actions for the WASD
+- `bevy_enhanced_input` 0.26 - input contexts/actions for the WASD
   controller in `helpers/wasd`.
 - `noise` 0.9 - noise functions consumed by `TriangleMeshBuilder`.
 - `rand` 0.9 - randomness for orbits and mesh explosion.
