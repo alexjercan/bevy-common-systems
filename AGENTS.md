@@ -427,6 +427,22 @@ Examples:
   code -- the pipe reports `tail`'s status, so a failed `cargo build | tail`
   looks like it passed. Redirect to a file and check `$?` when pass/fail
   matters; use `| tail` only for interactive peeking.
+- A bare `cargo build` compiles the library and bins but NOT the examples, so
+  it is a false green for any change that touches example call sites (the
+  examples are the integration tests). Use `cargo clippy --all-targets` (or
+  `cargo build --examples`) as the real compile gate. Missing this hid eight
+  example errors behind a "clean" build in `input/pointer`
+  (`docs/retros/20260704-161508-input-pointer.md`).
+- Prelude name collisions with bevy: a public type re-exported through
+  `crate::prelude` must not share a name with anything in `bevy::prelude`.
+  A game-local `struct Foo` silently shadows a bevy-prelude `Foo`, so it never
+  clashes in an example; the moment you harvest it into the crate prelude,
+  `use bevy::prelude::*` + `use bevy_common_systems::prelude::*` make every
+  reference ambiguous (E0659). This bit the harvested unified pointer, whose
+  natural name `Pointer` collides with bevy's `bevy_picking` `Pointer` event --
+  it had to become `UnifiedPointer`. Check new prelude names against
+  `bevy::prelude` before committing to them
+  (`docs/retros/20260704-161508-input-pointer.md`).
 - Web/wasm builds: `trunk` must run from the repo root (it fails with
   `Unable to find any Trunk configuration` from a subdir like `web/`), and
   `rand` on wasm needs the getrandom `wasm_js` backend. Both are handled in
