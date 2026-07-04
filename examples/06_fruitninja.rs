@@ -1397,13 +1397,6 @@ fn move_fragments(time: Res<Time>, mut q_fragments: Query<(&mut Transform, &mut 
     }
 }
 
-/// Pick the active pointer's screen position: an active touch wins over the
-/// mouse cursor, so a finger drives aiming when one is down and the cursor is
-/// the fallback (the desktop case, where there is never a touch).
-fn active_pointer_pos(touch_pos: Option<Vec2>, cursor_pos: Option<Vec2>) -> Option<Vec2> {
-    touch_pos.or(cursor_pos)
-}
-
 /// World position where the pointer ray meets the play plane, if the given
 /// screen position projects onto the plane. Shared by mouse and touch: the
 /// caller resolves the screen position (see `active_pointer_pos`), this only
@@ -1452,26 +1445,6 @@ fn swipe_is_active(previous: Vec3, current: Vec3, dt: f32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn touch_wins_over_cursor() {
-        // With both present, the active touch drives aiming.
-        let touch = Vec2::new(10.0, 20.0);
-        let cursor = Vec2::new(30.0, 40.0);
-        assert_eq!(active_pointer_pos(Some(touch), Some(cursor)), Some(touch));
-    }
-
-    #[test]
-    fn cursor_is_used_without_touch() {
-        // The desktop case: no touch, so the mouse cursor position is used.
-        let cursor = Vec2::new(30.0, 40.0);
-        assert_eq!(active_pointer_pos(None, Some(cursor)), Some(cursor));
-    }
-
-    #[test]
-    fn no_pointer_when_neither_present() {
-        assert_eq!(active_pointer_pos(None, None), None);
-    }
 
     #[test]
     fn point_inside_circle_hits() {

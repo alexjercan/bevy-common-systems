@@ -196,7 +196,6 @@ fn main() {
 
     app.init_state::<GameState>();
 
-    app.init_resource::<Pointer>();
     app.init_resource::<Score>();
     app.init_resource::<HighScore>();
     app.init_resource::<NewBest>();
@@ -207,8 +206,8 @@ fn main() {
     app.add_systems(Startup, setup);
 
     // Pointer state is resolved every frame, in every state, so menus and
-    // gameplay share one mouse+touch abstraction.
-    app.add_systems(PreUpdate, update_pointer);
+    // gameplay share one mouse+touch abstraction (the crate's `UnifiedPointerPlugin`).
+    app.add_plugins(UnifiedPointerPlugin);
 
     // `fit_camera` writes the camera base every frame; it must run between the
     // shake plugin's Restore and Apply phases (both in PostUpdate) so the shake
@@ -289,42 +288,6 @@ enum GameState {
     Menu,
     Playing,
     GameOver,
-}
-
-// ---------------------------------------------------------------------------
-// Unified pointer input (mouse + touch)
-// ---------------------------------------------------------------------------
-
-/// The current pointer, unified across mouse and touch. An active touch wins over
-/// the mouse cursor so a finger drives aiming on the wasm/mobile build.
-#[derive(Resource, Default)]
-struct Pointer {
-    /// On-screen position (logical window pixels) of the active pointer, if any.
-    screen_pos: Option<Vec2>,
-    /// Whether the pointer is currently down (mouse button held or a finger on
-    /// the screen).
-    pressed: bool,
-    /// True only on the frame the press began, for the menu "advance on tap".
-    just_pressed: bool,
-}
-
-/// Resolve the pointer from raw mouse and touch input each frame. Reading the raw
-/// state directly (rather than through `bevy_enhanced_input`) keeps this example
-/// self-contained; the desktop path is simply the mouse, since `Touches` is
-/// always empty there.
-fn update_pointer(
-    mouse: Res<ButtonInput<MouseButton>>,
-    touches: Res<Touches>,
-    window: Single<&Window>,
-    mut pointer: ResMut<Pointer>,
-) {
-    let touch_pos = touches.iter().next().map(|touch| touch.position());
-    let touch_just = touches.iter_just_pressed().next().is_some();
-
-    pointer.pressed = mouse.pressed(MouseButton::Left) || touch_pos.is_some();
-    pointer.just_pressed = mouse.just_pressed(MouseButton::Left) || touch_just;
-    // An active touch takes priority over the mouse cursor.
-    pointer.screen_pos = touch_pos.or_else(|| window.cursor_position());
 }
 
 // ---------------------------------------------------------------------------
@@ -707,7 +670,7 @@ fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<Men
 
 fn menu_click(
     mut commands: Commands,
-    pointer: Res<Pointer>,
+    pointer: Res<UnifiedPointer>,
     keys: Res<ButtonInput<KeyCode>>,
     sfx: Res<SfxAssets>,
     mut next: ResMut<NextState<GameState>>,
@@ -884,7 +847,7 @@ fn update_hud(
 fn control_ship(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
-    pointer: Res<Pointer>,
+    pointer: Res<UnifiedPointer>,
     camera: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     mut q_ship: Query<(&mut Ship, &Transform, &mut LinearVelocity)>,
     mut q_model: Query<&mut Transform, (With<ShipModel>, Without<Ship>)>,
@@ -979,7 +942,7 @@ fn control_ship(
 fn fire_bullets(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    pointer: Res<Pointer>,
+    pointer: Res<UnifiedPointer>,
     assets: Res<GameAssets>,
     sfx: Res<SfxAssets>,
     mut q_ship: Query<(&mut Ship, &Transform)>,
@@ -1454,7 +1417,7 @@ fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
 }
 
 fn gameover_click(
-    pointer: Res<Pointer>,
+    pointer: Res<UnifiedPointer>,
     keys: Res<ButtonInput<KeyCode>>,
     mut next: ResMut<NextState<GameState>>,
 ) {

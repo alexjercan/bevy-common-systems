@@ -1,6 +1,6 @@
 # input/pointer: unified mouse+touch+cursor pointer resource (Wave A)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 30
 - TAGS: spike,feature,input
 
