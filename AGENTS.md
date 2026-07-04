@@ -439,7 +439,13 @@ Examples:
   via `AppExit::Success`, not `std::process::exit` (the latter segfaults on wgpu
   teardown -- harmless, but do not mistake it for a game crash). See
   `docs/dev-harness.md`; 08_dropzone and 11_overload are wired up as the
-  reference. (History, for context: verified 07/08 gameplay via the old
+  reference. The two harness plugins are mutually exclusive in a single
+  run: `AutopilotPlugin` and `ScreenshotPlugin` both drive `NextState`, so
+  running with both `BCS_AUTOPILOT` and `BCS_SHOT` set makes the screenshot never
+  fire (its settle-frame count never accumulates). To capture a mid-gameplay
+  frame, use `ScreenshotPlugin` alone, or drive with `AutopilotPlugin` and grab
+  the window externally with `scrot`
+  (`docs/retros/20260704-220736-bastion-example.md`). (History, for context: verified 07/08 gameplay via the old
   hand-rolled harness in `tasks/20260703-213510`, `tasks/20260704-103544`.)
 - Seeing the screen (do not treat "a background run cannot see the screen" as a
   hard limit): when `$DISPLAY` is set, a background session CAN screenshot the
