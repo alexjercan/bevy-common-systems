@@ -407,7 +407,7 @@ fn apply_slice_pop(mut q_pop: Query<(&mut Transform, &Tween<Vec3>), With<SlicePo
 fn on_slice_pop_finished(
     finished: On<Add, TweenFinished>,
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut q_pop: Query<(&mut Transform, &Tween<Vec3>), With<SlicePop>>,
 ) {
     let entity = finished.entity;
@@ -423,7 +423,7 @@ fn on_slice_pop_finished(
         .insert(ExplodeMesh {
             fragment_count: FRAGMENT_COUNT,
         });
-    commands.play_sfx_volume(sfx.splat.clone(), 0.8);
+    commands.play_sfx_volume(sfx.get(Sfx::Splat), 0.8);
 }
 
 /// Marker for the on-screen score HUD text.
@@ -482,28 +482,28 @@ struct FruitAssets {
     gold_material: Handle<StandardMaterial>,
 }
 
-/// One `AudioSource` handle per gameplay event. Loaded once at startup; the
-/// systems trigger `PlaySfx` with the matching handle. The files under
-/// `assets/sounds/` are placeholders (see `assets/sounds/README.md`); drop real
-/// audio in at the same paths and nothing here changes.
-#[derive(Resource)]
-struct SfxAssets {
+/// One gameplay-event sound, keyed into the crate's `SoundBank`. Loaded once at
+/// startup from `assets/sounds/<name>.wav`; systems trigger `PlaySfx` with
+/// `sfx.get(...)`. The files are placeholders (see `assets/sounds/README.md`);
+/// drop real audio in at the same paths and nothing here changes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Sfx {
     /// Clicking "play" on the menu.
-    menu_select: Handle<AudioSource>,
+    MenuSelect,
     /// A fruit is sliced (the swipe connects).
-    slice: Handle<AudioSource>,
+    Slice,
     /// A sliced fruit bursts into fragments.
-    splat: Handle<AudioSource>,
+    Splat,
     /// A combo reaches x2 or more.
-    combo: Handle<AudioSource>,
+    Combo,
     /// A golden bonus fruit is sliced.
-    golden: Handle<AudioSource>,
+    Golden,
     /// A bomb is sliced (lethal).
-    bomb: Handle<AudioSource>,
+    Bomb,
     /// The run ends (game-over screen).
-    game_over: Handle<AudioSource>,
+    GameOver,
     /// A fresh fruit or bomb is launched from below.
-    launch: Handle<AudioSource>,
+    Launch,
 }
 
 fn setup(
@@ -513,16 +513,19 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // Load one sound per gameplay event. Paths are relative to `assets/`.
-    commands.insert_resource(SfxAssets {
-        menu_select: asset_server.load("sounds/menu_select.wav"),
-        slice: asset_server.load("sounds/slice.wav"),
-        splat: asset_server.load("sounds/splat.wav"),
-        combo: asset_server.load("sounds/combo.wav"),
-        golden: asset_server.load("sounds/golden.wav"),
-        bomb: asset_server.load("sounds/bomb.wav"),
-        game_over: asset_server.load("sounds/game_over.wav"),
-        launch: asset_server.load("sounds/launch.wav"),
-    });
+    commands.insert_resource(SoundBank::load(
+        &asset_server,
+        [
+            (Sfx::MenuSelect, "menu_select"),
+            (Sfx::Slice, "slice"),
+            (Sfx::Splat, "splat"),
+            (Sfx::Combo, "combo"),
+            (Sfx::Golden, "golden"),
+            (Sfx::Bomb, "bomb"),
+            (Sfx::GameOver, "game_over"),
+            (Sfx::Launch, "launch"),
+        ],
+    ));
 
     // One centered octahedron sphere, reused by every fruit and every fragment.
     // Centered on the origin means any slice plane through the local origin
@@ -743,11 +746,11 @@ fn pulse_menu_title(time: Res<Time>, mut q_title: Query<&mut TextColor, With<Men
 fn menu_click(
     mut commands: Commands,
     pointer: Res<UnifiedPointer>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut next: ResMut<NextState<GameState>>,
 ) {
     if pointer.just_pressed {
-        commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
+        commands.play_sfx_volume(sfx.get(Sfx::MenuSelect), 0.7);
         next.set(GameState::Playing);
     }
 }
@@ -884,8 +887,8 @@ fn spawn_game_over(
 /// Play the game-over sting when the screen appears. Fires for every cause of
 /// game over (a sliced bomb or an Escape give-up), since it hangs off the state
 /// transition rather than the death event.
-fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
-    commands.play_sfx_volume(sfx.game_over.clone(), 0.9);
+fn play_game_over_sfx(mut commands: Commands, sfx: Res<SoundBank<Sfx>>) {
+    commands.play_sfx_volume(sfx.get(Sfx::GameOver), 0.9);
 }
 
 /// Record the run's score into the session high score, flagging a new best.
@@ -912,7 +915,7 @@ fn spawn_projectile(
     mut timer: ResMut<SpawnTimer>,
     elapsed: Res<Elapsed>,
     assets: Res<FruitAssets>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
 ) {
     if !timer.tick(time.delta()).just_finished() {
         return;
@@ -925,7 +928,7 @@ fn spawn_projectile(
 
     // A soft launch whoosh. Kept quiet so it does not crowd the slice/pop
     // sounds as spawns speed up.
-    commands.play_sfx_volume(sfx.launch.clone(), 0.35);
+    commands.play_sfx_volume(sfx.get(Sfx::Launch), 0.35);
 
     let mut rng = rand::rng();
 
@@ -1018,7 +1021,7 @@ fn slice_objects(
     mut combo: ResMut<Combo>,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut score: ResMut<Score>,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     q_sliceable: Query<(Entity, &Transform, &Sliceable, Has<Bomb>, Has<Golden>)>,
 ) {
     // Releasing the button ends the swipe, so the next press starts a fresh
@@ -1086,7 +1089,7 @@ fn slice_objects(
             commands.entity(entity).insert(ExplodeMesh {
                 fragment_count: FRAGMENT_COUNT,
             });
-            commands.play_sfx(sfx.bomb.clone());
+            commands.play_sfx(sfx.get(Sfx::Bomb));
             commands.trigger(HealthApplyDamage {
                 entity: *player,
                 source: Some(entity),
@@ -1115,7 +1118,7 @@ fn slice_objects(
             if is_golden {
                 // Golden fruit: flat bonus, and it buys extra combo time by
                 // stretching the window, without advancing the combo count.
-                commands.play_sfx_volume(sfx.golden.clone(), 0.9);
+                commands.play_sfx_volume(sfx.get(Sfx::Golden), 0.9);
                 **score += GOLDEN_POINTS;
                 // Only fold into the combo tally when a combo is actually
                 // running, otherwise `points` would leak (tick_combo only
@@ -1136,7 +1139,7 @@ fn slice_objects(
                 }
             } else {
                 // A crisp blade whoosh on every plain-fruit slice.
-                commands.play_sfx_volume(sfx.slice.clone(), 0.9);
+                commands.play_sfx_volume(sfx.get(Sfx::Slice), 0.9);
 
                 // Each fruit in the combo is worth one more point than the last
                 // (1, 2, 3, ...); the combo window keeps the chain alive.
@@ -1148,7 +1151,7 @@ fn slice_objects(
                 if combo.streak.count() >= 2 {
                     let speed = (1.0 + (combo.streak.count() as f32 - 2.0) * 0.06).min(1.6);
                     commands.trigger(
-                        PlaySfx::new(sfx.combo.clone())
+                        PlaySfx::new(sfx.get(Sfx::Combo))
                             .with_volume(0.8)
                             .with_speed(speed),
                     );

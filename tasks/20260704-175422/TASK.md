@@ -1,6 +1,6 @@
 # assets: sound/handle registry + opt-in ready-gate (Wave 2)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 55
 - TAGS: spike,feature
 

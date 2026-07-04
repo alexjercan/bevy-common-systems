@@ -510,15 +510,17 @@ impl Progress {
 #[derive(Resource, Default)]
 struct HighScore(f64);
 
-/// Handles for the one-shot sound effects, loaded once in `setup`.
-#[derive(Resource)]
-struct SfxAssets {
-    menu_select: Handle<AudioSource>,
-    tap: Handle<AudioSource>,
-    buy: Handle<AudioSource>,
-    alarm: Handle<AudioSource>,
-    tier_up: Handle<AudioSource>,
-    game_over: Handle<AudioSource>,
+/// Keys into the crate's `SoundBank` of one-shot sound effects. The semantic key
+/// is decoupled from the file: several reuse shared placeholder `.wav`s (see the
+/// `SoundBank::load` list in `setup`).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+enum Sfx {
+    MenuSelect,
+    Tap,
+    Buy,
+    Alarm,
+    TierUp,
+    GameOver,
 }
 
 // --- Components --------------------------------------------------------------
@@ -620,14 +622,18 @@ fn heat_color(heat: f64) -> Color {
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn((Name::new("UI Camera"), Camera2d));
 
-    commands.insert_resource(SfxAssets {
-        menu_select: asset_server.load("sounds/menu_select.wav"),
-        tap: asset_server.load("sounds/pickup.wav"),
-        buy: asset_server.load("sounds/golden.wav"),
-        alarm: asset_server.load("sounds/alarm.wav"),
-        tier_up: asset_server.load("sounds/level_up.wav"),
-        game_over: asset_server.load("sounds/game_over.wav"),
-    });
+    commands.insert_resource(SoundBank::load(
+        &asset_server,
+        [
+            (Sfx::MenuSelect, "menu_select"),
+            // Semantic keys reuse shared placeholder files.
+            (Sfx::Tap, "pickup"),
+            (Sfx::Buy, "golden"),
+            (Sfx::Alarm, "alarm"),
+            (Sfx::TierUp, "level_up"),
+            (Sfx::GameOver, "game_over"),
+        ],
+    ));
 
     // A compact telemetry HUD in the corner, exercising `ui/status`: the value
     // closures read `ReactorWorld` / `Shop` straight out of the World each frame.
@@ -765,7 +771,7 @@ fn pulse_menu_title(time: Res<Time>, mut q: Query<&mut TextColor, With<MenuTitle
 /// taps as `Touch` events with no synthesized `MouseButton::Left`.
 fn menu_start(
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
     touches: Res<Touches>,
@@ -775,7 +781,7 @@ fn menu_start(
         || keys.get_just_pressed().next().is_some()
         || touches.any_just_pressed();
     if pressed {
-        commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
+        commands.play_sfx_volume(sfx.get(Sfx::MenuSelect), 0.7);
         next.set(GameState::Playing);
     }
 }
@@ -1006,7 +1012,7 @@ fn spawn_hud(mut commands: Commands) {
 fn fire_ticks(
     time: Res<Time>,
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     mut timer: ResMut<TickTimer>,
     mut world: ResMut<ReactorWorld>,
     shop: Res<Shop>,
@@ -1018,7 +1024,7 @@ fn fire_ticks(
     let new_tier = tier_for_score(score(&world, &shop));
     if new_tier > progress.tier {
         progress.tier = new_tier;
-        commands.play_sfx_volume(sfx.tier_up.clone(), 0.6);
+        commands.play_sfx_volume(sfx.get(Sfx::TierUp), 0.6);
     }
 
     if timer.0.tick(time.delta()).just_finished() {
@@ -1032,7 +1038,7 @@ fn fire_ticks(
 /// matching event onto the bus, where the built-in handlers act on it.
 fn manual_controls(
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     keys: Res<ButtonInput<KeyCode>>,
     tap_q: Query<&Interaction, (Changed<Interaction>, With<TapButton>)>,
     sell_q: Query<&Interaction, (Changed<Interaction>, With<SellButton>)>,
@@ -1042,7 +1048,7 @@ fn manual_controls(
 
     if tap_clicked || keys.just_pressed(KeyCode::Space) {
         commands.fire::<ClickEvent>(());
-        commands.play_sfx_volume(sfx.tap.clone(), 0.4);
+        commands.play_sfx_volume(sfx.get(Sfx::Tap), 0.4);
     }
     if sell_clicked || keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::NumpadEnter)
     {
@@ -1058,7 +1064,7 @@ fn try_buy(
     registry: &EventHandlerRegistry<ReactorWorld>,
     world: &mut ReactorWorld,
     shop: &mut Shop,
-    sfx: &SfxAssets,
+    sfx: &SoundBank<Sfx>,
 ) {
     let cost = part_cost(idx, shop.owned[idx]);
     if world.credits < cost {
@@ -1079,13 +1085,13 @@ fn try_buy(
     world.credits -= cost;
     shop.spent += cost;
     shop.owned[idx] += 1;
-    commands.play_sfx_volume(sfx.buy.clone(), 0.6);
+    commands.play_sfx_volume(sfx.get(Sfx::Buy), 0.6);
 }
 
 /// Buy parts from shop-card clicks or number keys.
 fn buy_input(
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     keys: Res<ButtonInput<KeyCode>>,
     registry: Res<EventHandlerRegistry<ReactorWorld>>,
     mut world: ResMut<ReactorWorld>,
@@ -1184,7 +1190,7 @@ fn update_shop_cards(
 fn update_alarm(
     time: Res<Time>,
     mut commands: Commands,
-    sfx: Res<SfxAssets>,
+    sfx: Res<SoundBank<Sfx>>,
     world: Res<ReactorWorld>,
     mut progress: ResMut<Progress>,
     mut q: Query<(&mut Visibility, &mut TextColor), With<AlarmBanner>>,
@@ -1209,7 +1215,7 @@ fn update_alarm(
     progress.alarm_timer -= time.delta_secs();
     if progress.alarm_timer <= 0.0 {
         progress.alarm_timer = ALARM_INTERVAL;
-        commands.play_sfx_volume(sfx.alarm.clone(), 0.5);
+        commands.play_sfx_volume(sfx.get(Sfx::Alarm), 0.5);
     }
 }
 
@@ -1279,8 +1285,8 @@ fn spawn_game_over(
         });
 }
 
-fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
-    commands.play_sfx_volume(sfx.game_over.clone(), 0.8);
+fn play_game_over_sfx(mut commands: Commands, sfx: Res<SoundBank<Sfx>>) {
+    commands.play_sfx_volume(sfx.get(Sfx::GameOver), 0.8);
 }
 
 /// A click, tap or key press on the game-over screen returns to the menu, so a

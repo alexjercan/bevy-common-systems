@@ -25,8 +25,10 @@
 
 use bevy::{audio::Volume, prelude::*};
 
+pub mod registry;
+
 pub mod prelude {
-    pub use super::{PlaySfx, SfxCommandsExt, SfxMasterVolume, SfxPlugin};
+    pub use super::{registry::prelude::*, PlaySfx, SfxCommandsExt, SfxMasterVolume, SfxPlugin};
 }
 
 /// Request to play a one-shot sound effect.
