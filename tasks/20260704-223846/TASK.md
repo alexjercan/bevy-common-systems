@@ -1,12 +1,14 @@
-# assets + scoring: migrate 07/08/10/11 onto SoundBank and HighScore
+# assets + scoring + ui/input: migrate the games onto the Wave 2 harvests
 
 - STATUS: OPEN
 - PRIORITY: 18
-- TAGS: feature,audio,scoring,cleanup
+- TAGS: feature,audio,scoring,ui,input,cleanup
 
-> Follow-up from tatr 20260704-175422 (SoundBank), review NIT R1.1, and tatr
-> 20260704-175423 (HighScore<T>), review NIT R1.2. Two harvest modules landed
-> with 06/09 migrated; finish the other games in one pass.
+> Follow-up from the dev-harness Wave 2 tasks: 20260704-175422 (SoundBank, NIT
+> R1.1), 20260704-175423 (HighScore<T>, NIT R1.2), 20260704-175424 (ui/menu
+> builders) and 20260704-175425 (leaf input/status/material helpers). Each
+> harvest landed with two proof games migrated; this task finishes the rest in
+> one pass so the crate's own modules are actually adopted everywhere.
 
 ## Goal (part 1: SoundBank)
 
@@ -40,3 +42,27 @@ Migrate them, mirroring the 06/09 refactor:
   and `high.best()`. Ensure `record_high_score` runs before the game-over screen
   in the `OnEnter(GameOver)` chain.
 - Where a game persists its best (if any), use `PersistPlugin::<HighScore<T>>`.
+
+## Goal (part 3: ui/menu builders)
+
+`ui/menu` shipped (`centered_screen`, `screen_text`, `TitlePulse` + `MenuPlugin`)
+with 06/07 migrated. Migrate the remaining games (08/09/10/11/12) off their local
+`centered_screen`/`screen_text`/`pulse_menu_title`/`MenuTitle` onto the shared
+module. 11_overload pulses its title differently (brightness, not alpha); leave
+it or extend `TitlePulse` only if it maps cleanly.
+
+## Goal (part 4: leaf helpers)
+
+The leaf helpers shipped (`AnyStartPress`/`any_start_pressed`, `set_state_on_key`,
+`status_bar_with_fps`, `glowing_material`) with 07/10 migrated. Migrate the rest:
+
+- Replace each game's copy-pasted "advance on any press" check with
+  `AnyStartPress` (adopting `UnifiedPointer` where the game does not already use
+  it -- the spike's UnifiedPointer-adoption ask lives here now).
+- Replace each local `giveup_on_escape`-style system with
+  `set_state_on_key(KeyCode::Escape, GameState::GameOver)`.
+- Replace the hand-rolled FPS `status_bar_item` block with `status_bar_with_fps()`.
+- Replace emissive `StandardMaterial` literals with `glowing_material(base,
+  emissive)` (spread it for extra fields).
+
+Keep behaviour identical and boot each game.
