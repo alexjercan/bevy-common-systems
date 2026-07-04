@@ -94,6 +94,32 @@ chase sync in PostUpdate. No new plugins or dependencies.
   a successful soft landing (score 497, confirming pad+fuel+time bonuses all
   compute), with no gameplay panic and the hull frozen on the surface.
 
+## Added during review: randomized layout + guide
+
+Play-review feedback asked for a fresher, more navigable run. Three follow-on
+changes (REVIEW.md R1.1-R1.3):
+
+- **Randomized pad each run.** The pad moved from a fixed `setup` entity to a
+  per-run entity rolled in `start_run`: a random azimuth and a polar angle in
+  `[PAD_ANGLE_MIN, PAD_ANGLE_MAX]` = `[0.18, 0.5]` rad around the +Y pole, kept
+  well clear of the antipode (where the `from_rotation_arc` upright target is
+  singular) and within a fuelled lateral reach. The terrain noise is retained in
+  a `PlanetNoise` resource so the beacon still sits flush on the surface. The pad
+  is a per-run entity (marker `Pad`) kept visible into Result and cleared by
+  `cleanup_run_scene` on leaving Result, alongside the parked ship.
+- **Randomized, self-refilling fuel field.** Fuel cans now spawn at random spots
+  in the descent cap (`random_fuel_can_pos`) and a `maintain_fuel_cans` system
+  keeps `FUEL_CAN_TARGET` (3) of them present: while at target the refill timer
+  stays primed, and once a can is collected a replacement spawns after
+  `FUEL_CAN_SPAWN_INTERVAL` (2.5 s), so the field refills over time rather than
+  instantly or emptying out. Shared can mesh/material live in a `FuelCanAssets`
+  resource so top-ups do not allocate.
+- **Diegetic guide arrow.** An emissive cone (`GuideArrow`) hovers
+  `GUIDE_ARROW_HEIGHT` above the ship and, each frame in `Playing`, points along
+  the ship's ground track toward the pad (the tangent-plane component of the
+  ship->pad vector), collapsing to "point up" when the ship is directly over the
+  pad. It complements the numeric "pad Nm" HUD readout with an in-world heading.
+
 ## Difficulties
 
 - The landed-ship-stays-visible feature is the one change that touched entity
