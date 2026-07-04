@@ -78,11 +78,30 @@ where
 {
     /// Create a new handler for a given event kind.
     pub fn new<E: EventKind>() -> Self {
+        Self::from_event_name(E::name())
+    }
+
+    /// Create a handler bound to an already-resolved event name.
+    ///
+    /// Prefer [`EventHandler::new`] with an [`EventKind`]; this lower-level
+    /// constructor exists for data-driven builders (the registry) that only
+    /// have the event name as a `&'static str` resolved from a string.
+    pub fn from_event_name(name: &'static str) -> Self {
         Self {
-            name: E::name(),
+            name,
             filters: Vec::new(),
             actions: Vec::new(),
         }
+    }
+
+    /// Push an already-shared filter (used by data-driven construction).
+    pub fn add_filter_arc(&mut self, f: Arc<dyn EventFilter<W>>) {
+        self.filters.push(f);
+    }
+
+    /// Push an already-shared action (used by data-driven construction).
+    pub fn add_action_arc(&mut self, a: Arc<dyn EventAction<W>>) {
+        self.actions.push(a);
     }
 
     /// Add a filter to the handler (builder-style).
@@ -184,7 +203,9 @@ where
     W: EventWorld + Default,
 {
     fn build(&self, app: &mut bevy::prelude::App) {
+        debug!("GameEventsPlugin: build");
         app.init_resource::<GameEventQueue<W>>();
+        app.init_resource::<super::registry::EventHandlerRegistry<W>>();
         app.add_observer(on_game_event::<W>);
 
         app.init_resource::<W>();

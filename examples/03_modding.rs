@@ -30,9 +30,28 @@ fn custom_plugin(app: &mut App) {
 
     app.init_resource::<SomeCounter>();
 
-    app.add_systems(Startup, setup_handler);
+    app.add_systems(Startup, setup_handlers);
     app.add_systems(FixedUpdate, (print_counter_system, update_system));
 }
+
+// The handlers are authored as data, not Rust. In a real mod this JSON would be
+// loaded from a file or received over a scripting boundary; here it is inlined
+// so the example stays a single file. Each entry names an `event`, the
+// `filters` that must pass, and the `actions` to run -- all by the string names
+// registered on the `EventHandlerRegistry` in `setup_handlers` below.
+const HANDLERS_JSON: &str = r#"[
+    {
+        "name": "OnUpdate Handler",
+        "event": "onupdate",
+        "filters": [{ "type": "min_value", "params": { "min_value": 0.5 } }],
+        "actions": [{ "type": "increment_counter" }]
+    },
+    {
+        "name": "OnTick Handler",
+        "event": "ontick",
+        "actions": [{ "type": "increment_counter" }]
+    }
+]"#;
 
 #[derive(Resource, Default, Debug, Clone, Deref, DerefMut)]
 pub struct SomeCounter(pub u32);
@@ -87,7 +106,7 @@ impl EventAction<CustomEventWorld> for IncrementCounterAction {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
 struct MinValueFilter {
     min_value: f32,
 }
@@ -107,20 +126,32 @@ impl EventFilter<CustomEventWorld> for MinValueFilter {
     }
 }
 
-fn setup_handler(mut commands: Commands) {
-    commands.spawn((
-        Name::new("OnUpdate Handler"),
-        EventHandler::<CustomEventWorld>::new::<OnUpdateEvent>()
-            .with_filter(MinValueFilter { min_value: 0.5 })
-            .with_action(IncrementCounterAction),
-    ));
+fn setup_handlers(
+    mut commands: Commands,
+    mut registry: ResMut<EventHandlerRegistry<CustomEventWorld>>,
+) {
+    // Teach the registry the names the JSON is allowed to use: the event kinds,
+    // the filter (deserialized straight from its params) and the action (a
+    // custom constructor that takes no params). `GameEventsPlugin` already
+    // inserted the empty registry resource.
+    registry
+        .register_event::<OnUpdateEvent>()
+        .register_event::<OnTick>()
+        .register_filter_de::<MinValueFilter>("min_value")
+        .register_action("increment_counter", |_| {
+            Ok::<_, String>(IncrementCounterAction)
+        });
 
-    // Handler for the attribute-less OnTick event. Its default payload is `()`
-    // (no data) and it has no filter, so it fires every tick.
-    commands.spawn((
-        Name::new("OnTick Handler"),
-        EventHandler::<CustomEventWorld>::new::<OnTick>().with_action(IncrementCounterAction),
-    ));
+    // Build a handler entity from each spec. `parse_specs` keeps the optional
+    // display name so it can become a Bevy `Name`.
+    let specs = parse_specs(HANDLERS_JSON).expect("HANDLERS_JSON should be valid handler specs");
+    for spec in &specs {
+        let handler = registry
+            .build_handler(spec)
+            .expect("every event/filter/action name should be registered");
+        let name = spec.name.clone().unwrap_or_else(|| spec.event.clone());
+        commands.spawn((Name::new(name), handler));
+    }
 }
 
 fn update_system(mut commands: Commands) {
