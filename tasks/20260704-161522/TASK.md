@@ -1,6 +1,6 @@
 # radial gravity: RadialGravity component or documented recipe (Wave B)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 20
 - TAGS: spike,feature,physics
 
