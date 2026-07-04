@@ -298,8 +298,13 @@ Examples:
   juggling act. While any gauge sits red the reactor's `Health` drains
   (`HealthApplyDamage` -> `HealthZeroMarker` ends the run) and an alarm beeps;
   difficulty ramps the climb rates over time. No 3D scene -- renders with a plain
-  `Camera2d`. Grows out of `04_status_item`, follows the `06_fruitninja` shape
-  (states, sounds, wasm). See `docs/2026-07-04-overload-example.md`.
+  `Camera2d`. Touch-playable like `08_dropzone`: an on-screen vent pad (a bottom
+  strip of four buttons, revealed on first touch) lets a phone tap-vent, and the
+  menu/meltdown screens take a tap; touch is an additive writer of the same
+  `apply_vent` path, keyboard unchanged. Grows out of `04_status_item`, follows
+  the `06_fruitninja` shape (states, sounds, wasm). See
+  `docs/2026-07-04-overload-example.md` and
+  `docs/2026-07-04-overload-touch-controls.md`.
 
 ## Workflow
 

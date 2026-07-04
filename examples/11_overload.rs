@@ -16,8 +16,9 @@
 //! needed, so it renders with a plain `Camera2d`.
 //!
 //! Controls: press 1 / 2 / 3 / 4 (or the numpad equivalents) to vent HEAT / PRES
-//! / FLUX / CHRG. Click or press any key to start and to dismiss the meltdown
-//! screen. Escape gives up.
+//! / FLUX / CHRG. On a touchscreen an on-screen vent pad appears along the bottom
+//! (revealed on the first touch) -- tap a gauge's button to vent it. Click, tap or
+//! press any key to start and to dismiss the meltdown screen. Escape gives up.
 //!
 //! Run it: `cargo run --example 11_overload` (add `--features debug` for the
 //! inspector).
@@ -76,6 +77,12 @@ const ALARM_INTERVAL: f32 = 0.55;
 const LEVEL_INTERVAL: f32 = 14.0;
 /// Each level multiplies every gauge's base climb by `1 + LEVEL_CLIMB_STEP * level`.
 const LEVEL_CLIMB_STEP: f32 = 0.16;
+
+/// Height of the on-screen touch vent pad, as a fraction of the window height.
+/// The pad is a bottom strip split into `GAUGE_COUNT` equal columns (one button
+/// per gauge); `vent_button_at` and `spawn_vent_pad` both key off this fraction
+/// so the visual buttons line up with the touch hit zones.
+const VENT_ZONE_H_FRAC: f32 = 0.16;
 
 /// One gauge's fixed properties.
 struct GaugeSpec {
@@ -160,6 +167,7 @@ fn main() {
     app.insert_resource(ClearColor(Color::srgb(0.04, 0.05, 0.08)));
     app.init_resource::<ReactorState>();
     app.init_resource::<HighScore>();
+    app.init_resource::<TouchSeen>();
 
     app.init_state::<GameState>();
 
@@ -173,13 +181,18 @@ fn main() {
     );
 
     // Playing.
-    app.add_systems(OnEnter(GameState::Playing), (start_run, spawn_hud));
+    app.add_systems(
+        OnEnter(GameState::Playing),
+        (start_run, spawn_hud, spawn_vent_pad),
+    );
     app.add_systems(
         Update,
         (
             advance_run,
             simulate_gauges,
             vent_input,
+            touch_vent_input,
+            update_touch_pad,
             apply_danger,
             mirror_health,
             update_alarm_banner,
@@ -283,6 +296,13 @@ impl ReactorState {
 #[derive(Resource, Default)]
 struct HighScore(f32);
 
+/// True once any touch has been seen this session. Gates the reveal of the
+/// on-screen vent pad so a PC/mouse session never shows it and a phone reveals it
+/// the instant a thumb lands -- runtime touch detection, no `#[cfg(wasm)]` (which
+/// would also fire on desktop browsers) or JS probe. Mirrors `08_dropzone`.
+#[derive(Resource, Default)]
+struct TouchSeen(bool);
+
 /// Handles for the one-shot sound effects, loaded once in `setup`.
 #[derive(Resource)]
 struct SfxAssets {
@@ -307,6 +327,15 @@ struct MenuTitle;
 /// Marker for the central alarm banner shown while a gauge is red.
 #[derive(Component)]
 struct AlarmBanner;
+
+/// Root of the on-screen touch vent pad; its visibility is gated on [`TouchSeen`].
+#[derive(Component)]
+struct TouchPad;
+
+/// Marker for the keyboard-legend line at the bottom of the HUD. Hidden once a
+/// touch is seen, since the vent pad then covers the same bottom strip.
+#[derive(Component)]
+struct HudLegend;
 
 // --- Status-bar readings -----------------------------------------------------
 
@@ -562,9 +591,14 @@ fn menu_start(
     sfx: Res<SfxAssets>,
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
+    touches: Res<Touches>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    let pressed = mouse.just_pressed(MouseButton::Left) || keys.get_just_pressed().next().is_some();
+    // A tap also starts, so the wasm build is enterable on a phone (winit-on-web
+    // delivers taps as touches, not synthesized mouse clicks).
+    let pressed = mouse.just_pressed(MouseButton::Left)
+        || keys.get_just_pressed().next().is_some()
+        || touches.any_just_pressed();
     if pressed {
         commands.play_sfx_volume(sfx.menu_select.clone(), 0.7);
         next.set(GameState::Playing);
@@ -611,8 +645,10 @@ fn spawn_hud(mut commands: Commands) {
         });
 
     // A quiet legend pinned to the bottom so the key mapping is always visible.
+    // Hidden once a touch is seen (the vent pad covers the same strip).
     commands.spawn((
         Name::new("HUD legend"),
+        HudLegend,
         DespawnOnExit(GameState::Playing),
         screen_text(
             "1 HEAT   2 PRES   3 FLUX   4 CHRG      keep them out of the red",
@@ -627,6 +663,114 @@ fn spawn_hud(mut commands: Commands) {
             ..default()
         },
     ));
+}
+
+/// A subtle per-gauge tint for its vent button, so the four read as distinct
+/// targets at a glance.
+fn vent_button_tint(idx: usize) -> Color {
+    match idx {
+        0 => Color::srgb(1.0, 0.5, 0.35),  // HEAT -- orange
+        1 => Color::srgb(0.45, 0.75, 1.0), // PRES -- blue
+        2 => Color::srgb(0.6, 1.0, 0.55),  // FLUX -- green
+        _ => Color::srgb(0.85, 0.6, 1.0),  // CHRG -- purple
+    }
+}
+
+/// Spawn the on-screen touch vent pad: a bottom strip of four labelled buttons,
+/// one per gauge, laid out over the same window fractions `vent_button_at`
+/// hit-tests. Spawned hidden and revealed by `update_touch_pad` once a touch is
+/// seen, so a PC session never shows it. The buttons are purely visual; the touch
+/// hit-test reads the raw `Touches` against the window, so nothing here needs to
+/// be queried back.
+fn spawn_vent_pad(mut commands: Commands) {
+    commands
+        .spawn((
+            Name::new("Vent Pad"),
+            TouchPad,
+            DespawnOnExit(GameState::Playing),
+            // Hidden until the first touch reveals it (see `TouchSeen`).
+            Visibility::Hidden,
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                bottom: Val::Px(0.0),
+                width: Val::Percent(100.0),
+                height: Val::Percent(VENT_ZONE_H_FRAC * 100.0),
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(8.0),
+                padding: UiRect::all(Val::Px(8.0)),
+                ..default()
+            },
+        ))
+        .with_children(|parent| {
+            for (idx, spec) in GAUGES.iter().enumerate() {
+                let tint = vent_button_tint(idx);
+                parent
+                    .spawn((
+                        Name::new(format!("Vent Button {}", idx + 1)),
+                        Node {
+                            flex_grow: 1.0,
+                            flex_basis: Val::Px(0.0),
+                            height: Val::Percent(100.0),
+                            flex_direction: FlexDirection::Column,
+                            align_items: AlignItems::Center,
+                            justify_content: JustifyContent::Center,
+                            row_gap: Val::Px(2.0),
+                            border: UiRect::all(Val::Px(2.0)),
+                            border_radius: BorderRadius::all(Val::Px(14.0)),
+                            ..default()
+                        },
+                        BackgroundColor(tint.with_alpha(0.22)),
+                        BorderColor::all(tint.with_alpha(0.6)),
+                    ))
+                    .with_children(|button| {
+                        button.spawn((
+                            Text::new(format!("{}", idx + 1)),
+                            TextFont {
+                                font_size: FontSize::Px(30.0),
+                                ..default()
+                            },
+                            TextColor(Color::srgba(1.0, 1.0, 1.0, 0.92)),
+                        ));
+                        button.spawn((
+                            Text::new(spec.label),
+                            TextFont {
+                                font_size: FontSize::Px(18.0),
+                                ..default()
+                            },
+                            TextColor(Color::srgba(1.0, 1.0, 1.0, 0.85)),
+                        ));
+                    });
+            }
+        });
+}
+
+/// Mark the session as touch-driven on the first touch, then reveal the vent pad
+/// (and hide the keyboard legend it replaces). Runs only in Playing, where the pad
+/// exists; the menu and meltdown screens read `Touches` directly to navigate.
+fn update_touch_pad(
+    touches: Res<Touches>,
+    mut seen: ResMut<TouchSeen>,
+    mut q_pad: Query<&mut Visibility, (With<TouchPad>, Without<HudLegend>)>,
+    mut q_legend: Query<&mut Visibility, (With<HudLegend>, Without<TouchPad>)>,
+) {
+    if touches.any_just_pressed() {
+        seen.0 = true;
+    }
+    if let Ok(mut vis) = q_pad.single_mut() {
+        *vis = if seen.0 {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+    if let Ok(mut vis) = q_legend.single_mut() {
+        *vis = if seen.0 {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
+    }
 }
 
 // --- Simulation -------------------------------------------------------------
@@ -668,6 +812,40 @@ fn apply_vent(gauges: &mut [f32; GAUGE_COUNT], i: usize) {
     gauges[partner] = (gauges[partner] + COUPLING).min(GAUGE_MAX);
 }
 
+/// Map a touch point (window logical pixels) to the vent-button column it lands
+/// in, or `None` when it is above the bottom vent strip. The strip spans the full
+/// width in `GAUGE_COUNT` equal columns and the bottom `VENT_ZONE_H_FRAC` of the
+/// height; `spawn_vent_pad` renders the buttons over the same fractions, so this
+/// is the single source of truth for the touch hit-test. Pure so the mapping can
+/// be unit-tested without a window (touch positions share the window's logical
+/// pixel space, exactly as `08_dropzone`'s zone split relies on).
+fn vent_button_at(point: Vec2, window: Vec2) -> Option<usize> {
+    if window.x <= 0.0 || window.y <= 0.0 {
+        return None;
+    }
+    // Only the bottom strip is live.
+    if point.y < window.y * (1.0 - VENT_ZONE_H_FRAC) {
+        return None;
+    }
+    if point.x < 0.0 || point.x >= window.x {
+        return None;
+    }
+    let col = (point.x / window.x * GAUGE_COUNT as f32) as usize;
+    Some(col.min(GAUGE_COUNT - 1))
+}
+
+/// Play the vent SFX for a just-vented gauge, pitched up a touch when the gauge is
+/// still in trouble. Shared by the keyboard (`vent_input`) and touch
+/// (`touch_vent_input`) paths so the two input sources sound identical.
+fn trigger_vent_sfx(commands: &mut Commands, sfx: &SfxAssets, gauge_value: f32) {
+    let speed = if gauge_value >= AMBER { 1.15 } else { 1.0 };
+    commands.trigger(
+        PlaySfx::new(sfx.vent.clone())
+            .with_volume(0.6)
+            .with_speed(speed),
+    );
+}
+
 /// Vent a gauge on its key, knocking it down but pushing its coupled neighbour up.
 fn vent_input(
     keys: Res<ButtonInput<KeyCode>>,
@@ -678,18 +856,33 @@ fn vent_input(
     for (i, spec) in GAUGES.iter().enumerate() {
         if keys.just_pressed(spec.key) || keys.just_pressed(spec.key_alt) {
             apply_vent(&mut reactor.gauges, i);
-            // Pitch the vent up a touch when relieving a gauge deep in trouble.
-            let speed = if reactor.gauges[i] >= AMBER {
-                1.15
-            } else {
-                1.0
-            };
-            commands.trigger(
-                PlaySfx::new(sfx.vent.clone())
-                    .with_volume(0.6)
-                    .with_speed(speed),
-            );
+            trigger_vent_sfx(&mut commands, &sfx, reactor.gauges[i]);
         }
+    }
+}
+
+/// Vent a gauge when a touch taps its column in the on-screen vent pad. Additive
+/// to `vent_input` (keyboard): it feeds the SAME `apply_vent` and the same SFX, so
+/// there is one gauge model with two input sources and the keyboard path is
+/// unchanged. Reads just-pressed touches (frame-derived), so a finger still held
+/// from the menu/meltdown tap that started the run never leaks a vent.
+fn touch_vent_input(
+    touches: Res<Touches>,
+    windows: Query<&Window>,
+    mut commands: Commands,
+    sfx: Res<SfxAssets>,
+    mut reactor: ResMut<ReactorState>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let win = Vec2::new(window.width(), window.height());
+    for touch in touches.iter_just_pressed() {
+        let Some(i) = vent_button_at(touch.position(), win) else {
+            continue;
+        };
+        apply_vent(&mut reactor.gauges, i);
+        trigger_vent_sfx(&mut commands, &sfx, reactor.gauges[i]);
     }
 }
 
@@ -828,9 +1021,13 @@ fn play_game_over_sfx(mut commands: Commands, sfx: Res<SfxAssets>) {
 fn gameover_dismiss(
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
+    touches: Res<Touches>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    let pressed = mouse.just_pressed(MouseButton::Left) || keys.get_just_pressed().next().is_some();
+    // A tap also returns to the menu, so a phone can leave the meltdown screen.
+    let pressed = mouse.just_pressed(MouseButton::Left)
+        || keys.get_just_pressed().next().is_some()
+        || touches.any_just_pressed();
     if pressed {
         next.set(GameState::Menu);
     }
@@ -959,6 +1156,40 @@ mod tests {
 
         state.gauges = [GAUGE_MAX; GAUGE_COUNT];
         assert_eq!(state.red_count(), GAUGE_COUNT);
+    }
+
+    #[test]
+    fn vent_button_hit_test_maps_columns_and_rejects_misses() {
+        let win = Vec2::new(800.0, 600.0);
+        // The live strip is the bottom VENT_ZONE_H_FRAC of the height.
+        let strip_top = win.y * (1.0 - VENT_ZONE_H_FRAC);
+        let in_strip_y = (strip_top + win.y) * 0.5;
+
+        // Each quarter-width column maps to its gauge index, in order.
+        for i in 0..GAUGE_COUNT {
+            let x = (i as f32 + 0.5) / GAUGE_COUNT as f32 * win.x;
+            assert_eq!(vent_button_at(Vec2::new(x, in_strip_y), win), Some(i));
+        }
+
+        // A touch above the strip is a miss even if horizontally over a column.
+        assert_eq!(
+            vent_button_at(Vec2::new(win.x * 0.5, strip_top - 1.0), win),
+            None
+        );
+
+        // The far edges clamp into the first / last column, never out of range.
+        assert_eq!(vent_button_at(Vec2::new(0.0, in_strip_y), win), Some(0));
+        assert_eq!(
+            vent_button_at(Vec2::new(win.x - 0.1, in_strip_y), win),
+            Some(GAUGE_COUNT - 1)
+        );
+        // Off-window x (and a degenerate window) are misses, not panics.
+        assert_eq!(vent_button_at(Vec2::new(-1.0, in_strip_y), win), None);
+        assert_eq!(
+            vent_button_at(Vec2::new(win.x + 1.0, in_strip_y), win),
+            None
+        );
+        assert_eq!(vent_button_at(Vec2::new(10.0, 10.0), Vec2::ZERO), None);
     }
 
     #[test]
