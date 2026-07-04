@@ -20,7 +20,7 @@ actionlint passes clean. The environment-url fallback is correct (empty
 
 One finding to address before merge:
 
-- [ ] R1.1 (MINOR) .github/workflows/pages.yml:56 - `timeout-minutes: 15` is
+- [x] R1.1 (MINOR) .github/workflows/pages.yml:56 - `timeout-minutes: 15` is
   smaller than two full action timeouts. `actions/deploy-pages` has an
   internal 600s (10 min) timeout per attempt; if attempt 1 ever fails by
   hitting that internal timeout rather than the observed fast "try again
@@ -41,3 +41,14 @@ Considered and explicitly NOT blocking:
   immediate second attempt is fine. (NIT at most.)
 - Single retry rather than a backoff loop. Reasonable, documented tradeoff;
   trivially bumped to two attempts later if needed.
+
+## Round 2
+
+- VERDICT: APPROVE
+
+R1.1 resolved: `timeout-minutes` is now 25 (pages.yml:57), comfortably above
+two 600s attempts; the job comment and docs/2026-07-04-pages-deploy-retry.md
+were updated to state the 2 x 10 min reasoning. actionlint clean. No new issues
+introduced by the change. The branch delivers the task Goal - a single
+transient "try again later" Pages error no longer reds the workflow, while a
+genuinely broken deploy still fails after the retry.
