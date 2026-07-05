@@ -1568,18 +1568,55 @@ fn update_touch_hud(
 
 // --- Playing: physics ------------------------------------------------------
 
+/// Build an orientation whose local +Y points along `up` (the radial "up" away
+/// from the planet centre) and whose heading is `forward_ref` projected into the
+/// tangent plane (mapped to local -Z, Bevy's forward).
+///
+/// This exists because `Quat::from_rotation_arc(Vec3::Y, up)` -- the obvious way
+/// to make something "upright on the surface" -- imposes an *arbitrary twist*:
+/// the shortest-arc rotation picks the yaw for you, and that yaw swings as `up`
+/// sweeps around the sphere (parallel-transport holonomy) and flips 180 degrees
+/// near the -Y antipode where the arc is singular. Feeding that into both the
+/// ship's PD attitude target and the chase camera made the ship yaw around and
+/// the camera roll/spin whenever you flew around the planet. Anchoring the yaw to
+/// an explicit `forward_ref` instead keeps the frame continuous everywhere the
+/// forward is not parallel to `up`, so no spurious rotation is introduced.
+fn surface_frame(up: Vec3, forward_ref: Vec3) -> Quat {
+    let up = up.normalize_or(Vec3::Y);
+    // Project the reference heading onto the tangent plane of `up`.
+    let mut fwd = forward_ref - up * forward_ref.dot(up);
+    if fwd.length_squared() < 1e-6 {
+        // Degenerate: forward is (nearly) parallel to up. Any tangent will do;
+        // pick one deterministically so the frame stays finite.
+        fwd = up.any_orthonormal_vector();
+    }
+    let fwd = fwd.normalize();
+    // Right-handed basis with local +Y = up and local -Z = fwd, so local +Z = -fwd
+    // and local +X = fwd x up (chosen so the columns form a proper rotation).
+    let right = fwd.cross(up).normalize();
+    Quat::from_mat3(&Mat3::from_cols(right, up, -fwd))
+}
+
 /// Feed the PD controller its target attitude: upright relative to the planet
 /// surface, tilted by the current lean. Runs before the controller.
+///
+/// The upright target keeps the ship's *current* heading (its forward projected
+/// onto the surface) rather than a shortest-arc yaw, so flying around the planet
+/// no longer yaws the hull around -- see [`surface_frame`]. A side effect is that
+/// the target never fights yaw (target heading == current heading), so yaw is a
+/// free integrator; that is fine for a lander, whose thrust is along local up, so
+/// yaw is purely cosmetic.
 fn set_attitude_target(
     input: Res<ShipInput>,
-    mut q_ship: Query<(&Position, &mut PDControllerInput), With<Ship>>,
+    mut q_ship: Query<(&Position, &Rotation, &mut PDControllerInput), With<Ship>>,
 ) {
-    let Ok((position, mut pd_input)) = q_ship.single_mut() else {
+    let Ok((position, rotation, mut pd_input)) = q_ship.single_mut() else {
         return;
     };
 
     let radial_up = position.0.normalize_or(Vec3::Y);
-    let upright = Quat::from_rotation_arc(Vec3::Y, radial_up);
+    let heading = rotation.0 * Vec3::NEG_Z;
+    let upright = surface_frame(radial_up, heading);
     let lean = Quat::from_axis_angle(Vec3::X, input.lean_pitch)
         * Quat::from_axis_angle(Vec3::Z, input.lean_roll);
     **pd_input = upright * lean;
@@ -1699,15 +1736,17 @@ fn drive_chase_camera(
     let Ok(mut input) = q_cam.single_mut() else {
         return;
     };
-    let anchor_pos = q_ship
+    let (anchor_pos, heading) = q_ship
         .single()
-        .map(|ship| ship.translation)
-        .unwrap_or_else(|_| ship_start_pos());
-    // Orient the camera frame to the terrain (radial up) rather than the hull,
-    // so the view does not roll when we lean.
+        .map(|ship| (ship.translation, ship.rotation * Vec3::NEG_Z))
+        .unwrap_or((ship_start_pos(), Vec3::NEG_Z));
+    // Orient the camera frame with radial up (so the view does not roll when we
+    // lean) but anchor its heading to the hull's forward, so circling the planet
+    // does not spin the camera the way a shortest-arc frame would -- see
+    // [`surface_frame`].
     let radial_up = anchor_pos.normalize_or(Vec3::Y);
     input.anchor_pos = anchor_pos;
-    input.anchor_rot = Quat::from_rotation_arc(Vec3::Y, radial_up);
+    input.anchor_rot = surface_frame(radial_up, heading);
 }
 
 // --- Playing: fuel pickups & timer -----------------------------------------
@@ -2393,6 +2432,102 @@ fn result_input(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `surface_frame` puts local +Y on the radial up and its local -Z (forward)
+    /// in the tangent plane, aligned with the projected heading. This is the
+    /// invariant both the PD attitude target and the chase camera rely on.
+    #[test]
+    fn surface_frame_is_upright_with_tangent_heading() {
+        for up in [
+            Vec3::Y,
+            Vec3::new(1.0, 2.0, 0.5),
+            Vec3::new(-0.3, -1.0, 0.7),
+            Vec3::NEG_Y * 0.99 + Vec3::X * 0.14, // just shy of the antipode
+        ] {
+            let up = up.normalize();
+            let heading = Vec3::new(0.4, 0.1, -0.9);
+            let frame = surface_frame(up, heading);
+
+            // Local up maps onto the radial up.
+            assert!(
+                (frame * Vec3::Y - up).length() < 1e-4,
+                "up axis not radial for up={up:?}"
+            );
+
+            // Forward is a unit tangent (orthogonal to up).
+            let fwd = frame * Vec3::NEG_Z;
+            assert!((fwd.length() - 1.0).abs() < 1e-4, "forward not unit");
+            assert!(fwd.dot(up).abs() < 1e-4, "forward not tangent to up");
+
+            // Forward points along the heading projected into the tangent plane.
+            let want = (heading - up * heading.dot(up)).normalize();
+            assert!(
+                (fwd - want).length() < 1e-4,
+                "forward {fwd:?} does not match projected heading {want:?}"
+            );
+        }
+    }
+
+    /// A forward reference parallel to up is degenerate; `surface_frame` must
+    /// still return a finite, upright frame instead of NaN.
+    #[test]
+    fn surface_frame_handles_forward_parallel_to_up() {
+        let frame = surface_frame(Vec3::Y, Vec3::Y);
+        assert!(frame.is_finite(), "degenerate frame is not finite");
+        assert!((frame * Vec3::Y - Vec3::Y).length() < 1e-4, "not upright");
+    }
+
+    /// The regression this fix is about. Flying "around the planet" walks the
+    /// radial `up` from the +Y pole out toward and past the equator.
+    /// `Quat::from_rotation_arc(Y, up)` twists the frame about that up as it goes
+    /// -- a spurious yaw/roll that swung the ship and camera even with no steering,
+    /// and blows up toward the -Y antipode where the arc is singular.
+    /// `surface_frame`, anchored to a fixed world heading, keeps its forward *on*
+    /// that heading: zero twist, everywhere.
+    #[test]
+    fn surface_frame_adds_no_twist_while_circling_the_planet() {
+        // Twist magnitude: angle between a forward and the intended heading, both
+        // projected into the tangent plane of `up`.
+        fn twist(fwd: Vec3, heading: Vec3, up: Vec3) -> f32 {
+            let proj = (heading - up * heading.dot(up)).normalize();
+            let flat = (fwd - up * fwd.dot(up)).normalize();
+            flat.dot(proj).clamp(-1.0, 1.0).acos()
+        }
+
+        let heading = Vec3::NEG_Z; // the stable world heading we want to keep
+        let mut max_surface_twist: f32 = 0.0;
+        let mut max_arc_twist: f32 = 0.0;
+        // Sweep out along a tilted meridian (nonzero azimuth so the probe heading
+        // is not degenerately parallel to the arc's axis), from near the +Y pole
+        // to near the -Y antipode: a full circumnavigation.
+        for i in 1..30 {
+            let theta = i as f32 / 30.0 * std::f32::consts::PI;
+            let phi: f32 = 0.7;
+            let up = Vec3::new(
+                theta.sin() * phi.cos(),
+                theta.cos(),
+                theta.sin() * phi.sin(),
+            )
+            .normalize();
+
+            let surface_fwd = surface_frame(up, heading) * Vec3::NEG_Z;
+            let arc_fwd = Quat::from_rotation_arc(Vec3::Y, up) * Vec3::NEG_Z;
+            max_surface_twist = max_surface_twist.max(twist(surface_fwd, heading, up));
+            max_arc_twist = max_arc_twist.max(twist(arc_fwd, heading, up));
+        }
+
+        // surface_frame is twist-free by construction; the arc twists well past
+        // a radian (~80 degrees here) as you round the planet.
+        assert!(
+            max_surface_twist < 1e-3,
+            "surface_frame introduced twist {max_surface_twist} while circling"
+        );
+        assert!(
+            max_arc_twist > 1.0,
+            "from_rotation_arc was expected to twist hard while circling but only \
+             reached {max_arc_twist}"
+        );
+    }
 
     /// A perfect touchdown: full tank, dead stop, upright, dead centre on the
     /// pad, instant. It beats an identical flight that lands one reward-radius
