@@ -1,6 +1,6 @@
 # breach -- ground pickups (HP / speed / fire-rate buffs)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 65
 - TAGS: spike,breach,example
 
@@ -37,3 +37,30 @@ module as an explicit follow-up if a second example wants it.
 - Verify: `cargo clippy --all-targets`, headless `BCS_AUTOPILOT` run, then run for
   real. If the pickup adds a game-driven state/resource change worth asserting,
   cover it with a headless `App` unit test.
+
+## Steps
+
+- [x] **Pickup kinds + buff state.** `PickupKind { Health, Speed, FireRate }`;
+  `Pickup { kind }` component; `Buffs { speed_secs, firerate_secs }` resource; consts
+  (drop chance, radius, lifetime, heal amount, buff durations + multipliers). Register
+  `Buffs` and a `PickupDrops(Vec<(Vec3, PickupKind)>)` buffer; reset both in `start_run`.
+- [x] **Drop on kill (observer stays logic-only).** In `on_health_zero`'s enemy branch,
+  roll `PICKUP_DROP_CHANCE`; on a hit push (enemy `Transform.translation`, random kind)
+  into `PickupDrops`. Query `&Transform` so the observer needs no Assets/UI -- the
+  spawn system owns meshes. Init `PickupDrops` in the `death_app` test.
+- [x] **Spawn + collect + animate (Playing systems).** `spawn_pickups` drains the buffer
+  into glowing per-kind emissive meshes (green/cyan/orange, bloom via `camera/post`) at
+  ground level, with `TempEntity(PICKUP_LIFETIME)` + `DespawnOnExit(Playing)`.
+  `collect_pickups`: within `PICKUP_RADIUS` of the player, call the pure
+  `apply_pickup(kind, &mut Health, &mut Buffs)` (heal caps at max; speed/firerate set
+  their timers), play a pickup SFX, float a popup, despawn the pickup. `animate_pickups`
+  spins/bobs them for juice.
+- [x] **Wire buffs into movement + gun.** `tick_buffs` decrements the timers (clamped 0).
+  `apply_speed_buff` sets `DoomController.move_speed = PLAYER_SPEED * SPEED_MULT` while
+  active else base. `player_shoot` ticks `Gun.cooldown` by `dt * firerate_tick_scale(..)`
+  so the fire-rate buff shortens the gate. Minimal buff HUD text (hidden when none).
+- [x] **Tests + verify.** Unit-test `apply_pickup` (heal caps at max, each buff sets its
+  timer) and the pure `buffed_speed`/`firerate_tick_scale` helpers, plus a `tick_buffs`
+  decrement/clamp test. `cargo fmt`, `cargo clippy --all-targets`, `cargo test --example
+  14_breach`, ascii check, headless `BCS_AUTOPILOT` run, real `cargo run` once. Update
+  the `//!` header and the AGENTS 14_breach note.

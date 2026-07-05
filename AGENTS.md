@@ -453,12 +453,18 @@ Examples:
   vignette + `camera/shake`); zero health ends the run. Kills chained inside a short
   window build a combo (`scoring/streak`) that multiplies the points each kill is
   worth, floats a "+N" and flashes a "COMBO xN +P" tally (`ui/popup`); the points
-  score (not the raw kill count) is the persisted `HighScore`. Reuses `camera/post`
-  (bloom on tracers/enemies), `helpers/temp`, `ui/status` HUD + crosshair, `ui/menu`,
-  `audio`, `persist`+`HighScore`, `ui/touchpad` (dual-stick touch), `input/state`.
-  The pure logic (`wave_size`/`ring_positions`, the streak-scaled scoring, and the
-  controller's `doom_move_dir`/pitch clamp now in `physics/doom_controller`) is
-  unit-tested off the ECS (chained kills multiply, the streak lapses); the
+  score (not the raw kill count) is the persisted `HighScore`. Slain enemies have a
+  chance to drop a glowing pickup (emissive-for-bloom sphere) that the player grabs by
+  walking over it: an instant heal (`HealthPlugin`, capped at max) or a timed speed /
+  fire-rate buff (the speed buff scales `DoomController.move_speed`, the fire-rate buff
+  ticks the `Gun` cooldown faster). Reuses `camera/post`
+  (bloom on tracers/enemies/pickups), `helpers/temp`, `ui/status` HUD + crosshair,
+  `ui/menu`, `audio`, `persist`+`HighScore`, `ui/touchpad` (dual-stick touch),
+  `input/state`. The pure logic (`wave_size`/`ring_positions`, the streak-scaled
+  scoring, `apply_pickup`/`decay_buffs`/buff multipliers, and the controller's
+  `doom_move_dir`/pitch clamp now in `physics/doom_controller`) is
+  unit-tested off the ECS (chained kills multiply, the streak lapses, heal caps at max,
+  buffs decay); the
   headless autopilot AIMS at the nearest enemy (an FPS gun can't be verified by
   fire-forward). Follows the `06_fruitninja` shape (states, sounds, wasm); touch is a
   compromise, desktop is primary. See `docs/2026-07-05-breach-example.md` and the

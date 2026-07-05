@@ -21,7 +21,9 @@
 //! and kicks the camera (`camera/shake`); zero health ends the run. Kills chained
 //! inside a short window build a combo (`scoring/streak`) that multiplies the points
 //! they are worth, floats a "+N" and flashes a "COMBO xN" tally (`ui/popup`); the
-//! points score is saved across launches (`persist` + `HighScore`).
+//! points score is saved across launches (`persist` + `HighScore`). Slain enemies
+//! sometimes drop a glowing pickup -- walk over it for an instant heal (`HealthPlugin`)
+//! or a timed speed / fire-rate buff.
 //!
 //! Controls: move with WASD, look with the mouse, fire with left-click, Escape
 //! gives up. The mouse is captured on start and released on the menu / game-over
@@ -93,6 +95,20 @@ const BASE_KILL_POINTS: u32 = 10;
 /// Seconds after a kill you have to land the next one to keep the combo alive.
 /// Longer than fruitninja's swipe combo because FPS kills are further apart.
 const COMBO_WINDOW: f32 = 2.5;
+
+/// Pickups: a slain enemy has this chance to drop one; the player grabs it by
+/// walking within `PICKUP_RADIUS`; an un-grabbed drop despawns after its lifetime.
+const PICKUP_DROP_CHANCE: f32 = 0.3;
+const PICKUP_RADIUS: f32 = 1.7;
+const PICKUP_LIFETIME: f32 = 12.0;
+/// A health pickup heals this much (capped at max). Speed / fire-rate pickups grant
+/// a timed buff: the multiplier applies for the duration, then lapses.
+const HEAL_AMOUNT: f32 = 30.0;
+const SPEED_BUFF_SECS: f32 = 6.0;
+const SPEED_BUFF_MULT: f32 = 1.6;
+const FIRERATE_BUFF_SECS: f32 = 6.0;
+/// The fire-rate buff ticks the gun cooldown this much faster (shorter gate).
+const FIRERATE_BUFF_MULT: f32 = 2.2;
 
 /// Enemy capsule, health, base speed (ramped per wave), melee reach, attack
 /// cadence and damage.
@@ -199,6 +215,8 @@ fn main() {
     app.init_resource::<Score>();
     app.init_resource::<Combo>();
     app.init_resource::<KillFeed>();
+    app.init_resource::<Buffs>();
+    app.init_resource::<PickupDrops>();
     app.init_resource::<Wave>();
     app.init_resource::<PlayerHp>();
     app.init_resource::<RunOver>();
@@ -236,6 +254,14 @@ fn main() {
             advance_waves,
             mirror_player_hp,
             (spawn_kill_popups, tick_combo, update_combo_text),
+            (
+                spawn_pickups,
+                animate_pickups,
+                collect_pickups,
+                tick_buffs,
+                apply_speed_buff,
+                update_buff_text,
+            ),
             check_run_over,
             set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
@@ -288,6 +314,7 @@ enum Sfx {
     EnemyDown,
     Hurt,
     Wave,
+    Pickup,
     Select,
     GameOver,
 }
@@ -323,6 +350,53 @@ impl Default for Combo {
 /// popups. Decouples the (headlessly testable) death observer from the UI.
 #[derive(Resource, Default)]
 struct KillFeed(Vec<u32>);
+
+/// The three ground pickups. Health heals instantly; Speed and FireRate grant a
+/// timed buff tracked in [`Buffs`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum PickupKind {
+    Health,
+    Speed,
+    FireRate,
+}
+
+impl PickupKind {
+    /// Emissive glow colour (also the drop's body colour), bright for bloom.
+    fn color(self) -> Color {
+        match self {
+            PickupKind::Health => Color::srgb(0.3, 1.0, 0.4),
+            PickupKind::Speed => Color::srgb(0.3, 0.8, 1.0),
+            PickupKind::FireRate => Color::srgb(1.0, 0.6, 0.2),
+        }
+    }
+
+    /// The pickup popup label.
+    fn label(self) -> &'static str {
+        match self {
+            PickupKind::Health => "+HP",
+            PickupKind::Speed => "SPEED!",
+            PickupKind::FireRate => "RAPID!",
+        }
+    }
+}
+
+/// A ground pickup the player can walk over.
+#[derive(Component)]
+struct Pickup {
+    kind: PickupKind,
+}
+
+/// Remaining seconds on the timed movement / fire-rate buffs (0 = inactive).
+#[derive(Resource, Default)]
+struct Buffs {
+    speed_secs: f32,
+    firerate_secs: f32,
+}
+
+/// Pending pickup drops (position + kind) pushed by the death observer and drained
+/// by `spawn_pickups`. Keeps the observer free of Assets/UI, like `KillFeed`.
+#[derive(Resource, Default)]
+struct PickupDrops(Vec<(Vec3, PickupKind)>);
 
 #[derive(Resource, Default)]
 struct Wave {
@@ -415,6 +489,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             (Sfx::EnemyDown, "combo"),
             (Sfx::Hurt, "hurt"),
             (Sfx::Wave, "level_up"),
+            (Sfx::Pickup, "golden"),
             (Sfx::Select, "menu_select"),
             (Sfx::GameOver, "game_over"),
         ],
@@ -512,6 +587,8 @@ fn start_run(
     mut score: ResMut<Score>,
     mut combo: ResMut<Combo>,
     mut feed: ResMut<KillFeed>,
+    mut buffs: ResMut<Buffs>,
+    mut drops: ResMut<PickupDrops>,
     mut wave: ResMut<Wave>,
     mut hp: ResMut<PlayerHp>,
     mut over: ResMut<RunOver>,
@@ -519,6 +596,8 @@ fn start_run(
     *score = Score::default();
     *combo = Combo::default();
     feed.0.clear();
+    *buffs = Buffs::default();
+    drops.0.clear();
     *wave = Wave::default();
     *hp = PlayerHp::default();
     over.0 = false;
@@ -754,6 +833,32 @@ fn spawn_hud(mut commands: Commands) {
         },
     ));
 
+    // Live buff readout, just below the combo text; hidden until a buff is active
+    // (driven by `update_buff_text`).
+    commands.spawn((
+        Name::new("Buff readout"),
+        BuffText,
+        DespawnOnExit(GameState::Playing),
+        Visibility::Hidden,
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            top: Val::Percent(44.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        Text::new(""),
+        TextFont {
+            font_size: FontSize::Px(24.0),
+            ..default()
+        },
+        TextColor(Color::srgb(0.7, 0.95, 1.0)),
+        TextLayout {
+            justify: Justify::Center,
+            ..default()
+        },
+    ));
+
     // Persistent damage vignette overlay (re-spiked on hit).
     commands.spawn((
         Name::new("Damage vignette"),
@@ -860,6 +965,7 @@ fn player_shoot(
     time: Res<Time>,
     mouse: Res<ButtonInput<MouseButton>>,
     touch: Res<TouchInput>,
+    buffs: Res<Buffs>,
     spatial: SpatialQuery,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -871,7 +977,9 @@ fn player_shoot(
     mut shake: Query<&mut CameraShakeInput>,
 ) {
     let (player_entity, mut gun) = player.into_inner();
-    gun.cooldown.tick(time.delta_secs());
+    // The fire-rate buff shortens the gate by advancing the cooldown faster.
+    gun.cooldown
+        .tick(time.delta_secs() * firerate_tick_scale(buffs.firerate_secs > 0.0));
 
     let firing = mouse.pressed(MouseButton::Left) || touch.fire;
     if !firing || !gun.cooldown.ready() {
@@ -1082,15 +1190,16 @@ fn enemy_melee(
 fn on_health_zero(
     add: On<Add, HealthZeroMarker>,
     mut commands: Commands,
-    enemies: Query<(), With<Enemy>>,
+    enemies: Query<&Transform, With<Enemy>>,
     players: Query<(), With<Player>>,
     mut score: ResMut<Score>,
     mut combo: ResMut<Combo>,
     mut feed: ResMut<KillFeed>,
+    mut drops: ResMut<PickupDrops>,
     mut over: ResMut<RunOver>,
 ) {
     let entity = add.entity;
-    if enemies.contains(entity) {
+    if let Ok(transform) = enemies.get(entity) {
         // Score the kill by the current streak length: chained kills pay more.
         let streak = combo.streak.hit();
         let gained = BASE_KILL_POINTS * streak as u32;
@@ -1098,6 +1207,20 @@ fn on_health_zero(
         score.kills += 1;
         combo.window_points += gained;
         feed.0.push(gained);
+        // Chance to drop a pickup where the enemy fell. Rolled here (the single kill
+        // choke point) but only buffered -- `spawn_pickups` owns the meshes/UI so this
+        // observer stays headlessly testable.
+        let mut rng = rand::rng();
+        if rng.random::<f32>() < PICKUP_DROP_CHANCE {
+            let kind = match rng.random_range(0..3) {
+                0 => PickupKind::Health,
+                1 => PickupKind::Speed,
+                _ => PickupKind::FireRate,
+            };
+            let mut pos = transform.translation;
+            pos.y = 0.6;
+            drops.0.push((pos, kind));
+        }
         // Stop steering / meleeing a dead enemy in the frames before it despawns:
         // drop `Enemy` and burst into gibs; the fragments observer despawns the body.
         commands
@@ -1225,6 +1348,151 @@ fn update_combo_text(
         color.0 = Color::srgba(1.0, 0.6, 0.2, alpha);
     } else {
         *vis = Visibility::Hidden;
+    }
+}
+
+// --- Pickups / buffs --------------------------------------------------------
+
+/// Live buff readout under the combo text; shown only while a buff runs.
+#[derive(Component)]
+struct BuffText;
+
+/// Apply a collected pickup. Pure so it is unit-testable off the ECS: Health heals
+/// (capped at max), Speed / FireRate (re)start their timed buff.
+fn apply_pickup(kind: PickupKind, health: &mut Health, buffs: &mut Buffs) {
+    match kind {
+        PickupKind::Health => health.current = (health.current + HEAL_AMOUNT).min(health.max),
+        PickupKind::Speed => buffs.speed_secs = SPEED_BUFF_SECS,
+        PickupKind::FireRate => buffs.firerate_secs = FIRERATE_BUFF_SECS,
+    }
+}
+
+/// The player's move speed given whether the speed buff is active.
+fn buffed_speed(base: f32, speed_active: bool) -> f32 {
+    if speed_active {
+        base * SPEED_BUFF_MULT
+    } else {
+        base
+    }
+}
+
+/// How fast to tick the gun cooldown given whether the fire-rate buff is active
+/// (a larger scale shortens the effective gate).
+fn firerate_tick_scale(firerate_active: bool) -> f32 {
+    if firerate_active {
+        FIRERATE_BUFF_MULT
+    } else {
+        1.0
+    }
+}
+
+/// Drain buffered drops into glowing ground pickups (emissive for bloom).
+fn spawn_pickups(
+    mut commands: Commands,
+    mut drops: ResMut<PickupDrops>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    if drops.0.is_empty() {
+        return;
+    }
+    let mesh = meshes.add(Sphere::new(0.3));
+    for (pos, kind) in drops.0.drain(..) {
+        let base = kind.color();
+        let mat = materials.add(StandardMaterial {
+            base_color: base,
+            emissive: LinearRgba::from(base) * 4.0,
+            ..default()
+        });
+        commands.spawn((
+            Name::new("Pickup"),
+            Pickup { kind },
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(mat),
+            Transform::from_translation(pos),
+            TempEntity(PICKUP_LIFETIME),
+            DespawnOnExit(GameState::Playing),
+        ));
+    }
+}
+
+/// Spin and bob pickups so they read as collectable.
+fn animate_pickups(time: Res<Time>, mut pickups: Query<&mut Transform, With<Pickup>>) {
+    let t = time.elapsed_secs();
+    for mut transform in &mut pickups {
+        transform.rotation = Quat::from_rotation_y(t * 2.0);
+        transform.translation.y = 0.6 + (t * 3.0).sin() * 0.15;
+    }
+}
+
+/// Grab pickups within `PICKUP_RADIUS` of the player: apply the effect, pop a label
+/// and play a sound, then despawn the drop.
+fn collect_pickups(
+    mut commands: Commands,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    player: Single<(&Transform, &mut Health), With<Player>>,
+    mut buffs: ResMut<Buffs>,
+    pickups: Query<(Entity, &Transform, &Pickup)>,
+    sfx: Res<SoundBank<Sfx>>,
+) {
+    let (player_transform, mut health) = player.into_inner();
+    let ppos = player_transform.translation;
+    let centre = windows
+        .single()
+        .map(|w| Vec2::new(w.width(), w.height()) * 0.5)
+        .unwrap_or(Vec2::splat(400.0));
+    for (entity, transform, pickup) in &pickups {
+        if transform.translation.distance(ppos) > PICKUP_RADIUS {
+            continue;
+        }
+        apply_pickup(pickup.kind, &mut health, &mut buffs);
+        commands.play_sfx_volume(sfx.get(Sfx::Pickup), 0.6);
+        commands
+            .spawn(popup(
+                centre + Vec2::new(0.0, -70.0),
+                pickup.kind.label(),
+                32.0,
+                pickup.kind.color(),
+            ))
+            .insert(DespawnOnExit(GameState::Playing));
+        commands.entity(entity).despawn();
+    }
+}
+
+/// Decay the timed buffs by `dt`, clamped at zero. Pure so it is unit-testable
+/// without leaning on a frame clock.
+fn decay_buffs(buffs: &mut Buffs, dt: f32) {
+    buffs.speed_secs = (buffs.speed_secs - dt).max(0.0);
+    buffs.firerate_secs = (buffs.firerate_secs - dt).max(0.0);
+}
+
+/// Decay the timed buffs each frame.
+fn tick_buffs(time: Res<Time>, mut buffs: ResMut<Buffs>) {
+    decay_buffs(&mut buffs, time.delta_secs());
+}
+
+/// Push the player's move speed up while the speed buff runs, back to base after.
+fn apply_speed_buff(buffs: Res<Buffs>, mut controller: Single<&mut DoomController, With<Player>>) {
+    controller.move_speed = buffed_speed(PLAYER_SPEED, buffs.speed_secs > 0.0);
+}
+
+/// Show/hide the buff readout, listing whichever buffs are running.
+fn update_buff_text(buffs: Res<Buffs>, mut q: Query<(&mut Text, &mut Visibility), With<BuffText>>) {
+    let Ok((mut text, mut vis)) = q.single_mut() else {
+        return;
+    };
+    let mut parts: Vec<String> = Vec::new();
+    if buffs.speed_secs > 0.0 {
+        parts.push(format!("SPEED {:.0}s", buffs.speed_secs.ceil()));
+    }
+    if buffs.firerate_secs > 0.0 {
+        parts.push(format!("RAPID {:.0}s", buffs.firerate_secs.ceil()));
+    }
+    if parts.is_empty() {
+        *vis = Visibility::Hidden;
+    } else {
+        *vis = Visibility::Inherited;
+        **text = parts.join("   ");
     }
 }
 
@@ -1425,6 +1693,8 @@ mod tests {
         app.init_resource::<Score>();
         app.init_resource::<Combo>();
         app.init_resource::<KillFeed>();
+        app.init_resource::<Buffs>();
+        app.init_resource::<PickupDrops>();
         app.init_resource::<RunOver>();
         app.add_observer(on_health_zero);
         app.add_systems(Update, check_run_over);
@@ -1432,9 +1702,15 @@ mod tests {
     }
 
     fn kill_enemy(app: &mut App) {
+        // The observer reads the enemy's Transform to place a potential drop, so a
+        // test enemy needs one.
         let enemy = app
             .world_mut()
-            .spawn((Enemy { speed: 1.0 }, Health::new(10.0)))
+            .spawn((
+                Enemy { speed: 1.0 },
+                Health::new(10.0),
+                Transform::default(),
+            ))
             .id();
         app.world_mut().trigger(HealthApplyDamage {
             entity: enemy,
@@ -1521,6 +1797,61 @@ mod tests {
             streak.tick(COMBO_WINDOW),
             Some(2),
             "past the window it lapses, returning the final count"
+        );
+    }
+
+    #[test]
+    fn health_pickup_heals_capped_at_max() {
+        let mut health = Health::new(100.0);
+        health.current = 80.0;
+        let mut buffs = Buffs::default();
+        apply_pickup(PickupKind::Health, &mut health, &mut buffs);
+        assert_eq!(health.current, (80.0 + HEAL_AMOUNT).min(100.0));
+        // A second heal cannot exceed max.
+        apply_pickup(PickupKind::Health, &mut health, &mut buffs);
+        assert_eq!(health.current, 100.0, "heal is capped at max");
+    }
+
+    #[test]
+    fn buff_pickups_start_their_timers() {
+        let mut health = Health::new(100.0);
+        let mut buffs = Buffs::default();
+        apply_pickup(PickupKind::Speed, &mut health, &mut buffs);
+        assert_eq!(buffs.speed_secs, SPEED_BUFF_SECS);
+        assert_eq!(
+            buffs.firerate_secs, 0.0,
+            "speed pickup does not touch fire rate"
+        );
+        apply_pickup(PickupKind::FireRate, &mut health, &mut buffs);
+        assert_eq!(buffs.firerate_secs, FIRERATE_BUFF_SECS);
+        assert_eq!(health.current, 100.0, "buff pickups do not change health");
+    }
+
+    #[test]
+    fn buff_multipliers_apply_only_while_active() {
+        assert_eq!(buffed_speed(PLAYER_SPEED, false), PLAYER_SPEED);
+        assert_eq!(
+            buffed_speed(PLAYER_SPEED, true),
+            PLAYER_SPEED * SPEED_BUFF_MULT
+        );
+        assert_eq!(firerate_tick_scale(false), 1.0);
+        assert_eq!(firerate_tick_scale(true), FIRERATE_BUFF_MULT);
+    }
+
+    #[test]
+    fn decay_buffs_decays_and_clamps_at_zero() {
+        let mut buffs = Buffs {
+            speed_secs: 0.05,
+            firerate_secs: 10.0,
+        };
+        decay_buffs(&mut buffs, 0.1);
+        assert_eq!(
+            buffs.speed_secs, 0.0,
+            "a buff shorter than dt clamps at zero, not negative"
+        );
+        assert!(
+            (buffs.firerate_secs - 9.9).abs() < 1e-6,
+            "a longer buff just decays by dt"
         );
     }
 }
