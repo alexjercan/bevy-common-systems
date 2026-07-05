@@ -484,7 +484,14 @@ Examples:
   fire-forward). Follows the `06_fruitninja` shape (states, sounds, wasm); touch is a
   compromise, desktop is primary. Has its own `breach_*` combat SFX (noise pops /
   sweeps from `scripts/gen-placeholder-sounds.py`, not the borrowed fruit blips),
-  keeping the shared `menu_select`/`game_over`. See `docs/2026-07-05-breach-example.md`,
+  keeping the shared `menu_select`/`game_over`. The main menu is navigable (PLAY /
+  OPTIONS buttons via Bevy UI `Button`+`Interaction`, mouse/touch + keyboard) with an
+  Options panel whose look-sensitivity stepper is persisted (`PersistPlugin`) and
+  applied to the `DoomController.look_sensitivity` at spawn (covering mouse + touch);
+  the menu spawns its own `Camera2d` (the Playing `Camera3d` is a child of the player,
+  so menu/game-over states otherwise have NO camera and Bevy UI never renders -- a
+  latent gap the force-transition autopilot + black headless captures had hidden).
+  See `docs/2026-07-05-breach-example.md`,
   the harvest note `docs/2026-07-05-fps-controller-harvest.md` (`tasks/20260705-103238`)
   and `docs/2026-07-05-breach-fun-pass.md` (combos/pickups/enemies/juice/sounds).
 

@@ -28,6 +28,10 @@
 //! sometimes drop a glowing pickup -- walk over it for an instant heal (`HealthPlugin`)
 //! or a timed speed / fire-rate buff.
 //!
+//! The main menu has PLAY and OPTIONS buttons (click/tap or Enter); Options has a
+//! look-sensitivity stepper that is saved across launches (`persist`) and applied to
+//! both mouse and touch look.
+//!
 //! Controls: move with WASD, look with the mouse, fire with left-click, Escape
 //! gives up. The mouse is captured on start and released on the menu / game-over
 //! screens. Touch (the wasm build): drag the left half to move, the right half to
@@ -50,6 +54,7 @@ use bevy::{
 use bevy_common_systems::prelude::*;
 use clap::Parser;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 #[command(name = "14_breach")]
@@ -86,8 +91,12 @@ const PLAYER_HEALTH: f32 = 100.0;
 const AIM_CONE: f32 = 0.6;
 const AIM_ASSIST_RATE: f32 = 3.5;
 
-/// Radians of view rotation per pixel of mouse motion.
+/// Base radians of view rotation per pixel of mouse motion. The options menu scales
+/// this by a persisted `LookSensitivity` multiplier, clamped to [SENS_MIN, SENS_MAX].
 const LOOK_SENS: f32 = 0.0022;
+const SENS_MIN: f32 = 0.25;
+const SENS_MAX: f32 = 3.0;
+const SENS_STEP: f32 = 0.1;
 /// Pitch is clamped to +/- this (just under 90deg) so the view cannot flip.
 const PITCH_LIMIT: f32 = 1.54;
 
@@ -227,8 +236,13 @@ fn main() {
     app.add_plugins(PopupPlugin);
     app.add_plugins(DoomControllerPlugin);
     app.add_plugins(PersistPlugin::<HighScore<u32>>::new("14_breach.high_score"));
+    // The options menu persists the look-sensitivity multiplier (auto-saved on change).
+    app.add_plugins(PersistPlugin::<LookSensitivity>::new(
+        "14_breach.sensitivity",
+    ));
 
     app.insert_resource(ClearColor(Color::srgb(0.02, 0.03, 0.05)));
+    app.init_resource::<MenuScreen>();
     app.init_resource::<Score>();
     app.init_resource::<Combo>();
     app.init_resource::<KillFeed>();
@@ -248,7 +262,14 @@ fn main() {
     app.add_systems(OnEnter(GameState::Menu), spawn_menu);
     app.add_systems(
         Update,
-        (menu_start, pulse_menu_title).run_if(in_state(GameState::Menu)),
+        (
+            menu_buttons,
+            menu_keys,
+            update_menu_visibility,
+            update_sens_readout,
+            pulse_menu_title,
+        )
+            .run_if(in_state(GameState::Menu)),
     );
 
     // Playing.
@@ -537,7 +558,50 @@ struct HitMarker;
 #[derive(Component)]
 struct MenuTitle;
 
+/// Persisted look-sensitivity multiplier over `LOOK_SENS` (default 1.0). Applied to
+/// `DoomController.look_sensitivity` at player spawn, so it scales BOTH mouse and touch
+/// look (both feed the controller). Auto-saved by `PersistPlugin` when it changes.
+#[derive(Resource, Clone, Copy, Serialize, Deserialize)]
+struct LookSensitivity(f32);
+
+impl Default for LookSensitivity {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
+/// Which menu panel is shown. Panels are toggled by visibility, and button handling is
+/// gated on this, so a hidden panel's buttons never fire.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq, Debug)]
+enum MenuScreen {
+    #[default]
+    Main,
+    Options,
+}
+
+#[derive(Component)]
+struct MainPanel;
+#[derive(Component)]
+struct OptionsPanel;
+#[derive(Component)]
+struct PlayButton;
+#[derive(Component)]
+struct OptionsButton;
+#[derive(Component)]
+struct BackButton;
+#[derive(Component)]
+struct SensDownButton;
+#[derive(Component)]
+struct SensUpButton;
+#[derive(Component)]
+struct SensReadout;
+
 // --- Pure logic (unit-tested) ----------------------------------------------
+
+/// Clamp a look-sensitivity multiplier to the adjustable range.
+fn clamp_sens(mult: f32) -> f32 {
+    mult.clamp(SENS_MIN, SENS_MAX)
+}
 
 /// Enemies in wave `n` (0-based): a steady ramp.
 fn wave_size(n: u32) -> u32 {
@@ -626,48 +690,141 @@ fn best_line(best: u32) -> String {
 
 // --- Menu -------------------------------------------------------------------
 
-fn spawn_menu(mut commands: Commands, high: Res<HighScore<u32>>) {
+/// A menu button bundle (caller adds a marker component and a text child).
+fn menu_button(width: f32, height: f32) -> impl Bundle {
+    (
+        Button,
+        Node {
+            width: Val::Px(width),
+            height: Val::Px(height),
+            margin: UiRect::all(Val::Px(7.0)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            border: UiRect::all(Val::Px(2.0)),
+            border_radius: BorderRadius::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(Color::srgba(1.0, 0.4, 0.3, 0.16)),
+        BorderColor::all(Color::srgba(1.0, 0.5, 0.35, 0.55)),
+    )
+}
+
+/// A vertical column panel that the menu shows one of at a time (`Display::None`
+/// hides the inactive one so it does not take layout space).
+fn menu_panel(shown: bool) -> Node {
+    Node {
+        display: if shown { Display::Flex } else { Display::None },
+        flex_direction: FlexDirection::Column,
+        align_items: AlignItems::Center,
+        ..default()
+    }
+}
+
+fn spawn_menu(mut commands: Commands, mut screen: ResMut<MenuScreen>, high: Res<HighScore<u32>>) {
+    // Always open on the main panel.
+    *screen = MenuScreen::Main;
+
+    // The Playing scene's `Camera3d` is a child of the player and despawns with it, so
+    // the menu (and game-over) states have no camera of their own -- Bevy UI needs one
+    // to render to. Give the menu a 2D camera for its lifetime.
+    commands.spawn((
+        Name::new("Menu Camera"),
+        Camera2d,
+        DespawnOnExit(GameState::Menu),
+    ));
+
     commands
         .spawn((
             Name::new("Menu"),
             DespawnOnExit(GameState::Menu),
             centered_screen(),
         ))
-        .with_children(|parent| {
-            parent.spawn((
-                MenuTitle,
-                screen_text("BREACH", 84.0, Color::srgb(1.0, 0.5, 0.3)),
-            ));
-            parent.spawn(screen_text(
-                "FIRST-PERSON ARENA SHOOTER",
-                26.0,
-                Color::srgb(0.8, 0.82, 0.9),
-            ));
-            parent.spawn(screen_text(
-                "Enemies close in from every side. Hold the line.",
-                20.0,
-                Color::srgb(0.7, 0.75, 0.85),
-            ));
-            parent.spawn(screen_text(
-                "WASD to move, mouse to look, left-click to fire. Escape gives up.",
-                18.0,
-                Color::srgb(0.62, 0.67, 0.77),
-            ));
-            parent.spawn(screen_text(
-                "Touch: left half moves, right half looks, FIRE button shoots (aim assist helps).",
-                18.0,
-                Color::srgb(0.62, 0.67, 0.77),
-            ));
-            parent.spawn(screen_text(
-                best_line(high.best()),
-                24.0,
-                Color::srgb(0.95, 0.85, 0.35),
-            ));
-            parent.spawn(screen_text(
-                "Tap or press any key to begin",
-                24.0,
-                Color::srgb(0.9, 0.9, 0.9),
-            ));
+        .with_children(|root| {
+            // --- Main panel ---
+            root.spawn((MainPanel, menu_panel(true)))
+                .with_children(|p| {
+                    p.spawn((
+                        MenuTitle,
+                        screen_text("BREACH", 84.0, Color::srgb(1.0, 0.5, 0.3)),
+                    ));
+                    p.spawn(screen_text(
+                        "FIRST-PERSON ARENA SHOOTER",
+                        26.0,
+                        Color::srgb(0.8, 0.82, 0.9),
+                    ));
+                    p.spawn(screen_text(
+                        best_line(high.best()),
+                        22.0,
+                        Color::srgb(0.95, 0.85, 0.35),
+                    ));
+                    p.spawn((PlayButton, menu_button(260.0, 54.0)))
+                        .with_children(|b| {
+                            b.spawn(screen_text("PLAY", 30.0, Color::srgb(0.95, 0.97, 1.0)));
+                        });
+                    p.spawn((OptionsButton, menu_button(260.0, 54.0)))
+                        .with_children(|b| {
+                            b.spawn(screen_text("OPTIONS", 30.0, Color::srgb(0.95, 0.97, 1.0)));
+                        });
+                    p.spawn(screen_text(
+                        "Enter or click PLAY to begin. WASD + mouse; touch has aim assist.",
+                        16.0,
+                        Color::srgb(0.6, 0.65, 0.75),
+                    ));
+                });
+
+            // --- Options panel (hidden until OPTIONS is chosen) ---
+            root.spawn((OptionsPanel, menu_panel(false)))
+                .with_children(|p| {
+                    p.spawn(screen_text("OPTIONS", 48.0, Color::srgb(1.0, 0.6, 0.4)));
+                    p.spawn(screen_text(
+                        "Look sensitivity",
+                        24.0,
+                        Color::srgb(0.85, 0.88, 0.95),
+                    ));
+                    // Stepper row: [-]  x1.0  [+]
+                    p.spawn(Node {
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        row.spawn((SensDownButton, menu_button(64.0, 64.0)))
+                            .with_children(|b| {
+                                b.spawn(screen_text("-", 40.0, Color::srgb(0.95, 0.97, 1.0)));
+                            });
+                        row.spawn((
+                            SensReadout,
+                            Node {
+                                width: Val::Px(140.0),
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            Text::new("x1.0"),
+                            TextFont {
+                                font_size: FontSize::Px(34.0),
+                                ..default()
+                            },
+                            TextColor(Color::srgb(0.95, 0.85, 0.35)),
+                            TextLayout {
+                                justify: Justify::Center,
+                                ..default()
+                            },
+                        ));
+                        row.spawn((SensUpButton, menu_button(64.0, 64.0)))
+                            .with_children(|b| {
+                                b.spawn(screen_text("+", 40.0, Color::srgb(0.95, 0.97, 1.0)));
+                            });
+                    });
+                    p.spawn((BackButton, menu_button(200.0, 50.0)))
+                        .with_children(|b| {
+                            b.spawn(screen_text("BACK", 26.0, Color::srgb(0.95, 0.97, 1.0)));
+                        });
+                    p.spawn(screen_text(
+                        "Escape also goes back. Applies to mouse and touch look.",
+                        16.0,
+                        Color::srgb(0.6, 0.65, 0.75),
+                    ));
+                });
         });
 }
 
@@ -679,20 +836,97 @@ fn pulse_menu_title(time: Res<Time>, mut q: Query<&mut TextColor, With<MenuTitle
     }
 }
 
-fn menu_start(
+/// Handle clicks/taps on the menu buttons. Gated on `MenuScreen` so a hidden panel's
+/// buttons never fire (Bevy still runs interaction on `Display::None` nodes rarely, but
+/// the gate makes it robust regardless).
+#[allow(clippy::too_many_arguments)]
+fn menu_buttons(
     mut commands: Commands,
     sfx: Res<SoundBank<Sfx>>,
-    mouse: Res<ButtonInput<MouseButton>>,
+    mut screen: ResMut<MenuScreen>,
+    mut sens: ResMut<LookSensitivity>,
+    mut next: ResMut<NextState<GameState>>,
+    play: Query<&Interaction, (Changed<Interaction>, With<PlayButton>)>,
+    options: Query<&Interaction, (Changed<Interaction>, With<OptionsButton>)>,
+    back: Query<&Interaction, (Changed<Interaction>, With<BackButton>)>,
+    down: Query<&Interaction, (Changed<Interaction>, With<SensDownButton>)>,
+    up: Query<&Interaction, (Changed<Interaction>, With<SensUpButton>)>,
+) {
+    match *screen {
+        MenuScreen::Main => {
+            if any_pressed(&play) {
+                commands.play_sfx_volume(sfx.get(Sfx::Select), 0.7);
+                next.set(GameState::Playing);
+            } else if any_pressed(&options) {
+                commands.play_sfx_volume(sfx.get(Sfx::Select), 0.5);
+                *screen = MenuScreen::Options;
+            }
+        }
+        MenuScreen::Options => {
+            if any_pressed(&back) {
+                commands.play_sfx_volume(sfx.get(Sfx::Select), 0.5);
+                *screen = MenuScreen::Main;
+            } else if any_pressed(&down) {
+                sens.0 = clamp_sens(sens.0 - SENS_STEP);
+                commands.play_sfx_volume(sfx.get(Sfx::Pickup), 0.4);
+            } else if any_pressed(&up) {
+                sens.0 = clamp_sens(sens.0 + SENS_STEP);
+                commands.play_sfx_volume(sfx.get(Sfx::Pickup), 0.4);
+            }
+        }
+    }
+}
+
+/// True if any button carrying marker `M` was pressed this frame.
+fn any_pressed<M: Component>(q: &Query<&Interaction, (Changed<Interaction>, With<M>)>) -> bool {
+    q.iter().any(|i| *i == Interaction::Pressed)
+}
+
+/// Keyboard shortcuts: Enter starts from the main panel, Escape backs out of options.
+fn menu_keys(
+    mut commands: Commands,
+    sfx: Res<SoundBank<Sfx>>,
     keys: Res<ButtonInput<KeyCode>>,
-    touches: Res<Touches>,
+    mut screen: ResMut<MenuScreen>,
     mut next: ResMut<NextState<GameState>>,
 ) {
-    let pressed = mouse.just_pressed(MouseButton::Left)
-        || keys.get_just_pressed().next().is_some()
-        || touches.any_just_pressed();
-    if pressed {
-        commands.play_sfx_volume(sfx.get(Sfx::Select), 0.7);
-        next.set(GameState::Playing);
+    match *screen {
+        MenuScreen::Main => {
+            if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
+                commands.play_sfx_volume(sfx.get(Sfx::Select), 0.7);
+                next.set(GameState::Playing);
+            }
+        }
+        MenuScreen::Options => {
+            if keys.just_pressed(KeyCode::Escape) {
+                commands.play_sfx_volume(sfx.get(Sfx::Select), 0.5);
+                *screen = MenuScreen::Main;
+            }
+        }
+    }
+}
+
+/// Show the panel for the current `MenuScreen`, hide the other (via `Display`).
+fn update_menu_visibility(
+    screen: Res<MenuScreen>,
+    mut main: Query<&mut Node, (With<MainPanel>, Without<OptionsPanel>)>,
+    mut options: Query<&mut Node, (With<OptionsPanel>, Without<MainPanel>)>,
+) {
+    let show = |node: &mut Node, on: bool| {
+        node.display = if on { Display::Flex } else { Display::None };
+    };
+    if let Ok(mut n) = main.single_mut() {
+        show(&mut n, *screen == MenuScreen::Main);
+    }
+    if let Ok(mut n) = options.single_mut() {
+        show(&mut n, *screen == MenuScreen::Options);
+    }
+}
+
+/// Keep the sensitivity readout text in sync with the setting.
+fn update_sens_readout(sens: Res<LookSensitivity>, mut q: Query<&mut Text, With<SensReadout>>) {
+    if let Ok(mut text) = q.single_mut() {
+        **text = format!("x{:.1}", sens.0);
     }
 }
 
@@ -724,6 +958,7 @@ fn spawn_scene(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    sens: Res<LookSensitivity>,
 ) {
     let floor_mat = materials.add(StandardMaterial {
         base_color: Color::srgb(0.12, 0.13, 0.17),
@@ -803,7 +1038,9 @@ fn spawn_scene(
             // game feeds it input and applies its velocity output below.
             DoomController {
                 move_speed: PLAYER_SPEED,
-                look_sensitivity: LOOK_SENS,
+                // The persisted options multiplier scales the base sensitivity; the
+                // controller applies it to both mouse and touch look.
+                look_sensitivity: LOOK_SENS * clamp_sens(sens.0),
                 pitch_min: -PITCH_LIMIT,
                 pitch_max: PITCH_LIMIT,
             },
@@ -1911,6 +2148,27 @@ mod tests {
     // crate's `physics/doom_controller` module.
 
     #[test]
+    fn clamp_sens_stays_in_range() {
+        assert_eq!(
+            clamp_sens(1.0),
+            1.0,
+            "an in-range multiplier passes through"
+        );
+        assert_eq!(
+            clamp_sens(SENS_MIN - 1.0),
+            SENS_MIN,
+            "clamps to the low bound"
+        );
+        assert_eq!(
+            clamp_sens(SENS_MAX + 1.0),
+            SENS_MAX,
+            "clamps to the high bound"
+        );
+        // Stepping down from the minimum by a step stays pinned at the minimum.
+        assert_eq!(clamp_sens(SENS_MIN - SENS_STEP), SENS_MIN);
+    }
+
+    #[test]
     fn wave_size_ramps_monotonically() {
         assert_eq!(wave_size(0), 3);
         assert_eq!(wave_size(1), 5);
@@ -2022,6 +2280,95 @@ mod tests {
         );
         // Already aligned: no movement.
         assert!((step_angle_toward(1.2, 1.2, 0.5) - 1.2).abs() < 1e-6);
+    }
+
+    // The menu navigation / start path is a game-driven state change the autopilot
+    // CANNOT prove (it force-transitions Menu -> Playing on a timer). `Interaction` is a
+    // plain component, so drive the real `menu_buttons` system headlessly instead.
+
+    fn menu_app() -> App {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            bevy::asset::AssetPlugin::default(),
+            bevy::input::InputPlugin, // menu_keys reads ButtonInput<KeyCode>
+            bevy::state::app::StatesPlugin,
+        ));
+        app.init_asset::<bevy::audio::AudioSource>();
+        app.init_state::<GameState>();
+        app.init_resource::<MenuScreen>();
+        app.init_resource::<LookSensitivity>();
+        // A sound bank so `sfx.get` does not panic (the PlaySfx trigger is a no-op with
+        // no SfxPlugin observer). Only the keys the menu plays are needed.
+        let bank = {
+            let assets = app.world().resource::<AssetServer>();
+            SoundBank::load(
+                assets,
+                [(Sfx::Select, "menu_select"), (Sfx::Pickup, "golden")],
+            )
+        };
+        app.insert_resource(bank);
+        app.add_systems(Update, (menu_buttons, menu_keys));
+        app
+    }
+
+    #[test]
+    fn play_button_starts_the_game() {
+        let mut app = menu_app();
+        app.world_mut().spawn((PlayButton, Interaction::Pressed));
+        app.update(); // menu_buttons sees Pressed -> NextState(Playing)
+        app.update(); // the transition applies
+        assert_eq!(
+            *app.world().resource::<State<GameState>>().get(),
+            GameState::Playing,
+            "clicking PLAY starts the run"
+        );
+    }
+
+    #[test]
+    fn options_navigation_and_sensitivity_stepping() {
+        let mut app = menu_app();
+        // OPTIONS opens the options panel.
+        app.world_mut().spawn((OptionsButton, Interaction::Pressed));
+        app.update();
+        assert_eq!(*app.world().resource::<MenuScreen>(), MenuScreen::Options);
+
+        // + steps sensitivity up; - steps it back down.
+        let base = app.world().resource::<LookSensitivity>().0;
+        app.world_mut().spawn((SensUpButton, Interaction::Pressed));
+        app.update();
+        let up = app.world().resource::<LookSensitivity>().0;
+        assert!(up > base, "the + button raises sensitivity");
+        assert!((up - clamp_sens(base + SENS_STEP)).abs() < 1e-6);
+
+        app.world_mut()
+            .spawn((SensDownButton, Interaction::Pressed));
+        app.update();
+        assert!(
+            (app.world().resource::<LookSensitivity>().0 - base).abs() < 1e-6,
+            "the - button lowers it back"
+        );
+
+        // BACK returns to the main panel.
+        app.world_mut().spawn((BackButton, Interaction::Pressed));
+        app.update();
+        assert_eq!(*app.world().resource::<MenuScreen>(), MenuScreen::Main);
+    }
+
+    #[test]
+    fn main_panel_buttons_are_inert_while_in_options() {
+        // A stale PLAY press must not start the game once we are in the options panel
+        // (the screen gate, not just visibility, guards this).
+        let mut app = menu_app();
+        *app.world_mut().resource_mut::<MenuScreen>() = MenuScreen::Options;
+        app.world_mut().spawn((PlayButton, Interaction::Pressed));
+        app.update();
+        app.update();
+        assert_eq!(
+            *app.world().resource::<State<GameState>>().get(),
+            GameState::Menu,
+            "PLAY does nothing while the options panel is up"
+        );
     }
 
     // The lose condition and score accounting live in the `on_health_zero` observer
