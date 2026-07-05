@@ -31,8 +31,9 @@
 //! Controls: move with WASD, look with the mouse, fire with left-click, Escape
 //! gives up. The mouse is captured on start and released on the menu / game-over
 //! screens. Touch (the wasm build): drag the left half to move, the right half to
-//! look, and tap the FIRE button -- clunky, an FPS is the hardest genre for touch,
-//! so desktop mouse+keyboard is the primary path.
+//! look, and tap the FIRE button -- with aim-assist nudging the view toward the
+//! nearest enemy in front while firing. An FPS is the hardest genre for touch, so
+//! desktop mouse+keyboard is still the primary path.
 //!
 //! Run it: `cargo run --example 14_breach` (add `--features debug` for the
 //! inspector and the headless harness).
@@ -78,6 +79,12 @@ const EYE_H: f32 = 0.55;
 const PLAYER_SPEED: f32 = 6.5;
 /// Player hit points.
 const PLAYER_HEALTH: f32 = 100.0;
+
+/// Touch aim-assist: while firing on touch, the view is nudged toward the nearest
+/// enemy within this frontal half-angle (radians), at up to this turn rate (rad/s).
+/// Touch-only (a mouse never sets `TouchInput.fire`), so desktop aim is untouched.
+const AIM_CONE: f32 = 0.6;
+const AIM_ASSIST_RATE: f32 = 3.5;
 
 /// Radians of view rotation per pixel of mouse motion.
 const LOOK_SENS: f32 = 0.0022;
@@ -255,7 +262,7 @@ fn main() {
             // Feed the controller's input BEFORE it runs (its Drive set), then apply
             // its velocity output AFTER -- otherwise the controller reads last frame's
             // look/move (a one-frame lag).
-            (read_touch, feed_look, feed_move)
+            (read_touch, feed_look, feed_move, touch_aim_assist)
                 .chain()
                 .before(DoomControllerSystems::Drive),
             apply_move_velocity.after(DoomControllerSystems::Drive),
@@ -647,12 +654,17 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore<u32>>) {
                 Color::srgb(0.62, 0.67, 0.77),
             ));
             parent.spawn(screen_text(
+                "Touch: left half moves, right half looks, FIRE button shoots (aim assist helps).",
+                18.0,
+                Color::srgb(0.62, 0.67, 0.77),
+            ));
+            parent.spawn(screen_text(
                 best_line(high.best()),
                 24.0,
                 Color::srgb(0.95, 0.85, 0.35),
             ));
             parent.spawn(screen_text(
-                "Click or press any key to begin",
+                "Tap or press any key to begin",
                 24.0,
                 Color::srgb(0.9, 0.9, 0.9),
             ));
@@ -1074,6 +1086,47 @@ fn apply_move_velocity(player: Single<(&DoomControllerOutput, &mut LinearVelocit
     let (output, mut vel) = player.into_inner();
     vel.0.x = output.velocity.x;
     vel.0.z = output.velocity.z;
+}
+
+/// Shortest-arc step from `current` toward `target` by at most `max_step` radians
+/// (handles the +/-pi wraparound). Pure, unit-tested.
+fn step_angle_toward(current: f32, target: f32, max_step: f32) -> f32 {
+    use std::f32::consts::{PI, TAU};
+    let diff = (target - current + PI).rem_euclid(TAU) - PI;
+    current + diff.clamp(-max_step, max_step)
+}
+
+/// Touch aim-assist: while the player is firing on touch, nudge the view yaw toward
+/// the nearest enemy that is already roughly in front (within `AIM_CONE`), capped at
+/// `AIM_ASSIST_RATE`. Runs before `Drive`, which then adds the player's own look on
+/// top, so manual aim still works. Touch-only: a mouse never sets `TouchInput.fire`.
+fn touch_aim_assist(
+    time: Res<Time>,
+    touch: Res<TouchInput>,
+    enemies: Query<&Transform, (With<Enemy>, Without<Player>)>,
+    player: Single<(&Transform, &mut DoomControllerState), With<Player>>,
+) {
+    if !touch.fire {
+        return;
+    }
+    let (ptf, mut state) = player.into_inner();
+    let ppos = ptf.translation;
+    let Some(epos) = enemies.iter().map(|t| t.translation).min_by(|a, b| {
+        a.distance_squared(ppos)
+            .total_cmp(&b.distance_squared(ppos))
+    }) else {
+        return;
+    };
+    let dir = epos - ppos;
+    // Same yaw convention the autopilot uses to face an enemy (forward is -Z at yaw 0).
+    let target = (-dir.x).atan2(-dir.z);
+    let diff = (target - state.yaw + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+        - std::f32::consts::PI;
+    if diff.abs() > AIM_CONE {
+        // Only assist when the enemy is already roughly in view -- never yank the camera.
+        return;
+    }
+    state.yaw = step_angle_toward(state.yaw, target, AIM_ASSIST_RATE * time.delta_secs());
 }
 
 // --- Gun --------------------------------------------------------------------
@@ -1951,6 +2004,24 @@ mod tests {
             is_low_health(LOW_HP_FRAC * 100.0 - 0.01, 100.0),
             "just under the fraction is low"
         );
+    }
+
+    #[test]
+    fn step_angle_toward_caps_and_wraps() {
+        use std::f32::consts::PI;
+        // Small gap: step all the way (gap < max_step).
+        assert!((step_angle_toward(0.0, 0.2, 1.0) - 0.2).abs() < 1e-5);
+        // Large gap: move only max_step toward the target.
+        assert!((step_angle_toward(0.0, 3.0, 0.5) - 0.5).abs() < 1e-5);
+        // Wraparound: from just below pi to just above -pi is a short +arc, not a long
+        // -arc, so a capped step increases the angle across the boundary.
+        let out = step_angle_toward(PI - 0.1, -PI + 0.1, 0.05);
+        assert!(
+            out > PI - 0.1,
+            "steps the short way across +/-pi, not the long way"
+        );
+        // Already aligned: no movement.
+        assert!((step_angle_toward(1.2, 1.2, 0.5) - 1.2).abs() < 1e-6);
     }
 
     // The lose condition and score accounting live in the `on_health_zero` observer

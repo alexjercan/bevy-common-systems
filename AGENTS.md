@@ -471,7 +471,9 @@ Examples:
   fire-rate buff (the speed buff scales `DoomController.move_speed`, the fire-rate buff
   ticks the `Gun` cooldown faster). Reuses `camera/post`
   (bloom on tracers/enemies/pickups), `helpers/temp`, `ui/status` HUD + crosshair,
-  `ui/menu`, `audio`, `persist`+`HighScore`, `ui/touchpad` (dual-stick touch),
+  `ui/menu`, `audio`, `persist`+`HighScore`, `ui/touchpad` (dual-stick touch, with a
+  firing aim-assist that nudges the view toward the nearest enemy in front, since an
+  FPS is the hardest genre for touch),
   `input/state`. The pure logic (`wave_size`/`ring_positions`, the streak-scaled
   scoring, `apply_pickup`/`decay_buffs`/buff multipliers, `archetype_weights`/
   `pick_archetype`, and the controller's

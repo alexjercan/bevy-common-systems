@@ -1,6 +1,6 @@
 # breach -- main-menu and mobile usability polish
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: spike,breach,example,mobile
 
@@ -26,3 +26,18 @@ candidly desktop-first).
 - Verify: `cargo clippy --all-targets`, headless run, then run for real; if
   `$DISPLAY` is set, screenshot the menu at phone width to confirm nothing renders
   below the fold.
+
+## Steps
+
+- [x] **Menu polish.** The desktop controls hint + pulsing title + best-score readout
+  already existed; added a touch controls hint line and made the begin prompt
+  tap-aware ("Tap or press any key to begin").
+- [x] **Touch aim-assist (the real mobile win).** `touch_aim_assist` (pre-Drive): while
+  firing on touch, nudge the view yaw toward the nearest enemy already within `AIM_CONE`,
+  capped at `AIM_ASSIST_RATE`; Drive then adds the player's own look on top. Touch-only
+  (a mouse never sets `TouchInput.fire`), so desktop aim is untouched. Shortest-arc
+  `step_angle_toward` is pure + unit-tested (cap + /-pi wraparound).
+- [x] **Verify.** `cargo fmt`, `cargo clippy --all-targets`, `cargo test --example
+  14_breach`, ascii, headless `BCS_AUTOPILOT`. Fire-button sizing left as-is (already
+  usable; changing it risks desyncing the visual button from the `read_touch` fire zone).
+  Header + AGENTS note updated.
