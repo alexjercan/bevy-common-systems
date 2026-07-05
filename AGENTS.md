@@ -105,6 +105,18 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     to rotate an avian3d rigid body (the `PDControllerTarget` entity)
     toward the `PDControllerInput` rotation; game code applies the
     resulting `PDControllerOutput`.
+  - `doom_controller` - `DoomControllerPlugin`: a Doom-style (simple,
+    arena-shooter) first-person character controller. `DoomController` config +
+    `DoomControllerInput` (look delta + strafe/forward intent) + public
+    `DoomControllerState` (yaw/pitch, settable to aim) + `DoomControllerOutput`
+    (a planar velocity). It integrates the look (clamping pitch), orients a
+    `DoomEye`-marked camera child, and outputs a velocity the game writes into
+    the body's `LinearVelocity` (leaving `.y` to gravity, so avian does
+    collide-and-slide). Output-only, so it takes NO avian dependency despite
+    living here. Named `Doom` on purpose -- it reserves the premium
+    `FirstPersonController` name for a future, more capable controller. Requires
+    an axis-locked body (`LockedAxes::ROTATION_LOCKED`) + a `DoomEye` child.
+    Harvested from `14_breach` (`docs/2026-07-05-fps-controller-harvest.md`).
 - `transform/` - motion driver components; each computes an Output that
   your systems apply or read:
   - `sphere_orbit` - orbit a sphere surface from explicit theta/phi input.
@@ -412,17 +424,19 @@ Examples:
   gallery's first first-person game. It headlines three things no prior example
   showed: the first-person viewpoint as a real game (`camera/wasd` only ever
   appeared in the free-fly tech demos), the crate's first avian `SpatialQuery`
-  raycast (the hitscan gun), and a game-local first-person character controller.
+  raycast (the hitscan gun), and (now harvested) the first-person controller.
   Because `camera/wasd` is a free-fly spectator camera (no gravity/ground/collision/
-  cursor-grab), the player is built locally: a `RigidBody::Dynamic` capsule with
-  `LockedAxes::ROTATION_LOCKED` driven by writing `LinearVelocity`, so avian's
+  cursor-grab), the player uses the crate's `physics/doom_controller`: a
+  `RigidBody::Dynamic` capsule with `LockedAxes::ROTATION_LOCKED` whose
+  `DoomControllerOutput` velocity the game writes into `LinearVelocity`, so avian's
   solver does collide-and-slide against the static level for free (a kinematic body
   is NOT pushed back by statics -- that was the key call). The body stays
-  axis-aligned; yaw lives on a `FirstPersonController` and the `Camera3d` is a child
-  at eye height carrying the full view rotation, with the WASD move intent rotated by
-  the same yaw. Look is always-on from `AccumulatedMouseMotion` with the cursor
-  grabbed via the 0.19 `CursorOptions` component (a per-window component, not
-  `window.cursor`) and a pitch clamp. Left-click (a `time/cooldown` gate) fires
+  axis-aligned; yaw lives in `DoomControllerState` and a `DoomEye` `Camera3d` child
+  at eye height carries the view rotation, with the move intent rotated by the same
+  yaw. Look is always-on from `AccumulatedMouseMotion` fed into
+  `DoomControllerInput`, with the cursor grabbed via `input/cursor` over the 0.19
+  `CursorOptions` component (a per-window component, not `window.cursor`) and a pitch
+  clamp. Left-click (a `time/cooldown` gate) fires
   `SpatialQuery::cast_ray` masked to `[Enemy, World]` and excluding the player; the
   first enemy hit takes `HealthApplyDamage` + `feedback/flash` and on death bursts
   into `mesh/explode` physics gibs. Waves of octahedron enemies (`mesh/builder`)
@@ -431,12 +445,12 @@ Examples:
   vignette + `camera/shake`); zero health ends the run. Reuses `camera/post` (bloom
   on tracers/enemies), `helpers/temp`, `ui/status` HUD + crosshair, `ui/menu`,
   `audio`, `persist`+`HighScore`, `ui/touchpad` (dual-stick touch), `input/state`.
-  The pure controller math (`move_dir`/`wave_size`/`ring_positions`/pitch clamp) is
-  unit-tested off the ECS; the headless autopilot AIMS at the nearest enemy (an FPS
-  gun can't be verified by fire-forward). Follows the `06_fruitninja` shape (states,
-  sounds, wasm); touch is a compromise, desktop is primary. See
-  `docs/2026-07-05-breach-example.md`; the FP-controller harvest is the follow-up
-  `tasks/20260705-103238`.
+  The pure logic (`wave_size`/`ring_positions`, and the controller's `doom_move_dir`/
+  pitch clamp now in `physics/doom_controller`) is unit-tested off the ECS; the
+  headless autopilot AIMS at the nearest enemy (an FPS gun can't be verified by
+  fire-forward). Follows the `06_fruitninja` shape (states, sounds, wasm); touch is a
+  compromise, desktop is primary. See `docs/2026-07-05-breach-example.md` and the
+  harvest note `docs/2026-07-05-fps-controller-harvest.md` (`tasks/20260705-103238`).
 
 ## Workflow
 

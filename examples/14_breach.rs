@@ -37,7 +37,7 @@ use bevy::{
     diagnostic::FrameTimeDiagnosticsPlugin,
     input::mouse::AccumulatedMouseMotion,
     prelude::*,
-    window::{CursorGrabMode, CursorOptions, PrimaryWindow},
+    window::{CursorOptions, PrimaryWindow},
 };
 use bevy_common_systems::prelude::*;
 use clap::Parser;
@@ -154,7 +154,7 @@ fn main() {
                         let dir = epos - ppos;
                         let yaw = (-dir.x).atan2(-dir.z);
                         let mut ctrl_q =
-                            world.query_filtered::<&mut FirstPersonController, With<Player>>();
+                            world.query_filtered::<&mut DoomControllerState, With<Player>>();
                         if let Ok(mut c) = ctrl_q.single_mut(world) {
                             c.yaw = yaw;
                             c.pitch = 0.0;
@@ -182,6 +182,7 @@ fn main() {
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
     app.add_plugins(TouchpadPlugin);
+    app.add_plugins(DoomControllerPlugin);
     app.add_plugins(PersistPlugin::<HighScore<u32>>::new("14_breach.high_score"));
 
     app.insert_resource(ClearColor(Color::srgb(0.02, 0.03, 0.05)));
@@ -205,14 +206,18 @@ fn main() {
     // Playing.
     app.add_systems(
         OnEnter(GameState::Playing),
-        (start_run, spawn_scene, spawn_hud, grab_cursor).chain(),
+        (start_run, spawn_scene, spawn_hud, capture_cursor).chain(),
     );
     app.add_systems(
         Update,
         (
-            read_touch,
-            player_look,
-            player_move,
+            // Feed the controller's input BEFORE it runs (its Drive set), then apply
+            // its velocity output AFTER -- otherwise the controller reads last frame's
+            // look/move (a one-frame lag).
+            (read_touch, feed_look, feed_move)
+                .chain()
+                .before(DoomControllerSystems::Drive),
+            apply_move_velocity.after(DoomControllerSystems::Drive),
             player_shoot,
             drive_enemies,
             enemy_melee,
@@ -223,7 +228,7 @@ fn main() {
         )
             .run_if(in_state(GameState::Playing)),
     );
-    app.add_systems(OnExit(GameState::Playing), release_cursor);
+    app.add_systems(OnExit(GameState::Playing), free_cursor);
 
     // Game over.
     app.add_systems(
@@ -321,17 +326,6 @@ struct TouchInput {
 #[derive(Component)]
 struct Player;
 
-/// Yaw/pitch accumulated from the mouse; the body stays axis-aligned and the
-/// camera child carries the full view rotation.
-#[derive(Component, Default)]
-struct FirstPersonController {
-    yaw: f32,
-    pitch: f32,
-}
-
-#[derive(Component)]
-struct PlayerCamera;
-
 /// The gun's fire-rate gate.
 #[derive(Component)]
 struct Gun {
@@ -351,14 +345,6 @@ struct MenuTitle;
 
 // --- Pure logic (unit-tested) ----------------------------------------------
 
-/// Turn a `(strafe, forward)` intent into a world-space move direction for a
-/// given yaw. Forward (`+forward`) is -Z at yaw 0; strafe (`+strafe`) is +X.
-fn move_dir(yaw: f32, intent: Vec2) -> Vec3 {
-    let local = Vec3::new(intent.x, 0.0, -intent.y);
-    let world = Quat::from_rotation_y(yaw) * local;
-    Vec3::new(world.x, 0.0, world.z).normalize_or_zero()
-}
-
 /// Enemies in wave `n` (0-based): a steady ramp.
 fn wave_size(n: u32) -> u32 {
     3 + 2 * n
@@ -372,11 +358,6 @@ fn ring_positions(count: u32, radius: f32) -> Vec<Vec3> {
             Vec3::new(radius * a.cos(), PLAYER_CENTER_Y, radius * a.sin())
         })
         .collect()
-}
-
-/// Clamp a pitch angle to the no-flip range.
-fn clamp_pitch(pitch: f32) -> f32 {
-    pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT)
 }
 
 fn enemy_speed(wave: u32) -> f32 {
@@ -578,7 +559,14 @@ fn spawn_scene(
         .spawn((
             Name::new("Player"),
             Player,
-            FirstPersonController::default(),
+            // The crate's Doom-style FP controller (look + planar-move math); the
+            // game feeds it input and applies its velocity output below.
+            DoomController {
+                move_speed: PLAYER_SPEED,
+                look_sensitivity: LOOK_SENS,
+                pitch_min: -PITCH_LIMIT,
+                pitch_max: PITCH_LIMIT,
+            },
             Gun {
                 cooldown: Cooldown::new(GUN_COOLDOWN),
             },
@@ -600,7 +588,7 @@ fn spawn_scene(
     commands.entity(player).with_children(|p| {
         p.spawn((
             Name::new("Eye Camera"),
-            PlayerCamera,
+            DoomEye,
             Camera3d::default(),
             Transform::from_xyz(0.0, EYE_H, 0.0),
             PostProcessingCamera,
@@ -739,39 +727,38 @@ fn headless() -> bool {
     std::env::var("BCS_AUTOPILOT").is_ok() || std::env::var("BCS_SHOT").is_ok()
 }
 
-fn grab_cursor(mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
+/// Capture the mouse for looking, unless a headless verification run is driving the
+/// game (a locked pointer would interfere). Uses the crate's `input/cursor` helper.
+fn capture_cursor(mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
     if headless() {
         return;
     }
-    cursor.grab_mode = CursorGrabMode::Locked;
-    cursor.visible = false;
+    grab_cursor(&mut cursor);
 }
 
-fn release_cursor(mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
-    cursor.grab_mode = CursorGrabMode::None;
-    cursor.visible = true;
+fn free_cursor(mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
+    release_cursor(&mut cursor);
 }
 
-// --- Look / move ------------------------------------------------------------
+// --- Input -> controller ----------------------------------------------------
+//
+// The crate's `DoomController` owns the look accumulation (+ pitch clamp, writing
+// the DoomEye child) and the move math; the game just feeds it input each frame and
+// applies its velocity output to the avian body.
 
-fn player_look(
+fn feed_look(
     motion: Res<AccumulatedMouseMotion>,
     touch: Res<TouchInput>,
-    mut controller: Single<&mut FirstPersonController, With<Player>>,
-    mut cam: Single<&mut Transform, With<PlayerCamera>>,
+    mut input: Single<&mut DoomControllerInput, With<Player>>,
 ) {
-    let delta = motion.delta + touch.look_delta;
-    controller.yaw -= delta.x * LOOK_SENS;
-    controller.pitch = clamp_pitch(controller.pitch - delta.y * LOOK_SENS);
-    cam.rotation = Quat::from_euler(EulerRot::YXZ, controller.yaw, controller.pitch, 0.0);
+    input.look = motion.delta + touch.look_delta;
 }
 
-fn player_move(
+fn feed_move(
     keys: Res<ButtonInput<KeyCode>>,
     touch: Res<TouchInput>,
-    player: Single<(&FirstPersonController, &mut LinearVelocity), With<Player>>,
+    mut input: Single<&mut DoomControllerInput, With<Player>>,
 ) {
-    let (controller, mut vel) = player.into_inner();
     let mut intent = touch.move_vec;
     if keys.pressed(KeyCode::KeyW) {
         intent.y += 1.0;
@@ -785,11 +772,15 @@ fn player_move(
     if keys.pressed(KeyCode::KeyA) {
         intent.x -= 1.0;
     }
+    input.movement = intent;
+}
 
-    let dir = move_dir(controller.yaw, intent);
-    vel.0.x = dir.x * PLAYER_SPEED;
-    vel.0.z = dir.z * PLAYER_SPEED;
-    // Leave vel.0.y to gravity / the solver.
+/// Apply the controller's velocity output to the body, leaving `.y` to gravity so
+/// avian's solver does collide-and-slide. Runs after `DoomControllerSystems::Drive`.
+fn apply_move_velocity(player: Single<(&DoomControllerOutput, &mut LinearVelocity), With<Player>>) {
+    let (output, mut vel) = player.into_inner();
+    vel.0.x = output.velocity.x;
+    vel.0.z = output.velocity.z;
 }
 
 // --- Gun --------------------------------------------------------------------
@@ -805,7 +796,7 @@ fn player_shoot(
     mut materials: ResMut<Assets<StandardMaterial>>,
     sfx: Res<SoundBank<Sfx>>,
     player: Single<(Entity, &mut Gun), With<Player>>,
-    cam: Single<&GlobalTransform, With<PlayerCamera>>,
+    cam: Single<&GlobalTransform, With<DoomEye>>,
     enemies: Query<(), With<Enemy>>,
     mut shake: Query<&mut CameraShakeInput>,
 ) {
@@ -1225,37 +1216,8 @@ fn gameover_dismiss(
 mod tests {
     use super::*;
 
-    fn approx(a: Vec3, b: Vec3) -> bool {
-        (a - b).length() < 1e-4
-    }
-
-    #[test]
-    fn forward_is_negative_z_at_zero_yaw() {
-        assert!(approx(
-            move_dir(0.0, Vec2::new(0.0, 1.0)),
-            Vec3::new(0.0, 0.0, -1.0)
-        ));
-    }
-
-    #[test]
-    fn strafe_is_positive_x_at_zero_yaw() {
-        assert!(approx(
-            move_dir(0.0, Vec2::new(1.0, 0.0)),
-            Vec3::new(1.0, 0.0, 0.0)
-        ));
-    }
-
-    #[test]
-    fn yaw_rotates_forward() {
-        // A 90deg yaw (about +Y) turns forward (-Z) toward -X.
-        let d = move_dir(std::f32::consts::FRAC_PI_2, Vec2::new(0.0, 1.0));
-        assert!(approx(d, Vec3::new(-1.0, 0.0, 0.0)));
-    }
-
-    #[test]
-    fn no_input_is_zero() {
-        assert_eq!(move_dir(1.2, Vec2::ZERO), Vec3::ZERO);
-    }
+    // The look/move math (move_dir, pitch clamp) now lives in and is tested by the
+    // crate's `physics/doom_controller` module.
 
     #[test]
     fn wave_size_ramps_monotonically() {
@@ -1282,13 +1244,6 @@ mod tests {
     #[test]
     fn ring_positions_handles_zero() {
         assert!(ring_positions(0, 5.0).is_empty());
-    }
-
-    #[test]
-    fn pitch_is_clamped() {
-        assert_eq!(clamp_pitch(3.0), PITCH_LIMIT);
-        assert_eq!(clamp_pitch(-3.0), -PITCH_LIMIT);
-        assert_eq!(clamp_pitch(0.5), 0.5);
     }
 
     #[test]

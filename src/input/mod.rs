@@ -3,6 +3,7 @@
 //! This module collects small, game-agnostic input building blocks:
 //! - [`pointer`] - a unified [`pointer::UnifiedPointer`] resource that collapses
 //!   mouse, touch and cursor into one per-frame abstraction.
+//! - [`cursor`] - lock / release the mouse cursor for mouse-look.
 //!
 //! The `prelude` re-exports the commonly used types:
 //!
@@ -10,6 +11,7 @@
 //! use bevy_common_systems::input::prelude::*;
 //! ```
 
+pub mod cursor;
 pub mod pointer;
 pub mod state;
 
@@ -19,5 +21,5 @@ pub mod state;
 /// use bevy_common_systems::input::prelude::*;
 /// ```
 pub mod prelude {
-    pub use super::{pointer::prelude::*, state::prelude::*};
+    pub use super::{cursor::prelude::*, pointer::prelude::*, state::prelude::*};
 }

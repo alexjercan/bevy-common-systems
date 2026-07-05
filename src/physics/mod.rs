@@ -68,8 +68,9 @@
 //! radial gravity plus wind on the lander, with thrust applied through a
 //! separate local-space channel and torque from [`pd_controller`].
 
+pub mod doom_controller;
 pub mod pd_controller;
 
 pub mod prelude {
-    pub use super::pd_controller::prelude::*;
+    pub use super::{doom_controller::prelude::*, pd_controller::prelude::*};
 }
