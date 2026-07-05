@@ -23,11 +23,13 @@
 //! ```rust
 //! # use bevy::prelude::*;
 //! # use bevy_common_systems::prelude::*;
+//! # fn wire_up() {
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
 //!     // Drives `UnifiedPointer` from an enhanced-input press action instead of
 //!     // the raw `UnifiedPointerPlugin`.
 //!     .add_plugins(EnhancedInputPointerPlugin);
+//! # }
 //!
 //! fn aim(pointer: Res<UnifiedPointer>) {
 //!     if pointer.just_pressed {

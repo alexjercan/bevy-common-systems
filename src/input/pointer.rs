@@ -22,9 +22,11 @@
 //! ```rust
 //! # use bevy::prelude::*;
 //! # use bevy_common_systems::prelude::*;
+//! # fn wire_up() {
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
 //!     .add_plugins(UnifiedPointerPlugin);
+//! # }
 //!
 //! fn aim(pointer: Res<UnifiedPointer>) {
 //!     if pointer.pressed {

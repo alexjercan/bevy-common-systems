@@ -24,10 +24,12 @@
 //! #[derive(Resource, Default, Serialize, Deserialize)]
 //! struct HighScore(u32);
 //!
+//! # fn wire_up() {
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
 //!     // Loads the stored HighScore on startup, saves it whenever it changes.
 //!     .add_plugins(PersistPlugin::<HighScore>::new("my_game.high_score"));
+//! # }
 //!
 //! fn on_new_best(mut high: ResMut<HighScore>, score: u32) {
 //!     if score > high.0 {

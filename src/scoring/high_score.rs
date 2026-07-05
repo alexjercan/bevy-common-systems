@@ -14,11 +14,13 @@
 //! ```rust
 //! # use bevy::prelude::*;
 //! # use bevy_common_systems::prelude::*;
+//! # fn wire_up() {
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
 //!     .insert_resource(HighScore::<u32>::default())
 //!     // ... and, to persist it across launches:
 //!     .add_plugins(PersistPlugin::<HighScore<u32>>::new("my_game.high_score"));
+//! # }
 //!
 //! // On game over, record the run's score and react to a new best.
 //! fn on_game_over(score: u32, mut high: ResMut<HighScore<u32>>) {

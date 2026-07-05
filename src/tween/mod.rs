@@ -23,9 +23,11 @@
 //! ```rust
 //! # use bevy::prelude::*;
 //! # use bevy_common_systems::prelude::*;
+//! # fn wire_up() {
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
 //!     .add_plugins(TweenPlugin);
+//! # }
 //!
 //! // Pop a sprite from 1x to 1.5x scale over 0.15s, then remove the tween.
 //! fn spawn_pop(mut commands: Commands) {

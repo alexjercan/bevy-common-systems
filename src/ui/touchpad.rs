@@ -24,9 +24,11 @@
 //! ```rust
 //! # use bevy::prelude::*;
 //! # use bevy_common_systems::prelude::*;
+//! # fn wire_up() {
 //! App::new()
 //!     .add_plugins(DefaultPlugins)
 //!     .add_plugins(TouchpadPlugin);
+//! # }
 //!
 //! // Spawn your pad root tagged so it is revealed on first touch:
 //! fn spawn_pad(mut commands: Commands) {
