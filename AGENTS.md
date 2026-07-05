@@ -608,3 +608,24 @@ Examples:
   X root is unreliable in a headless session (it returned a stale WM framebuffer
   from an orphaned earlier run), so do not lean on a live gameplay grab to catch
   these -- lean on the test.
+- `AutopilotPlugin.hold(state, seconds)` force-drives the `States` machine on a
+  fixed timer, so it proves only what happens *up to* each forced transition, never a
+  transition the *game itself* makes. It is structurally blind to a game-driven state
+  change -- most importantly the **lose condition**. `14_breach` reported a clean
+  `Menu->Playing->GameOver` autopilot cycle with kills, yet the enemy melee was
+  effectively broken (a defenceless player survived 30s+) and the player-death path
+  (`Health` zero -> `RunOver` -> `GameOver`) never actually fired: the observed
+  GameOver was always the `.hold(Playing, N)` timer, and the "kills" only proved the
+  offence side (`docs/retros/20260705-114236-breach-example.md`). Rule: verify any
+  game-driven transition (lose/win/level-up) with a headless `App` unit test
+  (`MinimalPlugins` + `bevy::state::app::StatesPlugin` + the relevant crate plugin)
+  that drives the trigger and asserts the state/resource flips -- write it before
+  trusting the autopilot. And to debug *balance* headlessly (not just pass/fail),
+  extend the Playing `.hold`, neuter the autopilot's offence (stop it firing) and log
+  the relevant per-frame numbers (HP, distances): measurement turns "the player
+  mysteriously survives" into "enemies arrive at 7s and melt 100->0 in 3s". Related
+  avian-gameplay traps seen here: a cooldown-gated distance melee is unreliable when
+  both bodies are dynamic (collision knockback flings the attacker out of range each
+  frame -- use continuous proximity damage and/or drop the collision between them),
+  and straight-line enemy AI with no avoidance gets stuck on interior obstacles (keep
+  the arena open, or give the AI navigation).
