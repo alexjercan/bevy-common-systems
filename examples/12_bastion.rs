@@ -990,10 +990,11 @@ fn update_hud(
     };
 
     text.0 = format!(
-        "Core {:.0}%   Credits {}   Wave {}   Score {}{}\n{}",
+        "Core {:.0}%   Credits {}   Wave {} ({} incoming)   Score {}{}\n{}",
         (integrity / CORE_HEALTH * 100.0).max(0.0),
         **credits,
         wave.number,
+        wave_size(wave.number),
         **score,
         combo_line,
         action_line,
