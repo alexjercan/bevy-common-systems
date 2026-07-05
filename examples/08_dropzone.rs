@@ -411,6 +411,24 @@ struct RunTimer(f32);
 #[derive(Resource, Default)]
 struct Outcome(Option<Landing>);
 
+/// Where the hull broke apart, captured the frame the run ends in destruction.
+/// The chase camera anchors here on the result screen once the ship entity is
+/// gone (it despawns with `DespawnOnExit(Playing)` on a crash), so the player
+/// watches the explosion instead of the camera swooping up to the planet
+/// overview. `None` outside a crash (a soft landing keeps the parked hull, which
+/// the camera follows directly); cleared at run start and on leaving Result.
+#[derive(Resource, Default)]
+struct CrashSite(Option<CrashView>);
+
+/// The crash-site anchor: the world position of the hull at destruction plus its
+/// forward heading, so [`drive_chase_camera`] can rebuild the same
+/// [`surface_frame`] it uses in flight and frame the debris without rolling.
+#[derive(Clone, Copy)]
+struct CrashView {
+    pos: Vec3,
+    heading: Vec3,
+}
+
 /// Details of a completed landing attempt.
 #[derive(Clone, Copy)]
 struct Landing {
@@ -617,6 +635,7 @@ fn main() {
     app.add_plugins(TouchpadPlugin);
     app.init_resource::<Telemetry>();
     app.init_resource::<Outcome>();
+    app.init_resource::<CrashSite>();
     app.init_resource::<RunTimer>();
     app.init_resource::<FuelSpawner>();
     app.init_resource::<Wind>();
@@ -1065,6 +1084,7 @@ fn start_run(
     mut fuel: ResMut<Fuel>,
     mut input: ResMut<ShipInput>,
     mut outcome: ResMut<Outcome>,
+    mut crash_site: ResMut<CrashSite>,
     mut timer: ResMut<RunTimer>,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut spawner: ResMut<FuelSpawner>,
@@ -1077,6 +1097,8 @@ fn start_run(
 ) {
     fuel.0 = START_FUEL;
     outcome.0 = None;
+    // A fresh run frames the ship (or the spawn vantage), never the last crash.
+    crash_site.0 = None;
     timer.0 = 0.0;
     if let Ok(mut input) = q_shake.single_mut() {
         input.reset = true;
@@ -1716,30 +1738,35 @@ fn update_thruster_flame(
 }
 
 /// Where the ship spawns each run: straight above the +Y pole, clear of the
-/// tallest peak. Also the camera's fallback anchor when there is no ship (the
-/// menu, or the result screen after a crash), so those screens frame the planet
-/// from above instead of parking the camera inside it. (After a soft landing the
-/// hull survives into Result, so there the camera follows the parked ship.)
+/// tallest peak. Also the camera's fallback anchor when there is neither a ship
+/// nor a crash site (the menu), so that screen frames the planet from above
+/// instead of parking the camera inside it. (After a soft landing the hull
+/// survives into Result, so there the camera follows the parked ship; after a
+/// crash the hull is gone but the recorded [`CrashSite`] anchors the camera.)
 fn ship_start_pos() -> Vec3 {
     Vec3::Y * (PLANET_BASE_RADIUS * (1.0 + TERRAIN_AMPLITUDE as f32) + START_ALTITUDE)
 }
 
-/// Drive the chase camera every frame in every state: follow the ship when it
-/// exists (in Playing, and on the result screen after a soft landing, where the
-/// parked hull is kept), otherwise sit at the spawn vantage. Running in the menu
-/// too lets the smoothed camera state settle on the vantage before a run starts,
-/// so Playing opens on the ship instead of swooping out from the planet centre.
+/// Drive the chase camera every frame in every state. The anchor, in priority:
+/// the live ship (in Playing, and on the result screen after a soft landing,
+/// where the parked hull is kept); else a recorded [`CrashSite`] (the result
+/// screen after a crash, so the camera stays on the explosion the frame the hull
+/// despawns); else the spawn vantage (the menu). Running in the menu too lets the
+/// smoothed camera state settle on the vantage before a run starts, so Playing
+/// opens on the ship instead of swooping out from the planet centre.
 fn drive_chase_camera(
     q_ship: Query<&Transform, With<Ship>>,
+    crash_site: Res<CrashSite>,
     mut q_cam: Query<&mut ChaseCameraInput>,
 ) {
     let Ok(mut input) = q_cam.single_mut() else {
         return;
     };
-    let (anchor_pos, heading) = q_ship
+    let ship = q_ship
         .single()
         .map(|ship| (ship.translation, ship.rotation * Vec3::NEG_Z))
-        .unwrap_or((ship_start_pos(), Vec3::NEG_Z));
+        .ok();
+    let (anchor_pos, heading) = camera_anchor(ship, crash_site.0);
     // Orient the camera frame with radial up (so the view does not roll when we
     // lean) but anchor its heading to the hull's forward, so circling the planet
     // does not spin the camera the way a shortest-arc frame would -- see
@@ -1747,6 +1774,16 @@ fn drive_chase_camera(
     let radial_up = anchor_pos.normalize_or(Vec3::Y);
     input.anchor_pos = anchor_pos;
     input.anchor_rot = surface_frame(radial_up, heading);
+}
+
+/// Pick the chase-camera anchor (world position, forward heading) by priority:
+/// the live ship first, then a recorded crash site (frame the wreck once the hull
+/// despawns), then the spawn vantage (the menu). Pure so the priority is
+/// unit-tested off the ECS; the autopilot forces Playing -> Result without a real
+/// crash, so it never records a `CrashSite` and cannot exercise the crash branch.
+fn camera_anchor(ship: Option<(Vec3, Vec3)>, crash: Option<CrashView>) -> (Vec3, Vec3) {
+    ship.or_else(|| crash.map(|c| (c.pos, c.heading)))
+        .unwrap_or((ship_start_pos(), Vec3::NEG_Z))
 }
 
 // --- Playing: fuel pickups & timer -----------------------------------------
@@ -1902,6 +1939,7 @@ fn resolve_collisions(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut outcome: ResMut<Outcome>,
+    mut crash_site: ResMut<CrashSite>,
     mut next: ResMut<NextState<GameState>>,
     mut commands: Commands,
 ) {
@@ -1998,6 +2036,11 @@ fn resolve_collisions(
                 },
                 DespawnOnExit(GameState::Playing),
             ));
+            // Pin the camera to the wreck so the result screen frames the debris.
+            crash_site.0 = Some(CrashView {
+                pos: transform.translation,
+                heading: transform.rotation * Vec3::NEG_Z,
+            });
             commands.play_sfx(sfx.get(Sfx::Crash));
             if let Ok(mut input) = q_shake.single_mut() {
                 input.add_trauma += CRASH_TRAUMA;
@@ -2193,6 +2236,7 @@ fn on_ship_destroyed(
     sfx: Res<SoundBank<Sfx>>,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut outcome: ResMut<Outcome>,
+    mut crash_site: ResMut<CrashSite>,
     mut next: ResMut<NextState<GameState>>,
     mut commands: Commands,
 ) {
@@ -2220,6 +2264,11 @@ fn on_ship_destroyed(
         },
         DespawnOnExit(GameState::Playing),
     ));
+    // Pin the camera to the wreck so the result screen frames the debris.
+    crash_site.0 = Some(CrashView {
+        pos: transform.translation,
+        heading: transform.rotation * Vec3::NEG_Z,
+    });
     commands.play_sfx(sfx.get(Sfx::Crash));
     if let Ok(mut input) = q_shake.single_mut() {
         input.add_trauma += CRASH_TRAUMA;
@@ -2267,11 +2316,17 @@ fn spawn_dust(
 }
 
 /// Despawn the parked hull (from a soft landing) and the pad beacon when leaving
-/// the result screen, before the next run rolls and spawns fresh ones.
-fn cleanup_run_scene(mut commands: Commands, q_scene: Query<Entity, Or<(With<Ship>, With<Pad>)>>) {
+/// the result screen, before the next run rolls and spawns fresh ones. Also
+/// forget any crash site so the menu returns to the planet-overview vantage.
+fn cleanup_run_scene(
+    mut commands: Commands,
+    mut crash_site: ResMut<CrashSite>,
+    q_scene: Query<Entity, Or<(With<Ship>, With<Pad>)>>,
+) {
     for entity in q_scene.iter() {
         commands.entity(entity).despawn();
     }
+    crash_site.0 = None;
 }
 
 /// Turn each mesh slice into an independent flying fragment (see `05_explode`).
@@ -2681,5 +2736,37 @@ mod tests {
         // A fast enough hit is lethal in one blow (>= the whole integrity pool).
         let lethal_speed = SHIP_MAX_INTEGRITY / INTEGRITY_DAMAGE_PER_SPEED;
         assert!(impact_damage(lethal_speed) >= SHIP_MAX_INTEGRITY);
+    }
+
+    /// The chase-camera anchor resolves by priority: a live ship wins, then a
+    /// recorded crash site (so the result screen frames the wreck once the hull
+    /// despawns), and only with neither does it fall back to the spawn vantage.
+    /// This is the logic that keeps the explosion on screen instead of swooping
+    /// to the planet overview, so it is worth asserting off the ECS.
+    #[test]
+    fn camera_anchor_prefers_ship_then_crash_site_then_spawn() {
+        let ship_pos = Vec3::new(3.0, 40.0, -2.0);
+        let ship_heading = Vec3::NEG_X;
+        let crash = CrashView {
+            pos: Vec3::new(-10.0, 25.0, 5.0),
+            heading: Vec3::Z,
+        };
+
+        // A live ship wins even when a crash site is also recorded.
+        let (pos, heading) = camera_anchor(Some((ship_pos, ship_heading)), Some(crash));
+        assert_eq!(pos, ship_pos);
+        assert_eq!(heading, ship_heading);
+
+        // No ship but a crash site: frame the wreck (its position and heading),
+        // NOT the spawn vantage -- this is the whole point of the feature.
+        let (pos, heading) = camera_anchor(None, Some(crash));
+        assert_eq!(pos, crash.pos);
+        assert_eq!(heading, crash.heading);
+        assert_ne!(pos, ship_start_pos());
+
+        // Neither (the menu): fall back to the spawn vantage above the pole.
+        let (pos, heading) = camera_anchor(None, None);
+        assert_eq!(pos, ship_start_pos());
+        assert_eq!(heading, Vec3::NEG_Z);
     }
 }
