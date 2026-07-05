@@ -1,0 +1,69 @@
+{
+  "towers": [
+    {
+      "name": "Gun",
+      "cost": 40,
+      "upgrade_cost": 30,
+      "range": 6.0,
+      "fire_interval": 0.45,
+      "damage": 6.0,
+      "turn_speed": 6.0,
+      "color": [0.5, 0.85, 1.0]
+    },
+    {
+      "name": "Cannon",
+      "cost": 80,
+      "upgrade_cost": 60,
+      "range": 9.5,
+      "fire_interval": 1.3,
+      "damage": 26.0,
+      "turn_speed": 2.2,
+      "color": [1.0, 0.7, 0.35]
+    },
+    {
+      "name": "Sniper",
+      "cost": 120,
+      "upgrade_cost": 90,
+      "range": 14.0,
+      "fire_interval": 2.0,
+      "damage": 60.0,
+      "turn_speed": 1.4,
+      "color": [0.7, 1.0, 0.55]
+    }
+  ],
+  "enemies": [
+    {
+      "name": "Runner",
+      "hp": 14.0,
+      "speed": 2.6,
+      "core_damage": 8.0,
+      "reward": 6,
+      "radius": 0.55,
+      "spawn_weight": 1.0,
+      "wave_weight": 0.0,
+      "color": [0.9, 0.35, 0.45]
+    },
+    {
+      "name": "Brute",
+      "hp": 44.0,
+      "speed": 1.4,
+      "core_damage": 20.0,
+      "reward": 14,
+      "radius": 0.85,
+      "spawn_weight": 0.12,
+      "wave_weight": 0.45,
+      "color": [0.8, 0.25, 0.75]
+    },
+    {
+      "name": "Swarm",
+      "hp": 6.0,
+      "speed": 3.6,
+      "core_damage": 3.0,
+      "reward": 3,
+      "radius": 0.4,
+      "spawn_weight": 0.5,
+      "wave_weight": 0.2,
+      "color": [0.45, 0.95, 0.6]
+    }
+  ]
+}

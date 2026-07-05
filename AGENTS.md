@@ -363,9 +363,14 @@ Examples:
   "+N" credit popups; `transform/point_rotation` drives an orbit camera (a pivot
   at the Core the player yaws/pitches by dragging, pitch clamped in-game);
   `transform/smooth_look_rotation` drives each tower turret, rate-limited so a
-  fast enemy can out-slew a cheap turret until upgraded. Tower/enemy stats live in
-  a game-local `TowerSpec`/`EnemySpec` catalog shaped for a later data-driven task
-  (`tasks/20260704-220719`). Reuses `mesh/explode` (own `On<Insert,
+  fast enemy can out-slew a cheap turret until upgraded. Tower/enemy stats are
+  data-driven: loaded from `assets/bastion/catalog.json` at startup (native reads
+  the file so stats/new types need no recompile, wasm uses a compiled-in copy),
+  with the build key bindings and weighted enemy spawn iterating the catalog so a
+  new tower/enemy is added purely in JSON (`tasks/20260704-220719`,
+  `docs/2026-07-05-bastion-data-catalog.md`; the spike concluded the loader -- not
+  a `SpecCatalog<T>` type -- is the only reusable nugget and should wait for a
+  second user). Reuses `mesh/explode` (own `On<Insert,
   ExplodeFragments>` observer -- the crate has no fragment observer), `ui/popup`,
   `ui/status`, `camera/shake`, `feedback`, `scoring/streak`, `time/cooldown`,
   `helpers/temp`, `input/pointer` and `audio`. One pointer does double duty (drag
@@ -478,6 +483,14 @@ Examples:
   `cargo build --examples`) as the real compile gate. Missing this hid eight
   example errors behind a "clean" build in `input/pointer`
   (`docs/retros/20260704-161508-input-pointer.md`).
+- Tests that embed a data file (`include_str!`) go stale when the same task edits
+  that file. If a `#[cfg(test)]` assertion checks the contents of a JSON/asset the
+  task also changes (e.g. an `include_str!`ed catalog), assert the *final shipped*
+  state and re-run `cargo test --examples` AFTER the data edit, not just after the
+  code edit -- a green example-test run before the data was finalized is a false
+  green for anything embedding it. Bit `12_bastion`'s data-driven catalog: a
+  roster-count test passed at 2+2 then failed once the "prove it" step made the
+  embedded catalog 3+3 (`docs/retros/20260704-220719-bastion-data-catalog.md`).
 - Prelude name collisions with bevy: a public type re-exported through
   `crate::prelude` must not share a name with anything in `bevy::prelude`.
   A game-local `struct Foo` silently shadows a bevy-prelude `Foo`, so it never

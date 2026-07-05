@@ -31,13 +31,18 @@
 //! `mesh/explode` shards on a kill, `ui/popup` "+N", `camera/shake`, `feedback`
 //! flashes, `time/cooldown` per-tower fire cadence, `scoring/streak`,
 //! `helpers/temp` self-despawning effects, and the same wasm/trunk web build. The
-//! tower and enemy stats live in a small game-local `TowerSpec`/`EnemySpec`
-//! catalog so a later task can make them data-driven without reshaping the game.
+//! tower and enemy stats are data-driven: they load from
+//! `assets/bastion/catalog.json` at startup (native reads the file, so editing
+//! the stats or adding a new tower/enemy needs no recompile; wasm uses a
+//! compiled-in copy), and both the build key bindings and the enemy spawn mix
+//! iterate the catalog so new JSON entries participate automatically. See
+//! `docs/2026-07-05-bastion-data-catalog.md`.
 //!
-//! Controls: drag the pointer (or A/D / arrow keys) to orbit the camera. Press 1
-//! or 2 to pick a tower to build, then tap the ground (or press Space) to place it
-//! at the ghost. Tap a placed tower to select it and press U to upgrade it.
-//! Escape gives up. On a touchscreen the same taps and drags work.
+//! Controls: drag the pointer (or A/D / arrow keys) to orbit the camera. Press a
+//! number key (1..N, one per catalogued tower) to pick a tower to build, then tap
+//! the ground (or press Space) to place it at the ghost. Tap a placed tower to
+//! select it and press U to upgrade it. Escape gives up. On a touchscreen the
+//! same taps and drags work.
 //!
 //! Run it: `cargo run --example 12_bastion` (add `--features debug` for the
 //! inspector and the headless autopilot/screenshot harness).
@@ -49,12 +54,13 @@ use bevy::prelude::*;
 use bevy_common_systems::prelude::*;
 use clap::Parser;
 use rand::Rng;
+use serde::Deserialize;
 
 #[derive(Parser)]
 #[command(name = "12_bastion")]
 #[command(version = "1.0.0")]
 #[command(
-    about = "Defend the Core: place towers around it and hold off waves that close in from every side. Drag to orbit, 1/2 to pick a tower, tap or Space to build, tap a tower and U to upgrade.",
+    about = "Defend the Core: place towers around it and hold off waves that close in from every side. Drag to orbit, number keys to pick a tower, tap or Space to build, tap a tower and U to upgrade.",
     long_about = None
 )]
 struct Cli;
@@ -224,6 +230,10 @@ fn main() {
 
     app.init_state::<GameState>();
 
+    // Tower/enemy stats are data-driven: load them from JSON before any system
+    // runs (native reads the editable file, wasm the embedded copy).
+    app.insert_resource(load_catalog());
+
     app.init_resource::<Credits>();
     app.init_resource::<Score>();
     app.init_resource::<HighScore<u32>>();
@@ -287,14 +297,19 @@ fn main() {
 }
 
 // ---------------------------------------------------------------------------
-// Spec catalog (game-local; a later task makes this data-driven)
+// Spec catalog (data-driven: loaded from assets/bastion/catalog.json at startup)
 // ---------------------------------------------------------------------------
+//
+// The tower and enemy stat tables live in an external JSON file, deserialized
+// once into the `Catalog` resource. Towers and enemies are referenced by their
+// index in the catalog `Vec`s, and both the build key bindings and the enemy
+// spawn mix iterate the catalog, so a new tower or enemy can be added purely in
+// JSON (native reads the file at startup, no recompile) and it just shows up.
 
-/// A buildable tower archetype. Kept as plain data so a follow-up task can load
-/// these from JSON and register new ones without touching the game systems.
-#[derive(Clone)]
+/// A buildable tower archetype (pure data, deserialized from JSON).
+#[derive(Clone, Deserialize)]
 struct TowerSpec {
-    name: &'static str,
+    name: String,
     /// Credit cost to place one.
     cost: u32,
     /// Credit cost to upgrade one (flat, per level).
@@ -307,14 +322,14 @@ struct TowerSpec {
     damage: f32,
     /// Turret slew rate, radians/sec (the `smooth_look_rotation` speed).
     turn_speed: f32,
-    /// Body tint.
-    color: Color,
+    /// Body tint as linear `[r, g, b]` in 0..1.
+    color: [f32; 3],
 }
 
 /// An enemy archetype (base stats; waves scale hp/speed off these).
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
 struct EnemySpec {
-    name: &'static str,
+    name: String,
     hp: f32,
     /// Ground speed in world units/sec.
     speed: f32,
@@ -324,59 +339,91 @@ struct EnemySpec {
     reward: u32,
     /// Collision / visual radius.
     radius: f32,
-    color: Color,
+    /// Relative spawn frequency: an enemy is picked with probability
+    /// proportional to `spawn_weight * (1 + wave * wave_weight)`, so setting
+    /// `wave_weight > 0` makes it appear more often in later waves. A new enemy
+    /// added to the catalog participates in the mix via these two fields alone.
+    spawn_weight: f32,
+    /// How much the wave number ramps this enemy's spawn weight (see above).
+    #[serde(default)]
+    wave_weight: f32,
+    /// Body tint as linear `[r, g, b]` in 0..1.
+    color: [f32; 3],
 }
 
-/// The two starter towers. `Gun` is cheap, fast and short-ranged; `Cannon` is
-/// pricey, slow, hard-hitting and long-ranged with a sluggish turret.
-fn tower_specs() -> [TowerSpec; 2] {
-    [
-        TowerSpec {
-            name: "Gun",
-            cost: 40,
-            upgrade_cost: 30,
-            range: 6.0,
-            fire_interval: 0.45,
-            damage: 6.0,
-            turn_speed: 6.0,
-            color: Color::srgb(0.5, 0.85, 1.0),
-        },
-        TowerSpec {
-            name: "Cannon",
-            cost: 80,
-            upgrade_cost: 60,
-            range: 9.5,
-            fire_interval: 1.3,
-            damage: 26.0,
-            turn_speed: 2.2,
-            color: Color::srgb(1.0, 0.7, 0.35),
-        },
-    ]
+impl TowerSpec {
+    /// The body tint as a Bevy `Color`.
+    fn color(&self) -> Color {
+        let [r, g, b] = self.color;
+        Color::srgb(r, g, b)
+    }
 }
 
-/// The two starter enemies. `Runner` is fast and fragile; `Brute` is slow, tough
-/// and hits the Core hard.
-fn enemy_specs() -> [EnemySpec; 2] {
-    [
-        EnemySpec {
-            name: "Runner",
-            hp: 14.0,
-            speed: 2.6,
-            core_damage: 8.0,
-            reward: 6,
-            radius: 0.55,
-            color: Color::srgb(0.9, 0.35, 0.45),
-        },
-        EnemySpec {
-            name: "Brute",
-            hp: 44.0,
-            speed: 1.4,
-            core_damage: 20.0,
-            reward: 14,
-            radius: 0.85,
-            color: Color::srgb(0.8, 0.25, 0.75),
-        },
-    ]
+impl EnemySpec {
+    /// The body tint as a Bevy `Color`.
+    fn color(&self) -> Color {
+        let [r, g, b] = self.color;
+        Color::srgb(r, g, b)
+    }
+
+    /// This enemy's spawn weight at the given wave (see `spawn_weight`).
+    fn weight_at(&self, wave: usize) -> f32 {
+        (self.spawn_weight * (1.0 + wave as f32 * self.wave_weight)).max(0.0)
+    }
+}
+
+/// The tower and enemy stat tables, deserialized from JSON at startup. Towers
+/// and enemies are referenced by index into these `Vec`s.
+#[derive(Resource, Clone, Deserialize)]
+struct Catalog {
+    towers: Vec<TowerSpec>,
+    enemies: Vec<EnemySpec>,
+}
+
+/// The catalog compiled into the binary, used as the default and the wasm
+/// source (where there is no filesystem). Native startup prefers the on-disk
+/// `assets/bastion/catalog.json` so the stats can be edited without a rebuild.
+const EMBEDDED_CATALOG: &str = include_str!("../assets/bastion/catalog.json");
+
+/// Path of the editable catalog (native only; wasm has no filesystem).
+#[cfg(not(target_arch = "wasm32"))]
+const CATALOG_PATH: &str = "assets/bastion/catalog.json";
+
+/// Load the catalog: on native, read `assets/bastion/catalog.json` from disk so
+/// edits take effect on the next run with no recompile; fall back to the
+/// compiled-in copy if the file is missing/unreadable (and always on wasm, which
+/// has no filesystem). A parse error in the on-disk file is logged and falls back
+/// to the embedded copy rather than panicking.
+fn load_catalog() -> Catalog {
+    let source = read_catalog_source();
+    let catalog = match serde_json::from_str::<Catalog>(&source) {
+        Ok(catalog) => catalog,
+        Err(err) => {
+            error!("12_bastion: catalog parse error ({err}); using embedded default");
+            serde_json::from_str(EMBEDDED_CATALOG).expect("embedded catalog is valid JSON")
+        }
+    };
+    let towers: Vec<&str> = catalog.towers.iter().map(|t| t.name.as_str()).collect();
+    let enemies: Vec<&str> = catalog.enemies.iter().map(|e| e.name.as_str()).collect();
+    info!(
+        "12_bastion: catalog loaded -- {} towers {:?}, {} enemies {:?}",
+        towers.len(),
+        towers,
+        enemies.len(),
+        enemies,
+    );
+    catalog
+}
+
+/// The raw catalog JSON: the on-disk file on native (falling back to embedded),
+/// always embedded on wasm.
+fn read_catalog_source() -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    match std::fs::read_to_string(CATALOG_PATH) {
+        Ok(text) => return text,
+        Err(err) => info!("12_bastion: no on-disk catalog ({err}); using embedded default"),
+    }
+    EMBEDDED_CATALOG.to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -394,7 +441,7 @@ struct Score(u32);
 /// Which tower type is currently armed for building, if any.
 #[derive(Resource, Default)]
 struct Build {
-    /// Index into `tower_specs()`, or `None` when not in build mode.
+    /// Index into the catalog's `towers`, or `None` when not in build mode.
     spec: Option<usize>,
 }
 
@@ -567,6 +614,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
+    catalog: Res<Catalog>,
 ) {
     // Sounds (paths are relative to `assets/`). Reuse the shared placeholder wavs.
     commands.insert_resource(SoundBank::load(
@@ -584,12 +632,13 @@ fn setup(
 
     // Shared render assets.
     let enemy_mesh = meshes.add(TriangleMeshBuilder::new_octahedron(2).build());
-    let enemy_materials = enemy_specs()
+    let enemy_materials = catalog
+        .enemies
         .iter()
         .map(|spec| {
             materials.add(StandardMaterial {
                 perceptual_roughness: 0.7,
-                ..glowing_material(spec.color, LinearRgba::from(spec.color) * 0.25)
+                ..glowing_material(spec.color(), LinearRgba::from(spec.color()) * 0.25)
             })
         })
         .collect();
@@ -819,7 +868,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore<u32>>) {
                 Color::srgb(0.6, 0.9, 1.0),
             ),
             screen_text(
-                "Drag / A-D to orbit - 1/2 pick a tower - tap or Space to build - tap a tower + U to upgrade",
+                "Drag / A-D to orbit - number keys pick a tower - tap or Space to build - tap a tower + U to upgrade",
                 18.0,
                 Color::srgb(0.7, 0.7, 0.75),
             ),
@@ -898,6 +947,7 @@ fn update_hud(
     combo: Res<Combo>,
     build: Res<Build>,
     selection: Res<Selection>,
+    catalog: Res<Catalog>,
     q_core: Query<&Health, With<Core>>,
     q_towers: Query<&Tower>,
     mut q_text: Query<&mut Text, With<HudText>>,
@@ -906,7 +956,7 @@ fn update_hud(
         return;
     };
     let integrity = q_core.single().map(|h| h.current).unwrap_or(0.0);
-    let specs = tower_specs();
+    let specs = &catalog.towers;
     let combo_line = if combo.0.count() >= 2 {
         format!("   COMBO x{}", combo.0.count())
     } else {
@@ -917,7 +967,7 @@ fn update_hud(
     // armed tower, or the default hint.
     let action_line = match selection.tower.and_then(|e| q_towers.get(e).ok()) {
         Some(tower) => {
-            let cost = upgrade_cost(tower.spec, tower.level);
+            let cost = upgrade_cost(&catalog, tower.spec, tower.level);
             let affordable = if **credits >= cost {
                 ""
             } else {
@@ -933,7 +983,10 @@ fn update_hud(
                 "Building {} ({}c) -- tap the ground to place, or tap a tower to select",
                 specs[i].name, specs[i].cost,
             ),
-            None => "1/2 pick a tower to build, or tap a tower to select".to_string(),
+            None => format!(
+                "1-{} pick a tower to build, or tap a tower to select",
+                specs.len()
+            ),
         },
     };
 
@@ -959,6 +1012,7 @@ fn advance_waves(
     mut commands: Commands,
     mut wave: ResMut<WaveState>,
     assets: Res<GameAssets>,
+    catalog: Res<Catalog>,
     sfx: Res<SoundBank<Sfx>>,
     q_enemies: Query<(), With<Enemy>>,
 ) {
@@ -970,7 +1024,7 @@ fn advance_waves(
         if wave.spawn_timer <= 0.0 {
             wave.spawn_timer = SPAWN_INTERVAL;
             wave.to_spawn -= 1;
-            spawn_enemy(&mut commands, &assets, wave.number);
+            spawn_enemy(&mut commands, &assets, &catalog, wave.number);
         }
         return;
     }
@@ -992,18 +1046,13 @@ fn advance_waves(
 }
 
 /// Spawn one enemy at a random point on the arena ring, walking toward the Core.
-/// Brutes get mixed in more often as the wave number climbs.
-fn spawn_enemy(commands: &mut Commands, assets: &GameAssets, wave: usize) {
+/// The type is a weighted pick over the whole catalog (see `weighted_enemy_index`),
+/// so tougher enemies mix in more often as the wave climbs and a new enemy added
+/// to the JSON participates automatically.
+fn spawn_enemy(commands: &mut Commands, assets: &GameAssets, catalog: &Catalog, wave: usize) {
     let mut rng = rand::rng();
-    let specs = enemy_specs();
-    // Brute chance ramps from ~10% to ~45%.
-    let brute_chance = (0.1 + wave as f32 * 0.03).min(0.45);
-    let idx = if rng.random::<f32>() < brute_chance {
-        1
-    } else {
-        0
-    };
-    let spec = &specs[idx];
+    let idx = weighted_enemy_index(catalog, wave, rng.random::<f32>());
+    let spec = &catalog.enemies[idx];
 
     let angle = rng.random_range(0.0..TAU);
     let mut pos = ring_point(angle);
@@ -1012,7 +1061,7 @@ fn spawn_enemy(commands: &mut Commands, assets: &GameAssets, wave: usize) {
     let speed = spec.speed * (1.0 + WAVE_SPEED_PER * wave as f32);
 
     commands.spawn((
-        Name::new(spec.name),
+        Name::new(spec.name.clone()),
         Enemy {
             hp,
             speed,
@@ -1025,6 +1074,28 @@ fn spawn_enemy(commands: &mut Commands, assets: &GameAssets, wave: usize) {
         MeshMaterial3d(assets.enemy_materials[idx].clone()),
         Transform::from_translation(pos).with_scale(Vec3::splat(spec.radius)),
     ));
+}
+
+/// Pick an enemy index by spawn weight at `wave`, given a uniform `roll` in
+/// `0..1`. Each enemy's weight is `EnemySpec::weight_at(wave)`, so an enemy with
+/// a positive `spawn_weight` in the catalog is selectable with no code change,
+/// and a positive `wave_weight` makes it more common in later waves. Falls back
+/// to index 0 if every weight is zero.
+fn weighted_enemy_index(catalog: &Catalog, wave: usize, roll: f32) -> usize {
+    let weights: Vec<f32> = catalog.enemies.iter().map(|e| e.weight_at(wave)).collect();
+    let total: f32 = weights.iter().sum();
+    if total <= 0.0 {
+        return 0;
+    }
+    let target = roll.clamp(0.0, 1.0) * total;
+    let mut acc = 0.0;
+    for (i, w) in weights.iter().enumerate() {
+        acc += w;
+        if target < acc {
+            return i;
+        }
+    }
+    catalog.enemies.len() - 1
 }
 
 /// Step each enemy toward the Core; on arrival, damage the Core and despawn.
@@ -1076,17 +1147,37 @@ fn move_enemies(
 // Towers: placement, targeting, firing (camera/project + smooth_look_rotation)
 // ---------------------------------------------------------------------------
 
-/// Pick / clear the armed tower type with the number keys.
-fn select_build(keys: Res<ButtonInput<KeyCode>>, mut build: ResMut<Build>) {
-    if keys.just_pressed(KeyCode::Digit1) {
-        build.spec = Some(0);
-    }
-    if keys.just_pressed(KeyCode::Digit2) {
-        build.spec = Some(1);
+/// Pick / clear the armed tower type with the number keys. The bindings iterate
+/// the catalog (tower `i` -> `Digit(i + 1)`), so a tower added to the JSON is
+/// buildable with the next number key and no code change.
+fn select_build(keys: Res<ButtonInput<KeyCode>>, catalog: Res<Catalog>, mut build: ResMut<Build>) {
+    for i in 0..catalog.towers.len() {
+        if let Some(key) = digit_key(i) {
+            if keys.just_pressed(key) {
+                build.spec = Some(i);
+            }
+        }
     }
     if keys.just_pressed(KeyCode::KeyQ) {
         build.spec = None;
     }
+}
+
+/// The number key that arms build slot `i` (0-based): index 0 -> `Digit1`, up to
+/// `Digit9`. Returns `None` past nine towers.
+fn digit_key(i: usize) -> Option<KeyCode> {
+    Some(match i {
+        0 => KeyCode::Digit1,
+        1 => KeyCode::Digit2,
+        2 => KeyCode::Digit3,
+        3 => KeyCode::Digit4,
+        4 => KeyCode::Digit5,
+        5 => KeyCode::Digit6,
+        6 => KeyCode::Digit7,
+        7 => KeyCode::Digit8,
+        8 => KeyCode::Digit9,
+        _ => return None,
+    })
 }
 
 /// Where a given screen position (or, if `None`, the ring in front of the camera)
@@ -1192,6 +1283,7 @@ fn place_or_select(
     mut build: ResMut<Build>,
     mut selection: ResMut<Selection>,
     assets: Res<GameAssets>,
+    catalog: Res<Catalog>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     sfx: Res<SoundBank<Sfx>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
@@ -1235,11 +1327,17 @@ fn place_or_select(
     // Otherwise, if a tower type is armed, try to place one at the point.
     if let Some(spec_idx) = build.spec {
         let towers: Vec<Vec3> = q_towers.iter().map(|(_, t)| t.translation).collect();
-        let specs = tower_specs();
-        let spec = &specs[spec_idx];
+        let spec = &catalog.towers[spec_idx];
         if placement_valid(point, &towers) && **credits >= spec.cost {
             **credits -= spec.cost;
-            spawn_tower(&mut commands, &assets, &mut materials, spec_idx, point);
+            spawn_tower(
+                &mut commands,
+                &assets,
+                &catalog,
+                &mut materials,
+                spec_idx,
+                point,
+            );
             commands.play_sfx_volume(sfx.get(Sfx::Build), 0.7);
             // Stay armed so several towers can be placed in a row, unless broke.
             if **credits < spec.cost {
@@ -1259,20 +1357,20 @@ fn place_or_select(
 fn spawn_tower(
     commands: &mut Commands,
     assets: &GameAssets,
+    catalog: &Catalog,
     materials: &mut Assets<StandardMaterial>,
     spec_idx: usize,
     pos: Vec3,
 ) {
-    let specs = tower_specs();
-    let spec = &specs[spec_idx];
+    let spec = &catalog.towers[spec_idx];
     let body_material = materials.add(StandardMaterial {
-        base_color: spec.color,
+        base_color: spec.color(),
         perceptual_roughness: 0.6,
         ..default()
     });
     let turret_material = materials.add(glowing_material(
-        spec.color.mix(&Color::WHITE, 0.3),
-        LinearRgba::from(spec.color) * 0.6,
+        spec.color().mix(&Color::WHITE, 0.3),
+        LinearRgba::from(spec.color()) * 0.6,
     ));
 
     // Turret: a barrel pivoting around Y via `smooth_look_rotation`. Its local
@@ -1295,7 +1393,7 @@ fn spawn_tower(
 
     commands
         .spawn((
-            Name::new(spec.name),
+            Name::new(spec.name.clone()),
             Tower {
                 spec: spec_idx,
                 level: 1,
@@ -1530,6 +1628,7 @@ fn upgrade_selected(
     keys: Res<ButtonInput<KeyCode>>,
     mut credits: ResMut<Credits>,
     selection: Res<Selection>,
+    catalog: Res<Catalog>,
     sfx: Res<SoundBank<Sfx>>,
     mut commands: Commands,
     mut q_towers: Query<&mut Tower>,
@@ -1543,7 +1642,7 @@ fn upgrade_selected(
     let Ok(mut tower) = q_towers.get_mut(entity) else {
         return;
     };
-    let cost = upgrade_cost(tower.spec, tower.level);
+    let cost = upgrade_cost(&catalog, tower.spec, tower.level);
     if **credits < cost {
         return;
     }
@@ -1719,8 +1818,8 @@ fn ring_point(angle: f32) -> Vec3 {
 /// Credit cost to upgrade a tower of `spec_idx` that is currently at `level`:
 /// the spec's flat upgrade cost scaled by the current level, so each successive
 /// upgrade costs more.
-fn upgrade_cost(spec_idx: usize, level: u32) -> u32 {
-    tower_specs()[spec_idx].upgrade_cost * level
+fn upgrade_cost(catalog: &Catalog, spec_idx: usize, level: u32) -> u32 {
+    catalog.towers[spec_idx].upgrade_cost * level
 }
 
 /// How many enemies wave `n` (1-based) spawns.
@@ -1768,16 +1867,69 @@ mod tests {
         assert!(placement_valid(Vec3::new(8.0, 0.0, 4.0), &towers));
     }
 
+    /// The catalog compiled into the binary, for the data-driven tests.
+    fn embedded_catalog() -> Catalog {
+        serde_json::from_str(EMBEDDED_CATALOG).expect("embedded catalog parses")
+    }
+
+    #[test]
+    fn embedded_catalog_parses_with_the_shipped_roster() {
+        // The embedded copy is the shipped `catalog.json`. Assert the roster the
+        // game ships with, including the Sniper tower and Swarm enemy added purely
+        // in JSON to prove the catalog is data-driven.
+        let catalog = embedded_catalog();
+        let towers: Vec<&str> = catalog.towers.iter().map(|t| t.name.as_str()).collect();
+        let enemies: Vec<&str> = catalog.enemies.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(towers, ["Gun", "Cannon", "Sniper"]);
+        assert_eq!(enemies, ["Runner", "Brute", "Swarm"]);
+    }
+
     #[test]
     fn upgrade_cost_scales_with_level() {
-        // Gun (spec 0) has a flat upgrade cost of 30; it scales by the current
-        // level, so the second upgrade costs twice the first.
-        let base = tower_specs()[0].upgrade_cost;
-        assert_eq!(upgrade_cost(0, 1), base);
-        assert_eq!(upgrade_cost(0, 2), base * 2);
-        assert_eq!(upgrade_cost(0, 3), base * 3);
+        let catalog = embedded_catalog();
+        // Gun (spec 0) has a flat upgrade cost; it scales by the current level, so
+        // the second upgrade costs twice the first.
+        let base = catalog.towers[0].upgrade_cost;
+        assert_eq!(upgrade_cost(&catalog, 0, 1), base);
+        assert_eq!(upgrade_cost(&catalog, 0, 2), base * 2);
+        assert_eq!(upgrade_cost(&catalog, 0, 3), base * 3);
         // A pricier tower (Cannon, spec 1) costs strictly more to upgrade.
-        assert!(upgrade_cost(1, 1) > upgrade_cost(0, 1));
+        assert!(upgrade_cost(&catalog, 1, 1) > upgrade_cost(&catalog, 0, 1));
+    }
+
+    #[test]
+    fn weighted_enemy_index_respects_weights_and_new_entries() {
+        // A roll of 0 lands on the first positive-weight enemy (Runner, index 0);
+        // a roll near 1 lands on the last catalogued enemy. Works for whatever
+        // roster the shipped catalog carries.
+        let catalog = embedded_catalog();
+        assert_eq!(weighted_enemy_index(&catalog, 0, 0.0), 0);
+        assert_eq!(
+            weighted_enemy_index(&catalog, 0, 0.999),
+            catalog.enemies.len() - 1
+        );
+
+        // An enemy appended to the catalog participates purely by data: with every
+        // other weight zeroed it is always chosen, proving spawn selection is not
+        // hard-coded to the starter roster.
+        let mut extended = embedded_catalog();
+        for e in &mut extended.enemies {
+            e.spawn_weight = 0.0;
+            e.wave_weight = 0.0;
+        }
+        extended.enemies.push(EnemySpec {
+            name: "Sentinel".to_string(),
+            hp: 6.0,
+            speed: 3.4,
+            core_damage: 4.0,
+            reward: 3,
+            radius: 0.4,
+            spawn_weight: 1.0,
+            wave_weight: 0.0,
+            color: [0.4, 0.9, 0.6],
+        });
+        let last = extended.enemies.len() - 1;
+        assert_eq!(weighted_enemy_index(&extended, 5, 0.5), last);
     }
 
     #[test]
