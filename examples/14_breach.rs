@@ -18,8 +18,10 @@
 //! in the crosshair takes damage (`HealthPlugin`), flashes (`feedback/flash`) and
 //! on death bursts into physics gibs (`mesh/explode`). Clearing a wave spawns a
 //! bigger, faster one. A hit spikes a red damage vignette (`feedback/screen_flash`)
-//! and kicks the camera (`camera/shake`); zero health ends the run. Score is
-//! kills, saved across launches (`persist` + `HighScore`).
+//! and kicks the camera (`camera/shake`); zero health ends the run. Kills chained
+//! inside a short window build a combo (`scoring/streak`) that multiplies the points
+//! they are worth, floats a "+N" and flashes a "COMBO xN" tally (`ui/popup`); the
+//! points score is saved across launches (`persist` + `HighScore`).
 //!
 //! Controls: move with WASD, look with the mouse, fire with left-click, Escape
 //! gives up. The mouse is captured on start and released on the menu / game-over
@@ -84,6 +86,13 @@ const GRAVITY: f32 = 22.0;
 const GUN_COOLDOWN: f32 = 0.14;
 const GUN_RANGE: f32 = 120.0;
 const GUN_DAMAGE: f32 = 12.0;
+
+/// Scoring: each kill is worth `BASE_KILL_POINTS * streak`, so chaining kills
+/// inside `COMBO_WINDOW` seconds ramps the payout (streak 1 -> 10, 2 -> 20, ...).
+const BASE_KILL_POINTS: u32 = 10;
+/// Seconds after a kill you have to land the next one to keep the combo alive.
+/// Longer than fruitninja's swipe combo because FPS kills are further apart.
+const COMBO_WINDOW: f32 = 2.5;
 
 /// Enemy capsule, health, base speed (ramped per wave), melee reach, attack
 /// cadence and damage.
@@ -182,11 +191,14 @@ fn main() {
     app.add_plugins(TempEntityPlugin);
     app.add_plugins(StatusBarPlugin);
     app.add_plugins(TouchpadPlugin);
+    app.add_plugins(PopupPlugin);
     app.add_plugins(DoomControllerPlugin);
     app.add_plugins(PersistPlugin::<HighScore<u32>>::new("14_breach.high_score"));
 
     app.insert_resource(ClearColor(Color::srgb(0.02, 0.03, 0.05)));
     app.init_resource::<Score>();
+    app.init_resource::<Combo>();
+    app.init_resource::<KillFeed>();
     app.init_resource::<Wave>();
     app.init_resource::<PlayerHp>();
     app.init_resource::<RunOver>();
@@ -223,6 +235,7 @@ fn main() {
             enemy_melee,
             advance_waves,
             mirror_player_hp,
+            (spawn_kill_popups, tick_combo, update_combo_text),
             check_run_over,
             set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
@@ -281,8 +294,35 @@ enum Sfx {
 
 // --- Resources --------------------------------------------------------------
 
+/// Run score. `points` is the combo-scaled tally (the persisted high score);
+/// `kills` is the raw body count, kept for the game-over readout.
 #[derive(Resource, Default)]
-struct Score(u32);
+struct Score {
+    points: u32,
+    kills: u32,
+}
+
+/// The decaying kill combo plus the points earned during the current window
+/// (shown in the "COMBO xN +P" tally when it lapses).
+#[derive(Resource)]
+struct Combo {
+    streak: Streak,
+    window_points: u32,
+}
+
+impl Default for Combo {
+    fn default() -> Self {
+        Self {
+            streak: Streak::new(COMBO_WINDOW),
+            window_points: 0,
+        }
+    }
+}
+
+/// Points earned by kills this frame, drained by `spawn_kill_popups` into "+N"
+/// popups. Decouples the (headlessly testable) death observer from the UI.
+#[derive(Resource, Default)]
+struct KillFeed(Vec<u32>);
 
 #[derive(Resource, Default)]
 struct Wave {
@@ -470,11 +510,15 @@ fn menu_start(
 
 fn start_run(
     mut score: ResMut<Score>,
+    mut combo: ResMut<Combo>,
+    mut feed: ResMut<KillFeed>,
     mut wave: ResMut<Wave>,
     mut hp: ResMut<PlayerHp>,
     mut over: ResMut<RunOver>,
 ) {
     *score = Score::default();
+    *combo = Combo::default();
+    feed.0.clear();
     *wave = Wave::default();
     *hp = PlayerHp::default();
     over.0 = false;
@@ -649,10 +693,10 @@ fn spawn_hud(mut commands: Commands) {
             value_fn: |world: &World| {
                 world
                     .get_resource::<Score>()
-                    .map(|s| Arc::new(s.0) as Arc<dyn StatusValue>)
+                    .map(|s| Arc::new(s.points) as Arc<dyn StatusValue>)
             },
             color_fn: |_| Some(Color::srgb(0.95, 0.85, 0.3)),
-            prefix: "KILLS".to_string(),
+            prefix: "SCORE".to_string(),
             suffix: "".to_string(),
         }),
     ));
@@ -683,6 +727,32 @@ fn spawn_hud(mut commands: Commands) {
                 BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.8)),
             ));
         });
+
+    // Live combo readout, centred just above the crosshair; hidden until a
+    // streak of 2+ is running (driven by `update_combo_text`).
+    commands.spawn((
+        Name::new("Combo readout"),
+        ComboText,
+        DespawnOnExit(GameState::Playing),
+        Visibility::Hidden,
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            top: Val::Percent(38.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        Text::new(""),
+        TextFont {
+            font_size: FontSize::Px(34.0),
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 0.6, 0.2)),
+        TextLayout {
+            justify: Justify::Center,
+            ..default()
+        },
+    ));
 
     // Persistent damage vignette overlay (re-spiked on hit).
     commands.spawn((
@@ -1015,11 +1085,19 @@ fn on_health_zero(
     enemies: Query<(), With<Enemy>>,
     players: Query<(), With<Player>>,
     mut score: ResMut<Score>,
+    mut combo: ResMut<Combo>,
+    mut feed: ResMut<KillFeed>,
     mut over: ResMut<RunOver>,
 ) {
     let entity = add.entity;
     if enemies.contains(entity) {
-        score.0 += 1;
+        // Score the kill by the current streak length: chained kills pay more.
+        let streak = combo.streak.hit();
+        let gained = BASE_KILL_POINTS * streak as u32;
+        score.points += gained;
+        score.kills += 1;
+        combo.window_points += gained;
+        feed.0.push(gained);
         // Stop steering / meleeing a dead enemy in the frames before it despawns:
         // drop `Enemy` and burst into gibs; the fragments observer despawns the body.
         commands
@@ -1066,6 +1144,88 @@ fn on_fragments_spawned(
         ));
     }
     commands.entity(entity).despawn();
+}
+
+// --- Combos / scoring feedback ----------------------------------------------
+
+/// Live "COMBO xN" readout under the crosshair; shown only while a streak runs.
+#[derive(Component)]
+struct ComboText;
+
+/// Drain the frame's kills into "+N" popups floating up from near the crosshair
+/// (jittered so a multi-kill does not stack into one label). Runs in Playing, so
+/// it has the window; the death observer only fills `KillFeed`.
+fn spawn_kill_popups(
+    mut commands: Commands,
+    mut feed: ResMut<KillFeed>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+) {
+    if feed.0.is_empty() {
+        return;
+    }
+    let Ok(window) = windows.single() else {
+        feed.0.clear();
+        return;
+    };
+    let centre = Vec2::new(window.width(), window.height()) * 0.5;
+    let mut rng = rand::rng();
+    for gained in feed.0.drain(..) {
+        let jitter = Vec2::new(rng.random_range(-60.0..60.0), rng.random_range(-40.0..10.0));
+        commands
+            .spawn(popup(
+                centre + jitter,
+                format!("+{gained}"),
+                30.0,
+                Color::srgb(0.95, 0.85, 0.3),
+            ))
+            .insert(DespawnOnExit(GameState::Playing));
+    }
+}
+
+/// Advance the combo decay; when the streak lapses on a chain of 2+, flash a
+/// "COMBO xN +P" tally near the top of the screen and reset the window points.
+fn tick_combo(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut combo: ResMut<Combo>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+) {
+    let Some(final_count) = combo.streak.tick(time.delta_secs()) else {
+        return;
+    };
+    if final_count >= 2 {
+        if let Ok(window) = windows.single() {
+            let pos = Vec2::new(window.width() * 0.5 - 90.0, window.height() * 0.28);
+            commands
+                .spawn(popup(
+                    pos,
+                    format!("COMBO x{} +{}", final_count, combo.window_points),
+                    40.0,
+                    Color::srgb(1.0, 0.6, 0.2),
+                ))
+                .insert(DespawnOnExit(GameState::Playing));
+        }
+    }
+    combo.window_points = 0;
+}
+
+/// Show/hide and update the live combo readout, fading it as the window drains.
+fn update_combo_text(
+    combo: Res<Combo>,
+    mut q: Query<(&mut Text, &mut TextColor, &mut Visibility), With<ComboText>>,
+) {
+    let Ok((mut text, mut color, mut vis)) = q.single_mut() else {
+        return;
+    };
+    let count = combo.streak.count();
+    if count >= 2 {
+        *vis = Visibility::Inherited;
+        **text = format!("COMBO x{count}");
+        let alpha = combo.streak.remaining_frac().clamp(0.25, 1.0);
+        color.0 = Color::srgba(1.0, 0.6, 0.2, alpha);
+    } else {
+        *vis = Visibility::Hidden;
+    }
 }
 
 fn mirror_player_hp(player: Single<&Health, With<Player>>, mut hp: ResMut<PlayerHp>) {
@@ -1148,7 +1308,7 @@ fn read_touch(
 // --- Game over --------------------------------------------------------------
 
 fn record_high_score(score: Res<Score>, mut high: ResMut<HighScore<u32>>) {
-    high.record(score.0);
+    high.record(score.points);
 }
 
 fn spawn_game_over(
@@ -1167,7 +1327,10 @@ fn spawn_game_over(
         .with_children(|parent| {
             parent.spawn(screen_text("YOU DIED", 84.0, Color::srgb(1.0, 0.3, 0.3)));
             parent.spawn(screen_text(
-                format!("{} kills over {} waves", score.0, wave.number),
+                format!(
+                    "{} pts -- {} kills over {} waves",
+                    score.points, score.kills, wave.number
+                ),
                 30.0,
                 Color::srgb(0.95, 0.95, 1.0),
             ));
@@ -1260,10 +1423,26 @@ mod tests {
         app.add_plugins((MinimalPlugins, bevy::state::app::StatesPlugin, HealthPlugin));
         app.init_state::<GameState>();
         app.init_resource::<Score>();
+        app.init_resource::<Combo>();
+        app.init_resource::<KillFeed>();
         app.init_resource::<RunOver>();
         app.add_observer(on_health_zero);
         app.add_systems(Update, check_run_over);
         app
+    }
+
+    fn kill_enemy(app: &mut App) {
+        let enemy = app
+            .world_mut()
+            .spawn((Enemy { speed: 1.0 }, Health::new(10.0)))
+            .id();
+        app.world_mut().trigger(HealthApplyDamage {
+            entity: enemy,
+            source: None,
+            amount: 25.0,
+        });
+        // The death chain (HealthZeroMarker -> on_health_zero) needs a flush.
+        app.update();
     }
 
     #[test]
@@ -1292,24 +1471,56 @@ mod tests {
     }
 
     #[test]
-    fn enemy_death_scores_one_and_does_not_end_the_run() {
+    fn enemy_death_scores_one_kill_and_does_not_end_the_run() {
         let mut app = death_app();
-        let enemy = app
-            .world_mut()
-            .spawn((Enemy { speed: 1.0 }, Health::new(10.0)))
-            .id();
-        app.world_mut().trigger(HealthApplyDamage {
-            entity: enemy,
-            source: None,
-            amount: 25.0,
-        });
-        for _ in 0..4 {
-            app.update();
-        }
-        assert_eq!(app.world().resource::<Score>().0, 1, "one kill scores one");
+        kill_enemy(&mut app);
+        let score = app.world().resource::<Score>();
+        assert_eq!(score.kills, 1, "one kill counted");
+        assert_eq!(
+            score.points, BASE_KILL_POINTS,
+            "the first kill (streak 1) is worth the base points"
+        );
         assert!(
             !app.world().resource::<RunOver>().0,
             "an enemy dying does not end the run"
+        );
+    }
+
+    #[test]
+    fn chained_kills_multiply_by_the_streak() {
+        let mut app = death_app();
+        // Two kills back-to-back (no `tick_combo` runs, so the streak never lapses):
+        // streak 1 -> BASE, streak 2 -> 2*BASE, totalling 3*BASE points over 2 kills.
+        kill_enemy(&mut app);
+        kill_enemy(&mut app);
+        let score = app.world().resource::<Score>();
+        assert_eq!(score.kills, 2);
+        assert_eq!(
+            score.points,
+            BASE_KILL_POINTS * 3,
+            "streak-scaled: 1x + 2x base"
+        );
+        assert_eq!(
+            app.world().resource::<Combo>().streak.count(),
+            2,
+            "the streak is at 2"
+        );
+    }
+
+    #[test]
+    fn the_streak_lapses_after_its_window() {
+        let mut streak = Streak::new(COMBO_WINDOW);
+        streak.hit();
+        streak.hit();
+        assert_eq!(
+            streak.tick(COMBO_WINDOW * 0.5),
+            None,
+            "still inside the window"
+        );
+        assert_eq!(
+            streak.tick(COMBO_WINDOW),
+            Some(2),
+            "past the window it lapses, returning the final count"
         );
     }
 }
