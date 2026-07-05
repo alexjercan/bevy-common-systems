@@ -1,6 +1,6 @@
 # Refresh AGENTS.md: stale dependency versions and incomplete Module Map
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: docs
 
