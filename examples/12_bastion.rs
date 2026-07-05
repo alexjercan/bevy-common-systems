@@ -33,7 +33,10 @@
 //! menu/playing/game-over, one-shot sounds via [`SfxPlugin`], a `ui/status` HUD,
 //! `mesh/explode` shards on a kill, `ui/popup` "+N", `camera/shake`, `feedback`
 //! flashes, `time/cooldown` per-tower fire cadence, `scoring/streak`,
-//! `helpers/temp` self-despawning effects, and the same wasm/trunk web build. The
+//! `helpers/temp` self-despawning effects, `ui/touchpad`'s `button_grid_at` to
+//! hit-test the on-screen build bar (a row of always-visible tower / upgrade
+//! buttons that a tap or click drives, region-owning the tap so it never
+//! double-fires the world), and the same wasm/trunk web build. The
 //! tower and enemy stats are data-driven: they load from
 //! `assets/bastion/catalog.json` at startup (native reads the file, so editing
 //! the stats or adding a new tower/enemy needs no recompile; wasm uses a
@@ -42,11 +45,12 @@
 //! `docs/2026-07-05-bastion-data-catalog.md`.
 //!
 //! Controls: drag the pointer (or A/D / left-right arrow keys) to spin the yaw
-//! orbit around the Core (the tilt never changes). Press a
-//! number key (1..N, one per catalogued tower) to pick a tower to build, then tap
-//! the ground (or press Space) to place it at the ghost. Tap a placed tower to
-//! select it and press U to upgrade it. Escape gives up. On a touchscreen the
-//! same taps and drags work.
+//! orbit around the Core (the tilt never changes). To pick a tower to build, tap
+//! its button on the bottom build bar or press its number key (1..N), then tap the
+//! ground (or press Space) to place it at the ghost. Tap a placed tower to select
+//! it, then tap the Upgrade button or press U to upgrade it. The build bar is
+//! always on screen -- taps and clicks both work, so the game is fully playable on
+//! a touchscreen and desktop alike. Escape gives up.
 //!
 //! Run it: `cargo run --example 12_bastion` (add `--features debug` for the
 //! inspector and the headless autopilot/screenshot harness).
@@ -100,6 +104,20 @@ const ORBIT_DRAG_RATE: f32 = 0.005; // radians per pixel dragged
 /// A press that moves less than this many pixels before release is a tap (place /
 /// select); more than this is a drag (orbit). Keeps one pointer doing both.
 const TAP_MOVE_THRESHOLD: f32 = 8.0;
+
+/// On-screen build bar. A row of buttons pinned to the bottom of the screen --
+/// one per catalogued tower plus a trailing Upgrade button -- so a tap or click
+/// arms a build / triggers an upgrade without the keyboard (mobile) and gives the
+/// standalone game the TD-style palette players expect. `BUILD_BAR_H_FRAC` is
+/// shared between the strip's height and the hit-test zone, so the visual layout
+/// and the region that owns a tap stay in lockstep (the button `i` a tap lands in
+/// is `button_grid_at` over the same zone). A tap in this zone is owned by the bar
+/// and never also acts as a world tap.
+const BUILD_BAR_H_FRAC: f32 = 0.14; // strip occupies the bottom 14% of the screen
+
+/// Accent tint for the Upgrade build-bar button (gold), shared by its spawn and
+/// its per-frame tint so they cannot drift.
+const UPGRADE_ACCENT: Color = Color::srgb(1.0, 0.85, 0.35);
 
 /// Credits the player starts a run with, and the reward/cost economy.
 const START_CREDITS: u32 = 120;
@@ -267,14 +285,19 @@ fn main() {
     app.add_systems(Update, menu_click.run_if(in_state(GameState::Menu)));
 
     // Playing.
-    app.add_systems(OnEnter(GameState::Playing), (start_game, spawn_hud).chain());
+    app.add_systems(
+        OnEnter(GameState::Playing),
+        (start_game, spawn_hud, spawn_build_bar).chain(),
+    );
     app.add_systems(
         Update,
         (
             select_build,
             update_ghost,
+            build_bar_input,
             place_or_select,
             upgrade_selected,
+            update_build_bar,
             advance_waves,
             move_enemies,
             aim_and_fire_towers,
@@ -285,8 +308,12 @@ fn main() {
             advance_dying,
             set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
-            // `place_or_select` / `update_ghost` read the DragState that
-            // `orbit_camera` computes this frame, so pin them after it.
+            // `place_or_select` / `update_ghost` / `build_bar_input` read the
+            // DragState that `orbit_camera` computes this frame, so pin them after
+            // it. `build_bar_input` and `place_or_select` both consume the same
+            // tap but never conflict: they partition it by zone (the bar owns taps
+            // in `build_bar_zone`, the world owns the rest), so no explicit order
+            // between them is needed.
             .after(orbit_camera)
             .run_if(in_state(GameState::Playing)),
     );
@@ -618,6 +645,21 @@ struct Tracer {
 #[derive(Component)]
 struct HudText;
 
+/// Which action an on-screen build-bar button performs. `Tower(i)` arms build
+/// slot `i` (the same as pressing its number key); `Upgrade` upgrades the
+/// selected tower (the same as pressing U).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum BuildButtonKind {
+    Tower(usize),
+    Upgrade,
+}
+
+/// A build-bar button entity, tinted each frame by `update_build_bar`.
+#[derive(Component)]
+struct BuildButton {
+    kind: BuildButtonKind,
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -867,7 +909,7 @@ fn spawn_menu(mut commands: Commands, high: Res<HighScore<u32>>) {
                 Color::srgb(0.6, 0.9, 1.0),
             ),
             screen_text(
-                "Drag / A-D to orbit - number keys pick a tower - tap or Space to build - tap a tower + U to upgrade",
+                "Drag / A-D to orbit - tap a build-bar button (or a number key) to pick a tower - tap the ground to build - tap a tower then Upgrade / U",
                 18.0,
                 Color::srgb(0.7, 0.7, 0.75),
             ),
@@ -938,6 +980,155 @@ fn spawn_hud(mut commands: Commands) {
     ));
 }
 
+/// Spawn the bottom-of-screen build bar: one button per catalogued tower (its
+/// number keybind + name + cost) and a trailing Upgrade button (keybind U). The
+/// buttons are laid out with equal `flex_grow` columns across the shared
+/// `BUILD_BAR_H_FRAC` strip, matching `button_grid_at`'s even column split, so the
+/// visual layout and the tap hit-test agree. Always visible (both mobile and
+/// desktop want it); `build_bar_input` routes taps and `update_build_bar` tints.
+fn spawn_build_bar(mut commands: Commands, catalog: Res<Catalog>) {
+    // Columns: one per tower, then the Upgrade button.
+    let towers = &catalog.towers;
+    commands
+        .spawn((
+            Name::new("Build Bar"),
+            DespawnOnExit(GameState::Playing),
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                bottom: Val::Px(0.0),
+                width: Val::Percent(100.0),
+                height: Val::Percent(BUILD_BAR_H_FRAC * 100.0),
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(6.0),
+                padding: UiRect::all(Val::Px(6.0)),
+                ..default()
+            },
+        ))
+        .with_children(|bar| {
+            for (i, spec) in towers.iter().enumerate() {
+                bar.spawn(build_button_bundle(
+                    BuildButtonKind::Tower(i),
+                    &digit_key_label(i),
+                    &spec.name,
+                    &format!("{}c", spec.cost),
+                    spec.color(),
+                ));
+            }
+            bar.spawn(build_button_bundle(
+                BuildButtonKind::Upgrade,
+                "U",
+                "Upgrade",
+                "sel +dmg",
+                UPGRADE_ACCENT,
+            ));
+        });
+}
+
+/// A build-bar button bundle: a rounded, equal-width column carrying the
+/// `BuildButton` tag, with a big keybind glyph, the action name, and a small
+/// sub-label (cost / hint), tinted by `accent`.
+fn build_button_bundle(
+    kind: BuildButtonKind,
+    keybind: &str,
+    name: &str,
+    sub: &str,
+    accent: Color,
+) -> impl Bundle {
+    (
+        Name::new(format!("Build Button {name}")),
+        BuildButton { kind },
+        Node {
+            flex_grow: 1.0,
+            flex_basis: Val::Px(0.0),
+            height: Val::Percent(100.0),
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            row_gap: Val::Px(1.0),
+            border: UiRect::all(Val::Px(2.0)),
+            border_radius: BorderRadius::all(Val::Px(12.0)),
+            ..default()
+        },
+        BackgroundColor(accent.with_alpha(0.22)),
+        BorderColor::all(accent.with_alpha(0.6)),
+        children![
+            (
+                Text::new(format!("[{keybind}]")),
+                TextFont {
+                    font_size: FontSize::Px(22.0),
+                    ..default()
+                },
+                TextColor(Color::srgba(1.0, 1.0, 1.0, 0.95)),
+            ),
+            (
+                Text::new(name.to_string()),
+                TextFont {
+                    font_size: FontSize::Px(18.0),
+                    ..default()
+                },
+                TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
+            ),
+            (
+                Text::new(sub.to_string()),
+                TextFont {
+                    font_size: FontSize::Px(14.0),
+                    ..default()
+                },
+                TextColor(Color::srgba(1.0, 1.0, 1.0, 0.7)),
+            ),
+        ],
+    )
+}
+
+/// Tint the build-bar buttons each frame to signal state: the armed tower and an
+/// upgradeable selection glow brighter; unaffordable actions dim. Reads the same
+/// `Build` / `Selection` / `Credits` the keyboard path uses, so button and key
+/// feedback agree.
+fn update_build_bar(
+    credits: Res<Credits>,
+    build: Res<Build>,
+    selection: Res<Selection>,
+    catalog: Res<Catalog>,
+    q_towers: Query<&Tower>,
+    mut q_buttons: Query<(&BuildButton, &mut BackgroundColor, &mut BorderColor)>,
+) {
+    for (button, mut bg, mut border) in q_buttons.iter_mut() {
+        let (accent, active, affordable) = match button.kind {
+            BuildButtonKind::Tower(i) => {
+                let spec = &catalog.towers[i];
+                (spec.color(), build.spec == Some(i), **credits >= spec.cost)
+            }
+            BuildButtonKind::Upgrade => {
+                let accent = UPGRADE_ACCENT;
+                match selection.tower.and_then(|e| q_towers.get(e).ok()) {
+                    Some(tower) => {
+                        let cost = upgrade_cost(&catalog, tower.spec, tower.level);
+                        (accent, true, **credits >= cost)
+                    }
+                    None => (accent, false, false),
+                }
+            }
+        };
+        // Dim unaffordable / inactive actions; brighten the armed / selected one.
+        let bg_alpha = if !affordable {
+            0.10
+        } else if active {
+            0.40
+        } else {
+            0.22
+        };
+        let border_alpha = if active { 1.0 } else { 0.5 };
+        let base = if affordable {
+            accent
+        } else {
+            accent.mix(&Color::srgb(0.3, 0.3, 0.3), 0.6)
+        };
+        bg.0 = base.with_alpha(bg_alpha);
+        *border = BorderColor::all(accent.with_alpha(border_alpha));
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn update_hud(
     credits: Res<Credits>,
@@ -973,7 +1164,7 @@ fn update_hud(
                 " -- need more"
             };
             format!(
-                "Selected {} Lv{}   press U to upgrade ({}c){}",
+                "Selected {} Lv{}   tap Upgrade / press U ({}c){}",
                 specs[tower.spec].name, tower.level, cost, affordable,
             )
         }
@@ -983,7 +1174,7 @@ fn update_hud(
                 specs[i].name, specs[i].cost,
             ),
             None => format!(
-                "1-{} pick a tower to build, or tap a tower to select",
+                "Tap a build-bar button (1-{}) to pick a tower, or tap a tower to select",
                 specs.len()
             ),
         },
@@ -1189,6 +1380,16 @@ fn digit_key(i: usize) -> Option<KeyCode> {
     })
 }
 
+/// The keybind label shown on build slot `i`'s button: the digit `i + 1` while a
+/// number key is bound (slots 0..9), otherwise `-` (no keyboard shortcut).
+fn digit_key_label(i: usize) -> String {
+    if digit_key(i).is_some() {
+        format!("{}", i + 1)
+    } else {
+        "-".to_string()
+    }
+}
+
 /// Where a given screen position (or, if `None`, the ring in front of the camera)
 /// lands on the ground plane. Used for the ghost preview and for placement.
 fn placement_point(
@@ -1295,12 +1496,24 @@ fn place_or_select(
     catalog: Res<Catalog>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     sfx: Res<SoundBank<Sfx>>,
+    windows: Query<&Window>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_towers: Query<(Entity, &Transform), With<Tower>>,
 ) {
     let space = keys.just_pressed(KeyCode::Space);
     if !drag.released_tap && !space {
         return;
+    }
+
+    // A tap that lands on the on-screen build bar is owned by `build_bar_input`;
+    // it must not also act as a world tap (place / select). Space always places in
+    // the world, so it is exempt.
+    if drag.released_tap {
+        if let (Some(pos), Ok(window)) = (drag.tap_pos, windows.single()) {
+            if build_bar_hit(pos, window.size(), catalog.towers.len()).is_some() {
+                return;
+            }
+        }
     }
 
     let Ok((camera, cam_gt)) = q_camera.single() else {
@@ -1645,21 +1858,91 @@ fn upgrade_selected(
     if !keys.just_pressed(KeyCode::KeyU) {
         return;
     }
+    try_upgrade_selected(
+        &selection,
+        &catalog,
+        &sfx,
+        &mut credits,
+        &mut commands,
+        &mut q_towers,
+    );
+}
+
+/// Upgrade the selected tower if one is selected and affordable: spend credits to
+/// raise damage and range and play the build cue. Shared by the U key
+/// (`upgrade_selected`) and the on-screen Upgrade button (`build_bar_input`) so
+/// the cost/credit logic lives in one place. Returns whether an upgrade happened.
+fn try_upgrade_selected(
+    selection: &Selection,
+    catalog: &Catalog,
+    sfx: &SoundBank<Sfx>,
+    credits: &mut Credits,
+    commands: &mut Commands,
+    q_towers: &mut Query<&mut Tower>,
+) -> bool {
     let Some(entity) = selection.tower else {
-        return;
+        return false;
     };
     let Ok(mut tower) = q_towers.get_mut(entity) else {
-        return;
+        return false;
     };
-    let cost = upgrade_cost(&catalog, tower.spec, tower.level);
+    let cost = upgrade_cost(catalog, tower.spec, tower.level);
     if **credits < cost {
-        return;
+        return false;
     }
     **credits -= cost;
     tower.level += 1;
     tower.damage *= 1.5;
     tower.range += 1.0;
     commands.play_sfx_volume(sfx.get(Sfx::Build), 1.0);
+    true
+}
+
+/// Route a build-bar tap to the same actions as the keyboard: a tower button arms
+/// that build slot (clearing any selection so the ghost shows), the Upgrade button
+/// upgrades the selected tower. Runs on the same `DragState::released_tap` /
+/// `tap_pos` a world tap uses; `place_or_select` early-returns for taps in the bar
+/// zone, so the two never both fire (region owns the tap).
+#[allow(clippy::too_many_arguments)]
+fn build_bar_input(
+    drag: Res<DragState>,
+    windows: Query<&Window>,
+    catalog: Res<Catalog>,
+    sfx: Res<SoundBank<Sfx>>,
+    mut credits: ResMut<Credits>,
+    mut build: ResMut<Build>,
+    mut selection: ResMut<Selection>,
+    mut commands: Commands,
+    mut q_towers: Query<&mut Tower>,
+) {
+    if !drag.released_tap {
+        return;
+    }
+    let Some(pos) = drag.tap_pos else {
+        return;
+    };
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let Some(kind) = build_bar_hit(pos, window.size(), catalog.towers.len()) else {
+        return;
+    };
+    match kind {
+        BuildButtonKind::Tower(i) => {
+            build.spec = Some(i);
+            selection.tower = None;
+        }
+        BuildButtonKind::Upgrade => {
+            try_upgrade_selected(
+                &selection,
+                &catalog,
+                &sfx,
+                &mut credits,
+                &mut commands,
+                &mut q_towers,
+            );
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1852,6 +2135,27 @@ fn wave_size(n: usize) -> usize {
     pack_size(n) * packs_in_wave(n)
 }
 
+/// The window-fraction rectangle the build bar occupies (the bottom
+/// `BUILD_BAR_H_FRAC` of the screen). Shared by the visual layout and the tap
+/// hit-test so they cannot drift.
+fn build_bar_zone() -> Rect {
+    Rect::new(0.0, 1.0 - BUILD_BAR_H_FRAC, 1.0, 1.0)
+}
+
+/// Map a screen-space point to the build-bar button it hits, given the window
+/// size and the number of tower slots. The bar is `tower_count + 1` equal columns
+/// (towers, then Upgrade) across `build_bar_zone`; a point outside the zone
+/// returns `None`. Pure, so it is unit-testable without a window.
+fn build_bar_hit(point: Vec2, window: Vec2, tower_count: usize) -> Option<BuildButtonKind> {
+    let cols = tower_count + 1;
+    let idx = button_grid_at(point, window, cols, 1, build_bar_zone())?;
+    if idx < tower_count {
+        Some(BuildButtonKind::Tower(idx))
+    } else {
+        Some(BuildButtonKind::Upgrade)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -1989,5 +2293,119 @@ mod tests {
             wave_size(10),
             linear_at_10,
         );
+    }
+
+    #[test]
+    fn build_bar_hit_maps_columns_and_misses() {
+        // A 1000x800 window; the bar is the bottom BUILD_BAR_H_FRAC. With 3 towers
+        // there are 4 equal columns: [Gun][Cannon][Sniper][Upgrade].
+        let window = Vec2::new(1000.0, 800.0);
+        let towers = 3;
+        let bar_y = 800.0 * (1.0 - BUILD_BAR_H_FRAC) + 5.0; // a few px inside the strip
+
+        // Left edge -> first tower slot.
+        assert_eq!(
+            build_bar_hit(Vec2::new(10.0, bar_y), window, towers),
+            Some(BuildButtonKind::Tower(0))
+        );
+        // Just past the third column (x in 500..750) -> Sniper (slot 2).
+        assert_eq!(
+            build_bar_hit(Vec2::new(620.0, bar_y), window, towers),
+            Some(BuildButtonKind::Tower(2))
+        );
+        // Right edge (last column) -> the Upgrade button.
+        assert_eq!(
+            build_bar_hit(Vec2::new(990.0, bar_y), window, towers),
+            Some(BuildButtonKind::Upgrade)
+        );
+        // Above the strip -> a miss (owned by the world, not the bar).
+        assert_eq!(build_bar_hit(Vec2::new(500.0, 100.0), window, towers), None);
+    }
+
+    #[test]
+    fn build_bar_zone_matches_strip_height() {
+        // The hit-test zone's height must equal the strip's layout fraction, or a
+        // tap could land visually on a button but miss the zone (or vice versa).
+        let zone = build_bar_zone();
+        assert!((zone.height() - BUILD_BAR_H_FRAC).abs() < 1e-6);
+        assert!((zone.max.y - 1.0).abs() < 1e-6); // flush to the bottom edge
+    }
+
+    /// Drive `build_bar_input` through a real (minimal) App and assert the
+    /// OBSERVABLE effect of a bar tap: a tower button arms that build slot, and the
+    /// Upgrade button actually upgrades the selected tower. This verifies the
+    /// advertised control's effect, not a proxy (the follow-up bastion retro's
+    /// lesson) -- the autopilot only presses keys, so the pointer-tap path needs
+    /// its own coverage.
+    #[test]
+    fn build_bar_tap_arms_tower_and_upgrades() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        // Register the audio asset type so `SoundBank::load` (which calls
+        // `asset_server.load::<AudioSource>`) gets a valid handle without pulling
+        // in the whole `AudioPlugin`.
+        app.init_asset::<bevy::audio::AudioSource>();
+        let asset_server = app.world().resource::<AssetServer>().clone();
+        app.insert_resource(SoundBank::load(&asset_server, [(Sfx::Build, "pickup")]));
+        app.insert_resource(embedded_catalog());
+        app.insert_resource(Credits(1000));
+        app.init_resource::<Build>();
+        app.init_resource::<Selection>();
+        app.init_resource::<DragState>();
+        app.add_systems(Update, build_bar_input);
+
+        // A window of known size so we can aim taps at specific bar columns.
+        let window = Vec2::new(1000.0, 800.0);
+        app.world_mut().spawn(Window {
+            resolution: (window.x as u32, window.y as u32).into(),
+            ..default()
+        });
+        let bar_y = window.y * (1.0 - BUILD_BAR_H_FRAC) + 5.0;
+
+        // Helper: inject a one-frame tap at `pos` and run the system once.
+        fn tap(app: &mut App, pos: Vec2) {
+            let mut drag = app.world_mut().resource_mut::<DragState>();
+            drag.released_tap = true;
+            drag.tap_pos = Some(pos);
+            app.update();
+            // build_bar_input does not clear released_tap (place_or_select's guard
+            // does in the real game); clear it here so the next tap is fresh.
+            let mut drag = app.world_mut().resource_mut::<DragState>();
+            drag.released_tap = false;
+        }
+
+        // Tap the left column -> arms tower slot 0.
+        tap(&mut app, Vec2::new(10.0, bar_y));
+        assert_eq!(app.world().resource::<Build>().spec, Some(0));
+
+        // Tap the right column with no selection -> Upgrade is a no-op (nothing
+        // selected), and it must NOT clear the armed build.
+        tap(&mut app, Vec2::new(990.0, bar_y));
+        assert_eq!(app.world().resource::<Build>().spec, Some(0));
+
+        // Now select a real tower, tap Upgrade, and assert it actually leveled up.
+        let turret = app.world_mut().spawn(Turret).id();
+        let tower = app
+            .world_mut()
+            .spawn(Tower {
+                spec: 0,
+                level: 1,
+                range: 6.0,
+                damage: 6.0,
+                fire: Cooldown::new(0.5),
+                turret,
+            })
+            .id();
+        app.world_mut().resource_mut::<Selection>().tower = Some(tower);
+        let before = app.world().get::<Tower>(tower).unwrap().damage;
+
+        tap(&mut app, Vec2::new(990.0, bar_y));
+
+        let after = app.world().get::<Tower>(tower).unwrap();
+        assert_eq!(
+            after.level, 2,
+            "Upgrade button should raise the tower level"
+        );
+        assert!(after.damage > before, "Upgrade button should raise damage");
     }
 }

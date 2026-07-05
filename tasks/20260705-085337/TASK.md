@@ -1,6 +1,6 @@
 # Bastion: on-screen build + upgrade buttons with keybind labels
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: feature,example,bastion
 
@@ -38,18 +38,18 @@ be treated as a world/ground tap.
 
 ## Steps
 
-- [ ] Read `src/ui/touchpad.rs` for the exact `button_grid_at` signature and
+- [x] Read `src/ui/touchpad.rs` for the exact `button_grid_at` signature and
       `Rect` convention, and re-read `11_overload.rs:674-837` (`spawn_vent_pad`,
       `vent_button_at`, `touch_vent_input`) as the reference.
-- [ ] Define the button zone as a shared constant (window-fraction `Rect`) and a
+- [x] Define the button zone as a shared constant (window-fraction `Rect`) and a
       helper that returns which button a normalized point hits: N tower buttons
       then 1 upgrade button. Unit-test this pure hit-test (left edge -> slot 0,
       right edge -> upgrade slot, above the strip -> None).
-- [ ] Spawn the strip in `spawn_hud` (or a new `spawn_build_bar` chained after
+- [x] Spawn the strip in `spawn_hud` (or a new `spawn_build_bar` chained after
       it): iterate `catalog.towers` for the tower buttons (label
       `"{digit}  {name}\n{cost}c"`) plus a trailing Upgrade button (`"U\nUpgrade"`).
       Tag it `DespawnOnExit(GameState::Playing)`.
-- [ ] Add a `build_bar_input` system (run in Playing, after `orbit_camera` like
+- [x] Add a `build_bar_input` system (run in Playing, after `orbit_camera` like
       the other tap consumers) that, on `drag.released_tap`, maps `drag.tap_pos`
       to a button: a tower button sets `build.spec = Some(i)` (and clears
       `selection`), the Upgrade button runs the same upgrade action as pressing
@@ -57,20 +57,20 @@ be treated as a world/ground tap.
       it before `place_or_select` and clear `drag.released_tap` (make DragState's
       field writable) or have `place_or_select` early-return when the tap is in
       the bar zone via the shared helper. Pick one mechanism and make it robust.
-- [ ] Refactor the upgrade action out of `upgrade_selected` into a shared helper
+- [x] Refactor the upgrade action out of `upgrade_selected` into a shared helper
       (`try_upgrade_selected(...)` taking the needed params) so both the U key
       and the Upgrade button call it (no duplicated cost/credit logic - the retro
       warns against inline formulas).
-- [ ] Give the buttons feedback: tint the armed tower's button and the Upgrade
+- [x] Give the buttons feedback: tint the armed tower's button and the Upgrade
       button by affordability/selection each frame (a small
       `update_build_bar` system reading `Build`/`Selection`/`Credits`/`Catalog`).
       Grey out unaffordable buttons.
-- [ ] Make sure the strip does not overlap the top-left HUD text; place it along
+- [x] Make sure the strip does not overlap the top-left HUD text; place it along
       the bottom. Verify on a phone-shaped viewport with `ScreenshotPlugin`
       (`BCS_SHOT=390x844 ... --features debug`) that all buttons fit on one row
       at narrow width (use percentage/flex-grow widths, not fixed px + wrap -
       the reactor mobile retro lesson).
-- [ ] Update the module `//!` controls paragraph, the menu hint and the HUD
+- [x] Update the module `//!` controls paragraph, the menu hint and the HUD
       action-line to mention the buttons.
 
 ## Verification
@@ -88,3 +88,44 @@ be treated as a world/ground tap.
   scripted tap. Document how it was verified in the close-out.
 - If `$DISPLAY` is set, also boot interactively under `timeout` to confirm it
   reaches the render loop.
+
+## Close-out
+
+Done. Added an always-visible on-screen build bar to the Playing HUD: a bottom
+strip of equal-width buttons, one per catalogued tower (keybind digit + name +
+cost) plus a trailing Upgrade button (keybind U), spawned by `spawn_build_bar`
+(chained after `spawn_hud`). Buttons are hand-rolled `Node`s copied from
+`11_overload`'s vent-pad idiom (`border_radius` in `Node`, `BorderColor::all`,
+`TextFont { font_size: FontSize::Px }`), tinted each frame by `update_build_bar`
+(armed/selected glow, unaffordable dim).
+
+Tap routing is region-owns-tap, not Bevy `Interaction` (composes with
+`UnifiedPointer`): `build_bar_hit` (pure, over `button_grid_at` from
+`ui/touchpad`) maps a `tap_pos` to a `BuildButtonKind`; `build_bar_input` acts on
+bar taps (arm a tower / upgrade), and `place_or_select` early-returns for taps in
+the shared `build_bar_zone`, so a button tap never also hits the world. The
+`BUILD_BAR_H_FRAC` fraction is shared between the strip height and the hit-test
+zone. The upgrade logic was extracted into `try_upgrade_selected`, called by both
+the U key and the Upgrade button (no duplicated cost/credit logic).
+
+Kept the standalone requirement: the bar is always visible (plain `Visibility`,
+no `RevealOnTouch`/`TouchpadPlugin` gating), so desktop gets the TD palette and
+mobile gets tappable controls from the same code. Mouse click and touch both
+reach it via `UnifiedPointer`. Docs (module controls, reuse list, menu hint, HUD
+action line) updated.
+
+Verification:
+- Pure hit-test unit-tested (`build_bar_hit_maps_columns_and_misses`,
+  `build_bar_zone_matches_strip_height`).
+- OBSERVABLE-effect integration test (`build_bar_tap_arms_tower_and_upgrades`)
+  drives the real `build_bar_input` system through a minimal App with a sized
+  Window: a left-column tap arms tower slot 0, and an Upgrade tap on a selected
+  tower actually raises its level (1->2) and damage. This covers the pointer-tap
+  path the autopilot (keyboard-only) cannot, per the follow-up retro's
+  "verify the advertised control's effect, not a proxy" lesson.
+- `BCS_SHOT=390x844` phone-width screenshot confirms all four buttons render on a
+  single row with readable keybind + label + cost, tinted per tower (reactor
+  mobile lesson: flex-grow columns, not fixed px + wrap).
+- Checks: plain `cargo build --example` clean (no dead-code, per the packs-task
+  lesson), `cargo clippy --all-targets` clean, `cargo fmt --check` clean,
+  `./scripts/check-ascii.sh` clean, `cargo test --examples` all green.
