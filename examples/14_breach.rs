@@ -13,7 +13,8 @@
 //! always-on yaw/pitch from a grabbed mouse with a pitch clamp; the `Camera3d`
 //! rides at eye height as a child of the body.
 //!
-//! You spawn in a walled arena; waves of glowing enemies close in from every
+//! You spawn in a walled arena; waves of glowing enemies -- fast weak Rushers,
+//! slow tanky Brutes and baseline Grunts, mixed in by wave -- close in from every
 //! side and melee you. Left-click fires a hitscan ray -- the first enemy collider
 //! in the crosshair takes damage (`HealthPlugin`), flashes (`feedback/flash`) and
 //! on death bursts into physics gibs (`mesh/explode`). Clearing a wave spawns a
@@ -110,15 +111,16 @@ const FIRERATE_BUFF_SECS: f32 = 6.0;
 /// The fire-rate buff ticks the gun cooldown this much faster (shorter gate).
 const FIRERATE_BUFF_MULT: f32 = 2.2;
 
-/// Enemy capsule, health, base speed (ramped per wave), melee reach, attack
-/// cadence and damage.
+/// Base enemy capsule and the wave speed ramp. Per-archetype stats scale off these
+/// (see `EnemyKind::stats`); the Grunt is the unscaled baseline.
 const ENEMY_R: f32 = 0.5;
 const ENEMY_LEN: f32 = 0.5;
 const ENEMY_HEALTH: f32 = 30.0;
 const ENEMY_SPEED_BASE: f32 = 2.4;
 const ENEMY_SPEED_PER_WAVE: f32 = 0.35;
 const MELEE_RANGE: f32 = 1.7;
-/// Damage per second each enemy within `MELEE_RANGE` drains from the player.
+/// Damage per second a baseline (Grunt) enemy within `MELEE_RANGE` drains; Rushers
+/// hit softer, Brutes harder (each enemy carries its own `dps`).
 const ENEMY_DPS: f32 = 16.0;
 
 /// Enemies spawn on a ring this far from the centre.
@@ -449,6 +451,59 @@ struct Gun {
 #[derive(Component)]
 struct Enemy {
     speed: f32,
+    /// Damage-per-second this enemy drains while within `MELEE_RANGE`.
+    dps: f32,
+}
+
+/// The three enemy archetypes. Grunt is the baseline; Rusher trades health for
+/// speed and a small body; Brute is a slow, tanky, hard-hitting wall.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum EnemyKind {
+    Grunt,
+    Rusher,
+    Brute,
+}
+
+/// Per-archetype stats. `speed_mult` scales the wave base speed; `scale` scales the
+/// body mesh and collider.
+struct EnemyStats {
+    health: f32,
+    speed_mult: f32,
+    dps: f32,
+    scale: f32,
+    color: Color,
+    emissive: LinearRgba,
+}
+
+impl EnemyKind {
+    fn stats(self) -> EnemyStats {
+        match self {
+            EnemyKind::Grunt => EnemyStats {
+                health: ENEMY_HEALTH,
+                speed_mult: 1.0,
+                dps: ENEMY_DPS,
+                scale: 1.0,
+                color: Color::srgb(0.9, 0.25, 0.3),
+                emissive: LinearRgba::rgb(2.2, 0.3, 0.4),
+            },
+            EnemyKind::Rusher => EnemyStats {
+                health: 16.0,
+                speed_mult: 1.8,
+                dps: 10.0,
+                scale: 0.68,
+                color: Color::srgb(1.0, 0.75, 0.2),
+                emissive: LinearRgba::rgb(3.0, 1.8, 0.3),
+            },
+            EnemyKind::Brute => EnemyStats {
+                health: 75.0,
+                speed_mult: 0.58,
+                dps: 30.0,
+                scale: 1.55,
+                color: Color::srgb(0.65, 0.3, 0.9),
+                emissive: LinearRgba::rgb(1.4, 0.4, 2.6),
+            },
+        }
+    }
 }
 
 #[derive(Component)]
@@ -476,6 +531,33 @@ fn ring_positions(count: u32, radius: f32) -> Vec<Vec3> {
 
 fn enemy_speed(wave: u32) -> f32 {
     ENEMY_SPEED_BASE + ENEMY_SPEED_PER_WAVE * wave as f32
+}
+
+/// Spawn-share of each archetype `[grunt, rusher, brute]` at wave `n` (0-based).
+/// Early waves are all grunts; rushers phase in from wave 1 and brutes from wave 3,
+/// each capped, with the grunt share held to a floor so the mix never loses its base.
+fn archetype_weights(n: u32) -> [f32; 3] {
+    let w = n as f32;
+    let rusher = if n >= 1 { (w * 0.12).min(0.45) } else { 0.0 };
+    let brute = if n >= 3 {
+        ((w - 2.0) * 0.08).min(0.3)
+    } else {
+        0.0
+    };
+    let grunt = (1.0 - rusher - brute).max(0.1);
+    [grunt, rusher, brute]
+}
+
+/// Pick an archetype from a `roll` in [0, 1) against the wave's cumulative weights.
+fn pick_archetype(n: u32, roll: f32) -> EnemyKind {
+    let [grunt, rusher, _brute] = archetype_weights(n);
+    if roll < grunt {
+        EnemyKind::Grunt
+    } else if roll < grunt + rusher {
+        EnemyKind::Rusher
+    } else {
+        EnemyKind::Brute
+    }
 }
 
 // --- Setup ------------------------------------------------------------------
@@ -1067,23 +1149,28 @@ fn spawn_wave(
                 0.0,
                 rng.random_range(-1.5..1.5),
             );
+        let kind = pick_archetype(wave.number, rng.random::<f32>());
+        let stats = kind.stats();
         let mat = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.9, 0.25, 0.3),
-            emissive: LinearRgba::rgb(2.2, 0.3, 0.4),
+            base_color: stats.color,
+            emissive: stats.emissive,
             ..default()
         });
         commands.spawn((
             Name::new("Enemy"),
-            Enemy { speed },
-            Health::new(ENEMY_HEALTH),
+            Enemy {
+                speed: speed * stats.speed_mult,
+                dps: stats.dps,
+            },
+            Health::new(stats.health),
             RigidBody::Dynamic,
-            Collider::capsule(ENEMY_R, ENEMY_LEN),
+            Collider::capsule(ENEMY_R * stats.scale, ENEMY_LEN * stats.scale),
             LockedAxes::ROTATION_LOCKED,
             enemy_layers,
             Mesh3d(
                 meshes.add(
                     TriangleMeshBuilder::new_octahedron(2)
-                        .with_scale(Vec3::splat(ENEMY_R * 1.6))
+                        .with_scale(Vec3::splat(ENEMY_R * 1.6 * stats.scale))
                         .build(),
                 ),
             ),
@@ -1141,18 +1228,20 @@ fn enemy_melee(
     mut commands: Commands,
     mut feedback_timer: Local<f32>,
     player: Single<(Entity, &Transform), With<Player>>,
-    enemies: Query<&Transform, (With<Enemy>, Without<Player>)>,
+    enemies: Query<(&Transform, &Enemy), Without<Player>>,
     mut vignette: Query<Entity, With<DamageVignette>>,
     mut shake: Query<&mut CameraShakeInput>,
     sfx: Res<SoundBank<Sfx>>,
 ) {
     let (player_entity, player_transform) = *player;
     let mut attackers = 0u32;
-    for transform in &enemies {
+    let mut dps_total = 0.0;
+    for (transform, enemy) in &enemies {
         let mut to = player_transform.translation - transform.translation;
         to.y = 0.0;
         if to.length() <= MELEE_RANGE {
             attackers += 1;
+            dps_total += enemy.dps;
         }
     }
     if attackers == 0 {
@@ -1162,7 +1251,7 @@ fn enemy_melee(
     commands.trigger(HealthApplyDamage {
         entity: player_entity,
         source: None,
-        amount: attackers as f32 * ENEMY_DPS * time.delta_secs(),
+        amount: dps_total * time.delta_secs(),
     });
 
     // Throttle the juice so it pulses rather than firing every frame.
@@ -1682,6 +1771,56 @@ mod tests {
         assert!(enemy_speed(3) > enemy_speed(0));
     }
 
+    #[test]
+    fn early_waves_are_all_grunts() {
+        let [grunt, rusher, brute] = archetype_weights(0);
+        assert_eq!(
+            (rusher, brute),
+            (0.0, 0.0),
+            "wave 0 has no rushers or brutes"
+        );
+        assert_eq!(grunt, 1.0);
+        // Every roll maps to a grunt.
+        assert_eq!(pick_archetype(0, 0.0), EnemyKind::Grunt);
+        assert_eq!(pick_archetype(0, 0.999), EnemyKind::Grunt);
+    }
+
+    #[test]
+    fn later_waves_mix_in_rushers_and_brutes() {
+        // Rushers phase in from wave 1, brutes from wave 3, and the rusher share grows.
+        assert!(archetype_weights(1)[1] > 0.0, "rushers appear by wave 1");
+        assert_eq!(archetype_weights(2)[2], 0.0, "no brutes before wave 3");
+        assert!(archetype_weights(4)[2] > 0.0, "brutes appear by wave 3+");
+        assert!(
+            archetype_weights(5)[1] > archetype_weights(2)[1],
+            "the rusher share rises with the wave"
+        );
+        // A high roll at a late wave lands on a brute, a low roll stays a grunt.
+        assert_eq!(pick_archetype(6, 0.0), EnemyKind::Grunt);
+        assert_eq!(pick_archetype(6, 0.999), EnemyKind::Brute);
+    }
+
+    #[test]
+    fn weights_sum_to_one() {
+        for n in [0u32, 1, 3, 8, 20] {
+            let w = archetype_weights(n);
+            assert!(
+                (w[0] + w[1] + w[2] - 1.0).abs() < 1e-5,
+                "weights at wave {n} sum to 1"
+            );
+        }
+    }
+
+    #[test]
+    fn archetype_stats_are_distinct() {
+        let g = EnemyKind::Grunt.stats();
+        let r = EnemyKind::Rusher.stats();
+        let b = EnemyKind::Brute.stats();
+        // Rusher: faster, weaker than the grunt. Brute: slower, tankier, hits harder.
+        assert!(r.speed_mult > g.speed_mult && r.health < g.health);
+        assert!(b.speed_mult < g.speed_mult && b.health > g.health && b.dps > g.dps);
+    }
+
     // The lose condition and score accounting live in the `on_health_zero` observer
     // and `check_run_over`, which the headless autopilot can NOT prove (it force-
     // transitions Playing -> GameOver on a timer). Exercise them in a real App.
@@ -1707,7 +1846,10 @@ mod tests {
         let enemy = app
             .world_mut()
             .spawn((
-                Enemy { speed: 1.0 },
+                Enemy {
+                    speed: 1.0,
+                    dps: 1.0,
+                },
                 Health::new(10.0),
                 Transform::default(),
             ))

@@ -452,10 +452,13 @@ Examples:
   clamp. Left-click (a `time/cooldown` gate) fires
   `SpatialQuery::cast_ray` masked to `[Enemy, World]` and excluding the player; the
   first enemy hit takes `HealthApplyDamage` + `feedback/flash` and on death bursts
-  into `mesh/explode` physics gibs. Waves of octahedron enemies (`mesh/builder`)
-  path toward you (straight-line, so the arena is open -- no interior cover to snag
-  the AI) and melee via continuous proximity damage (spikes a `feedback/screen_flash`
-  vignette + `camera/shake`); zero health ends the run. Kills chained inside a short
+  into `mesh/explode` physics gibs. Waves of octahedron enemies (`mesh/builder`) in
+  three archetypes -- baseline Grunts, fast/weak/small Rushers and slow/tanky/big Brutes,
+  each an in-file `EnemyKind::stats` entry (per-enemy health/speed/dps/scale/colour),
+  mixed by a wave-weighted spawn roll (`archetype_weights`/`pick_archetype`) -- path
+  toward you (straight-line, so the arena is open -- no interior cover to snag
+  the AI) and melee via continuous per-enemy-dps proximity damage (spikes a
+  `feedback/screen_flash` vignette + `camera/shake`); zero health ends the run. Kills chained inside a short
   window build a combo (`scoring/streak`) that multiplies the points each kill is
   worth, floats a "+N" and flashes a "COMBO xN +P" tally (`ui/popup`); the points
   score (not the raw kill count) is the persisted `HighScore`. Slain enemies have a
@@ -466,10 +469,11 @@ Examples:
   (bloom on tracers/enemies/pickups), `helpers/temp`, `ui/status` HUD + crosshair,
   `ui/menu`, `audio`, `persist`+`HighScore`, `ui/touchpad` (dual-stick touch),
   `input/state`. The pure logic (`wave_size`/`ring_positions`, the streak-scaled
-  scoring, `apply_pickup`/`decay_buffs`/buff multipliers, and the controller's
+  scoring, `apply_pickup`/`decay_buffs`/buff multipliers, `archetype_weights`/
+  `pick_archetype`, and the controller's
   `doom_move_dir`/pitch clamp now in `physics/doom_controller`) is
   unit-tested off the ECS (chained kills multiply, the streak lapses, heal caps at max,
-  buffs decay); the
+  buffs decay, early waves are all grunts and later waves mix in rushers/brutes); the
   headless autopilot AIMS at the nearest enemy (an FPS gun can't be verified by
   fire-forward). Follows the `06_fruitninja` shape (states, sounds, wasm); touch is a
   compromise, desktop is primary. See `docs/2026-07-05-breach-example.md` and the
