@@ -31,7 +31,10 @@
 //!
 //! It also reuses the established shape and juice kit: `States` for
 //! menu/playing/game-over, one-shot sounds via [`SfxPlugin`], a `ui/status` HUD,
-//! `mesh/explode` shards on a kill, `ui/popup` "+N", `camera/shake`, `feedback`
+//! `mesh/explode` shards on a kill AND on the Core's death (a short-lived mesh copy
+//! is exploded so the persistent Core survives to be revived), `ui/popup` "+N",
+//! `camera/shake` on kills / Core hits / builds / new waves, glowing `helpers/temp`
+//! spark bursts on every build and upgrade, `feedback`
 //! flashes, `time/cooldown` per-tower fire cadence, `scoring/streak`,
 //! `helpers/temp` self-despawning effects, `ui/touchpad`'s `button_grid_at` to
 //! hit-test the on-screen build bar (a row of always-visible tower / upgrade
@@ -154,6 +157,16 @@ const DYING_BEAT: f32 = 0.9;
 const SHAKE_KILL: f32 = 0.18;
 const SHAKE_CORE_HIT: f32 = 0.5;
 const SHAKE_DEATH: f32 = 1.0;
+const SHAKE_BUILD: f32 = 0.12; // a small thump when a tower is placed
+const SHAKE_WAVE: f32 = 0.22; // a warning jolt when a new wave opens
+
+/// Juice tuning. A tower placement bursts a handful of sparks; the Core shatters
+/// into this many fragments when it dies.
+const BUILD_SPARKS: usize = 14;
+const UPGRADE_SPARKS: usize = 10;
+const CORE_EXPLODE_FRAGMENTS: usize = 8;
+const SPARK_GRAVITY: f32 = 14.0; // world units/sec^2 pulling sparks back down
+const SPARK_DRAG: f32 = 2.2; // exponential-ish velocity damping per second
 
 // ---------------------------------------------------------------------------
 // State
@@ -302,6 +315,7 @@ fn main() {
             move_enemies,
             aim_and_fire_towers,
             tick_tracers,
+            move_sparks,
             tick_combo,
             draw_arena,
             update_hud,
@@ -561,6 +575,9 @@ struct GameAssets {
     ghost_bad_material: Handle<StandardMaterial>,
     spark_mesh: Handle<Mesh>,
     spark_material: Handle<StandardMaterial>,
+    /// One glowing build-burst material per tower spec (indexed by spec position),
+    /// so a placement reuses a shared handle instead of allocating a material.
+    tower_spark_materials: Vec<Handle<StandardMaterial>>,
 }
 
 /// One gameplay-event sound, keyed into the crate's `SoundBank`. The semantic
@@ -639,6 +656,13 @@ struct Tracer {
     from: Vec3,
     to: Vec3,
     ttl: f32,
+}
+
+/// A build/upgrade spark particle: flies outward under a little gravity + drag and
+/// self-despawns via `TempEntity`. `move_sparks` integrates the velocity.
+#[derive(Component)]
+struct Spark {
+    velocity: Vec3,
 }
 
 /// HUD text tags.
@@ -720,6 +744,18 @@ fn setup(
         Color::srgb(1.0, 0.95, 0.7),
         LinearRgba::rgb(6.0, 5.0, 2.0),
     ));
+    // One glowing burst material per tower spec, tinted by the tower colour, so a
+    // placement reuses a shared handle instead of allocating a material each time.
+    let tower_spark_materials = catalog
+        .towers
+        .iter()
+        .map(|spec| {
+            materials.add(glowing_material(
+                spec.color(),
+                LinearRgba::from(spec.color()) * 4.0,
+            ))
+        })
+        .collect();
 
     commands.insert_resource(GameAssets {
         enemy_mesh,
@@ -730,6 +766,7 @@ fn setup(
         ghost_bad_material,
         spark_mesh,
         spark_material,
+        tower_spark_materials,
     });
 
     // Camera rig: a pivot at the Core carrying `PointRotation` (the orbit control),
@@ -943,8 +980,17 @@ fn start_game(
     mut selection: ResMut<Selection>,
     mut combo: ResMut<Combo>,
     mut dying: ResMut<DyingTimer>,
-    mut q_core: Query<(Entity, &mut Health), With<Core>>,
-    q_leftover: Query<Entity, Or<(With<Enemy>, With<Tower>, With<Ghost>, With<Tracer>)>>,
+    mut q_core: Query<(Entity, &mut Health, &mut Visibility), With<Core>>,
+    q_leftover: Query<
+        Entity,
+        Or<(
+            With<Enemy>,
+            With<Tower>,
+            With<Ghost>,
+            With<Tracer>,
+            With<Spark>,
+        )>,
+    >,
 ) {
     **credits = START_CREDITS;
     **score = 0;
@@ -958,9 +1004,11 @@ fn start_game(
     for e in q_leftover.iter() {
         commands.entity(e).despawn();
     }
-    if let Ok((core, mut health)) = q_core.single_mut() {
+    if let Ok((core, mut health, mut visibility)) = q_core.single_mut() {
         health.current = health.max;
         commands.entity(core).remove::<HealthZeroMarker>();
+        // Reveal the Core again -- it was hidden when it shattered last run.
+        *visibility = Visibility::Visible;
     }
 }
 
@@ -1206,6 +1254,7 @@ fn advance_waves(
     assets: Res<GameAssets>,
     catalog: Res<Catalog>,
     sfx: Res<SoundBank<Sfx>>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     q_enemies: Query<(), With<Enemy>>,
 ) {
     let dt = time.delta_secs();
@@ -1239,8 +1288,10 @@ fn advance_waves(
         wave.gap_timer = WAVE_GAP;
         if wave.number > 1 {
             commands.play_sfx_volume(sfx.get(Sfx::Wave), 0.7);
-            // NOTE: the juice task (20260705-085338) owns the wave-start camera
-            // shake so it is not double-added; only the sound cue lives here.
+            // Juice: a warning jolt as the next wave opens.
+            if let Ok(mut shake) = q_shake.single_mut() {
+                shake.add_trauma += SHAKE_WAVE;
+            }
         }
     }
 }
@@ -1497,6 +1548,7 @@ fn place_or_select(
     mut materials: ResMut<Assets<StandardMaterial>>,
     sfx: Res<SoundBank<Sfx>>,
     windows: Query<&Window>,
+    mut q_shake: Query<&mut CameraShakeInput>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_towers: Query<(Entity, &Transform), With<Tower>>,
 ) {
@@ -1561,6 +1613,17 @@ fn place_or_select(
                 point,
             );
             commands.play_sfx_volume(sfx.get(Sfx::Build), 0.7);
+            // Juice: a tower-tinted spark burst and a small thump on placement.
+            spawn_spark_burst(
+                &mut commands,
+                assets.spark_mesh.clone(),
+                assets.tower_spark_materials[spec_idx].clone(),
+                point + Vec3::Y * 0.5,
+                BUILD_SPARKS,
+            );
+            if let Ok(mut shake) = q_shake.single_mut() {
+                shake.add_trauma += SHAKE_BUILD;
+            }
             // Stay armed so several towers can be placed in a row, unless broke.
             if **credits < spec.cost {
                 build.spec = None;
@@ -1629,6 +1692,57 @@ fn spawn_tower(
             Transform::from_translation(pos),
         ))
         .add_child(turret);
+}
+
+// ---------------------------------------------------------------------------
+// Juice: spark bursts
+// ---------------------------------------------------------------------------
+
+/// Spawn `count` glowing spark particles bursting up and out from `origin` with
+/// the given `mesh` / `material`. Each gets a random outward+upward velocity and a
+/// short `TempEntity` life; `move_sparks` flies them under gravity + drag. Used
+/// for the "particles on build / upgrade" juice.
+fn spawn_spark_burst(
+    commands: &mut Commands,
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+    origin: Vec3,
+    count: usize,
+) {
+    let mut rng = rand::rng();
+    for _ in 0..count {
+        // Bias the direction upward so the burst fountains rather than sprays flat.
+        let dir = Vec3::new(
+            rng.random_range(-1.0..1.0),
+            rng.random_range(0.4..1.2),
+            rng.random_range(-1.0..1.0),
+        )
+        .normalize_or_zero();
+        let speed = rng.random_range(3.5..6.5);
+        let scale = rng.random_range(0.12..0.28);
+        commands.spawn((
+            Spark {
+                velocity: dir * speed,
+            },
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(material.clone()),
+            Transform::from_translation(origin).with_scale(Vec3::splat(scale)),
+            TempEntity(rng.random_range(0.35..0.6)),
+            DespawnOnExit(GameState::Playing),
+        ));
+    }
+}
+
+/// Fly spark particles: integrate velocity, pull them down with gravity, and damp
+/// the velocity so the burst settles instead of shooting off. (They despawn on
+/// their own via `TempEntity`.)
+fn move_sparks(time: Res<Time>, mut q_sparks: Query<(&mut Transform, &mut Spark)>) {
+    let dt = time.delta_secs();
+    for (mut transform, mut spark) in q_sparks.iter_mut() {
+        transform.translation += spark.velocity * dt;
+        spark.velocity.y -= SPARK_GRAVITY * dt;
+        spark.velocity *= (1.0 - SPARK_DRAG * dt).max(0.0);
+    }
 }
 
 /// Each tower finds the nearest enemy in range, aims its turret at it with
@@ -1846,14 +1960,16 @@ fn tick_combo(time: Res<Time>, mut combo: ResMut<Combo>) {
 // ---------------------------------------------------------------------------
 
 /// Press U to upgrade the selected tower: spend credits to raise damage and range.
+#[allow(clippy::too_many_arguments)]
 fn upgrade_selected(
     keys: Res<ButtonInput<KeyCode>>,
     mut credits: ResMut<Credits>,
     selection: Res<Selection>,
     catalog: Res<Catalog>,
     sfx: Res<SoundBank<Sfx>>,
+    assets: Res<GameAssets>,
     mut commands: Commands,
-    mut q_towers: Query<&mut Tower>,
+    mut q_towers: Query<(&mut Tower, &Transform)>,
 ) {
     if !keys.just_pressed(KeyCode::KeyU) {
         return;
@@ -1862,6 +1978,7 @@ fn upgrade_selected(
         &selection,
         &catalog,
         &sfx,
+        &assets,
         &mut credits,
         &mut commands,
         &mut q_towers,
@@ -1869,21 +1986,23 @@ fn upgrade_selected(
 }
 
 /// Upgrade the selected tower if one is selected and affordable: spend credits to
-/// raise damage and range and play the build cue. Shared by the U key
-/// (`upgrade_selected`) and the on-screen Upgrade button (`build_bar_input`) so
-/// the cost/credit logic lives in one place. Returns whether an upgrade happened.
+/// raise damage and range, play the build cue, and pop a gold spark burst over the
+/// tower. Shared by the U key (`upgrade_selected`) and the on-screen Upgrade
+/// button (`build_bar_input`) so the cost/credit logic lives in one place. Returns
+/// whether an upgrade happened.
 fn try_upgrade_selected(
     selection: &Selection,
     catalog: &Catalog,
     sfx: &SoundBank<Sfx>,
+    assets: &GameAssets,
     credits: &mut Credits,
     commands: &mut Commands,
-    q_towers: &mut Query<&mut Tower>,
+    q_towers: &mut Query<(&mut Tower, &Transform)>,
 ) -> bool {
     let Some(entity) = selection.tower else {
         return false;
     };
-    let Ok(mut tower) = q_towers.get_mut(entity) else {
+    let Ok((mut tower, tower_tf)) = q_towers.get_mut(entity) else {
         return false;
     };
     let cost = upgrade_cost(catalog, tower.spec, tower.level);
@@ -1895,6 +2014,14 @@ fn try_upgrade_selected(
     tower.damage *= 1.5;
     tower.range += 1.0;
     commands.play_sfx_volume(sfx.get(Sfx::Build), 1.0);
+    // Juice: a gold spark burst rising off the upgraded tower.
+    spawn_spark_burst(
+        commands,
+        assets.spark_mesh.clone(),
+        assets.spark_material.clone(),
+        tower_tf.translation + Vec3::Y * 1.1,
+        UPGRADE_SPARKS,
+    );
     true
 }
 
@@ -1909,11 +2036,12 @@ fn build_bar_input(
     windows: Query<&Window>,
     catalog: Res<Catalog>,
     sfx: Res<SoundBank<Sfx>>,
+    assets: Res<GameAssets>,
     mut credits: ResMut<Credits>,
     mut build: ResMut<Build>,
     mut selection: ResMut<Selection>,
     mut commands: Commands,
-    mut q_towers: Query<&mut Tower>,
+    mut q_towers: Query<(&mut Tower, &Transform)>,
 ) {
     if !drag.released_tap {
         return;
@@ -1937,6 +2065,7 @@ fn build_bar_input(
                 &selection,
                 &catalog,
                 &sfx,
+                &assets,
                 &mut credits,
                 &mut commands,
                 &mut q_towers,
@@ -1990,23 +2119,53 @@ fn draw_arena(
 
 /// When the Core's health hits zero, kick a big shake + red flash and start the
 /// death beat before the game-over screen.
+#[allow(clippy::too_many_arguments)]
 fn on_core_died(
     add: On<Add, HealthZeroMarker>,
-    q_core: Query<(), With<Core>>,
+    mut q_core: Query<
+        (
+            &Transform,
+            &Mesh3d,
+            &MeshMaterial3d<StandardMaterial>,
+            &mut Visibility,
+        ),
+        With<Core>,
+    >,
     state: Res<State<GameState>>,
     mut commands: Commands,
     mut q_shake: Query<&mut CameraShakeInput>,
     mut dying: ResMut<DyingTimer>,
 ) {
-    if !q_core.contains(add.entity)
-        || dying.remaining.is_some()
-        || *state.get() != GameState::Playing
-    {
+    // `get_mut` only matches the Core (the query's `With<Core>` filter), so a
+    // stray HealthZeroMarker on anything else is ignored.
+    let Ok((core_tf, core_mesh, core_material, mut core_vis)) = q_core.get_mut(add.entity) else {
+        return;
+    };
+    if dying.remaining.is_some() || *state.get() != GameState::Playing {
         return;
     }
     if let Ok(mut shake) = q_shake.single_mut() {
         shake.add_trauma += SHAKE_DEATH;
     }
+
+    // Juice: shatter the Core. The Core entity itself is persistent (revived in
+    // `start_game`), so we do NOT explode it -- instead we spawn a short-lived COPY
+    // of its mesh at the same pose with `ExplodeMesh` (the global
+    // `on_fragments_spawned` observer slices it into debris and despawns the copy)
+    // and hide the real Core for the death beat. `start_game` makes it visible
+    // again on the next run.
+    commands.spawn((
+        Name::new("Core Debris"),
+        DespawnOnExit(GameState::Playing),
+        Mesh3d(core_mesh.0.clone()),
+        MeshMaterial3d(core_material.0.clone()),
+        *core_tf,
+        ExplodeMesh {
+            fragment_count: CORE_EXPLODE_FRAGMENTS,
+        },
+    ));
+    *core_vis = Visibility::Hidden;
+
     dying.remaining = Some(DYING_BEAT);
     commands
         .spawn(screen_flash(
@@ -2349,6 +2508,19 @@ mod tests {
         app.insert_resource(SoundBank::load(&asset_server, [(Sfx::Build, "pickup")]));
         app.insert_resource(embedded_catalog());
         app.insert_resource(Credits(1000));
+        // `build_bar_input` now spawns an upgrade spark burst, so it needs the
+        // shared render handles. Default handles are fine (nothing renders here).
+        app.insert_resource(GameAssets {
+            enemy_mesh: Handle::default(),
+            enemy_materials: Vec::new(),
+            tower_base_mesh: Handle::default(),
+            turret_mesh: Handle::default(),
+            ghost_material: Handle::default(),
+            ghost_bad_material: Handle::default(),
+            spark_mesh: Handle::default(),
+            spark_material: Handle::default(),
+            tower_spark_materials: Vec::new(),
+        });
         app.init_resource::<Build>();
         app.init_resource::<Selection>();
         app.init_resource::<DragState>();
@@ -2387,14 +2559,17 @@ mod tests {
         let turret = app.world_mut().spawn(Turret).id();
         let tower = app
             .world_mut()
-            .spawn(Tower {
-                spec: 0,
-                level: 1,
-                range: 6.0,
-                damage: 6.0,
-                fire: Cooldown::new(0.5),
-                turret,
-            })
+            .spawn((
+                Tower {
+                    spec: 0,
+                    level: 1,
+                    range: 6.0,
+                    damage: 6.0,
+                    fire: Cooldown::new(0.5),
+                    turret,
+                },
+                Transform::from_xyz(4.0, 0.0, 0.0),
+            ))
             .id();
         app.world_mut().resource_mut::<Selection>().tower = Some(tower);
         let before = app.world().get::<Tower>(tower).unwrap().damage;
@@ -2407,5 +2582,54 @@ mod tests {
             "Upgrade button should raise the tower level"
         );
         assert!(after.damage > before, "Upgrade button should raise damage");
+    }
+
+    /// The Core is hidden when it shatters (juice) but must come back for the next
+    /// run: `start_game` reveals it, refills its health, and clears the zero
+    /// marker. This is the highest-risk correctness path the prior bastion retro
+    /// called out (the Core is persistent, not respawned), so assert the whole
+    /// revive, including the new `Visibility::Hidden -> Visible` restore.
+    #[test]
+    fn start_game_revives_hidden_core() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<Credits>();
+        app.init_resource::<Score>();
+        app.init_resource::<WaveState>();
+        app.init_resource::<Build>();
+        app.init_resource::<Selection>();
+        app.init_resource::<Combo>();
+        app.init_resource::<DyingTimer>();
+
+        // A Core that "died" last run: hidden, out of health, and marked.
+        let core = app
+            .world_mut()
+            .spawn((
+                Core,
+                Health::new(CORE_HEALTH),
+                Visibility::Hidden,
+                Transform::default(),
+            ))
+            .id();
+        app.world_mut().get_mut::<Health>(core).unwrap().current = 0.0;
+        app.world_mut().entity_mut(core).insert(HealthZeroMarker);
+
+        app.add_systems(Update, start_game);
+        app.update();
+
+        assert_eq!(
+            *app.world().get::<Visibility>(core).unwrap(),
+            Visibility::Visible,
+            "start_game must reveal the shattered Core for the next run"
+        );
+        assert_eq!(
+            app.world().get::<Health>(core).unwrap().current,
+            CORE_HEALTH,
+            "start_game must refill the Core's health"
+        );
+        assert!(
+            app.world().get::<HealthZeroMarker>(core).is_none(),
+            "start_game must clear the zero marker so the Core is not instantly dead"
+        );
     }
 }
