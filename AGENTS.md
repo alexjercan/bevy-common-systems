@@ -774,3 +774,24 @@ Examples:
   frame -- use continuous proximity damage and/or drop the collision between them),
   and straight-line enemy AI with no avoidance gets stuck on interior obstacles (keep
   the arena open, or give the AI navigation).
+- Spurious rotation on a sphere is almost always `Quat::from_rotation_arc(Vec3::Y,
+  up)`. It is the obvious way to make something "upright" relative to a planet
+  surface (radial `up`), and it is correct for the *up axis*, but it silently
+  commits to a yaw/twist about that axis -- the one that falls out of the shortest
+  arc. That twist is not stable as `up` moves: it swings as `up` sweeps around the
+  sphere (parallel-transport holonomy, ~80 degrees by the time you round toward the
+  far side) and goes singular at the `-Y` antipode where the arc flips 180 degrees.
+  `08_dropzone` fed the same expression into both the ship's PD attitude target and
+  the chase camera, so flying around the planet yawed the hull around and rolled the
+  camera with it (`tasks/20260705-154507`,
+  `docs/2026-07-05-dropzone-orbit-rotation-fix.md`). Fix: when you need a full
+  orientation on a surface, anchor the yaw to an explicit heading -- build the frame
+  from `up` plus a `forward_ref` projected into the tangent plane
+  (`surface_frame(up, forward_ref)` in `08_dropzone`), never from a bare
+  shortest-arc. Two related traps that bit the same fix: `Quat::from_mat3` on an
+  improper (left-handed, det -1) basis returns garbage, so get the cross-product
+  handedness right (or let a numeric test catch it); and a regression test meant to
+  *prove* a rotation bug must be shown to actually observe it -- the first attempt
+  here probed with a vector parallel to the arc's rotation axis and measured a swing
+  of exactly 0, a green test looking in the wrong place. Measure the effect across
+  the input range before trusting the threshold.
