@@ -1,15 +1,18 @@
 //! 13_glide -- a slide-merge (2048-style) number puzzle, rendered entirely in
 //! Bevy UI.
 //!
-//! This is the headline demo of [`tween`](bevy_common_systems::tween) and of
+//! This is the headline demo of [`tween`](bevy_common_systems::tween),
+//! [`ui/animate`](bevy_common_systems::ui::animate) and of
 //! [`persist`](bevy_common_systems::persist) + [`HighScore`]: the whole board is
-//! a UI tree, every tile *slide* is a `Tween<Vec2>` driving a `Node`'s
-//! `left`/`top`, every *pop* is a `Tween<f32>` driving a `Node`'s size, every
-//! merge *flash* is a `Tween<Vec4>` driving a `BackgroundColor`, and the score
-//! readout *rolls* to its new value on another `Tween<f32>`. The best score is
-//! saved across launches through `PersistPlugin::<HighScore<u32>>` -- a 2048
-//! lives on its high score, so the save primitive is load-bearing, not
-//! incidental.
+//! a UI tree, and the crate's `ui/animate` markers copy each tile's `Tween`
+//! into a plain UI field -- a `Tween<Vec2>` slide into `Node.left/top`
+//! ([`TweenNodeOffset`]), a `Tween<f32>` pop into the face size
+//! ([`TweenNodeScale`]), and a `Tween<Vec4>` merge flash into `BackgroundColor`
+//! ([`TweenNodeBackground`], built with [`node_flash`]). The score readout
+//! *rolls* to its new value on another `Tween<f32>` (kept game-local: its
+//! source and text format are game-specific). The best score is saved across
+//! launches through `PersistPlugin::<HighScore<u32>>` -- a 2048 lives on its high
+//! score, so the save primitive is load-bearing, not incidental.
 //!
 //! The UI structure is the reusable pattern the example teaches: a fixed-size,
 //! centered board with a static cell underlay, and a separate absolutely-
@@ -142,6 +145,9 @@ fn main() {
 
     app.add_plugins(SfxPlugin);
     app.add_plugins(TweenPlugin);
+    // Drives the tile slide / pop / flash from `Tween` values into Node /
+    // BackgroundColor fields (the crate's UI-animate markers).
+    app.add_plugins(UiAnimatePlugin);
     app.add_plugins(PopupPlugin);
     app.add_plugins(MenuPlugin);
     app.add_plugins(UnifiedPointerPlugin);
@@ -181,10 +187,12 @@ fn main() {
             .before(TweenSystems::Advance)
             .run_if(in_state(GameState::Playing)),
     );
-    // Appliers read the freshly advanced tween values into UI fields.
+    // The tile slide / pop / flash appliers now come from `UiAnimatePlugin`; the
+    // rolling score readout stays game-local (its source and text format are
+    // game-specific -- see the harvest note).
     app.add_systems(
         Update,
-        (apply_slide, apply_pop, apply_flash, update_score_text)
+        update_score_text
             .after(TweenSystems::Advance)
             .run_if(in_state(GameState::Playing)),
     );
@@ -437,10 +445,6 @@ struct Tile {
     face: Entity,
     text: Entity,
 }
-
-/// The coloured, poppable inner node of a tile.
-#[derive(Component)]
-struct TileFace;
 
 /// The score number in the HUD (rolls via a `Tween<f32>`).
 #[derive(Component)]
@@ -702,7 +706,6 @@ fn spawn_tile(
 
     let face = commands
         .spawn((
-            TileFace,
             Node {
                 width: Val::Percent(pop_from * 100.0),
                 height: Val::Percent(pop_from * 100.0),
@@ -712,6 +715,11 @@ fn spawn_tile(
                 ..default()
             },
             BackgroundColor(tile_color(value)),
+            // The crate's UI-animate markers: the pop `Tween<f32>` drives the
+            // face size, and a merge flash `Tween<Vec4>` (inserted on merge) drives
+            // its background. `UiAnimatePlugin` applies both after the tween ticks.
+            TweenNodeScale,
+            TweenNodeBackground,
             Tween::new(pop_from, 1.0, POP_DURATION, EaseFunction::BackOut)
                 .with_on_complete(TweenOnComplete::Keep),
         ))
@@ -721,6 +729,9 @@ fn spawn_tile(
     let wrapper = commands
         .spawn((
             Tile { value, face, text },
+            // A slide `Tween<Vec2>` (inserted on a move) drives left/top via the
+            // crate's `TweenNodeOffset` marker.
+            TweenNodeOffset,
             Node {
                 position_type: PositionType::Absolute,
                 left: Val::Px(p.x),
@@ -958,7 +969,7 @@ fn tick_move_anim(
                 commands.entity(tile.face).insert((
                     Tween::new(1.25, 1.0, POP_DURATION, EaseFunction::QuadraticOut)
                         .with_on_complete(TweenOnComplete::Keep),
-                    flash_tween(new_value),
+                    node_flash(tile_color(new_value), FLASH_DURATION),
                 ));
                 commands.entity(tile.text).insert(text_bundle(new_value));
             }
@@ -1016,14 +1027,6 @@ fn tick_move_anim(
     anim.gained = 0;
 }
 
-/// A `Tween<Vec4>` that flashes the tile from bright white back to its colour.
-fn flash_tween(value: u32) -> Tween<Vec4> {
-    let target = color_to_vec4(tile_color(value));
-    let bright = Vec4::new(1.0, 1.0, 1.0, 1.0);
-    Tween::new(bright, target, FLASH_DURATION, EaseFunction::QuadraticOut)
-        .with_on_complete(TweenOnComplete::Keep)
-}
-
 fn text_bundle(value: u32) -> impl Bundle {
     (
         Text::new(value.to_string()),
@@ -1037,34 +1040,6 @@ fn text_bundle(value: u32) -> impl Bundle {
             ..default()
         },
     )
-}
-
-// --- Tween appliers (the headline: value -> Node / colour) ------------------
-
-/// Write each sliding wrapper's tweened px position into its `Node`.
-fn apply_slide(mut q: Query<(&mut Node, &Tween<Vec2>), With<Tile>>) {
-    for (mut node, tween) in &mut q {
-        let p = tween.value();
-        node.left = Val::Px(p.x);
-        node.top = Val::Px(p.y);
-    }
-}
-
-/// Write each popping face's tweened scale into its `Node` size (percent of the
-/// wrapper), so it grows from the centre.
-fn apply_pop(mut q: Query<(&mut Node, &Tween<f32>), With<TileFace>>) {
-    for (mut node, tween) in &mut q {
-        let s = (tween.value() * 100.0).max(0.0);
-        node.width = Val::Percent(s);
-        node.height = Val::Percent(s);
-    }
-}
-
-/// Write each flashing face's tweened colour into its `BackgroundColor`.
-fn apply_flash(mut q: Query<(&mut BackgroundColor, &Tween<Vec4>), With<TileFace>>) {
-    for (mut bg, tween) in &mut q {
-        bg.0 = vec4_to_color(tween.value());
-    }
 }
 
 // --- Score readout ----------------------------------------------------------
@@ -1166,17 +1141,6 @@ fn gameover_dismiss(
     if pressed {
         next.set(GameState::Menu);
     }
-}
-
-// --- Colour <-> Vec4 --------------------------------------------------------
-
-fn color_to_vec4(color: Color) -> Vec4 {
-    let c = color.to_linear();
-    Vec4::new(c.red, c.green, c.blue, c.alpha)
-}
-
-fn vec4_to_color(v: Vec4) -> Color {
-    Color::linear_rgba(v.x, v.y, v.z, v.w)
 }
 
 // --- Tests ------------------------------------------------------------------

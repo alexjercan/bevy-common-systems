@@ -119,6 +119,15 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     values) driven by `value_fn` / `color_fn` closures. The value closures
     run inside an exclusive system every frame (they get `&World` and
     block parallelism), so keep them cheap.
+  - `animate` - `UiAnimatePlugin` plus opt-in marker components that copy a
+    `Tween` into a plain UI field each frame (the UI-node counterpart to the
+    material-only `feedback/flash`): `TweenNodeOffset` (`Tween<Vec2>` ->
+    `Node.left/top` px), `TweenNodeScale` (`Tween<f32>` -> `Node.width/height`
+    percent), `TweenNodeBackground` (`Tween<Vec4>` -> `BackgroundColor`), with
+    `color_to_vec4`/`vec4_to_color` helpers and a `node_flash()` constructor.
+    Builds on `tween`; harvested from `13_glide` (see
+    `docs/2026-07-05-13glide-ui-juice-harvest.md`, which also records why the
+    rolling-number readout stayed game-local).
 
 ## Conventions
 
@@ -392,10 +401,13 @@ Examples:
   (moved by the slide tween) around a face (sized/coloured by the pop and flash
   tweens), so the three animate independently and the pop grows from centre. The
   pure move logic (`resolve_line` / `apply_move` / `is_game_over`) is unit-tested
-  off the ECS. Also reuses `ui/popup`, `ui/menu`, `input/pointer`, `input/state`
-  and `audio`; renders with a plain `Camera2d`. Follows the `06_fruitninja` shape
-  (states, sounds, wasm). See `docs/2026-07-05-glide-example.md`; the game-local
-  UI-juice helpers are the harvest follow-up `tasks/20260705-090557`.
+  off the ECS. The slide/pop/flash appliers are now the crate's `ui/animate`
+  markers (`TweenNodeOffset`/`TweenNodeScale`/`TweenNodeBackground` + `node_flash`,
+  harvested by `tasks/20260705-090557`); the rolling score readout stayed
+  game-local (see `docs/2026-07-05-13glide-ui-juice-harvest.md`). Also reuses
+  `ui/popup`, `ui/menu`, `input/pointer`, `input/state` and `audio`; renders with
+  a plain `Camera2d`. Follows the `06_fruitninja` shape (states, sounds, wasm).
+  See `docs/2026-07-05-glide-example.md`.
 
 ## Workflow
 
