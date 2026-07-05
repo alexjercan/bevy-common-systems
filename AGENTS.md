@@ -547,3 +547,23 @@ Examples:
   that step intermittently returns a transient "Deployment failed, try again
   later." -- do not remove the retry as redundant
   (`docs/2026-07-04-pages-deploy-retry.md`).
+- A state-machine example screenshot at *state entry* is not gameplay
+  verification. `ScreenshotPlugin` snaps as soon as it reaches the target state,
+  before any input has driven the game, so a `BCS_SHOT` grab of a
+  menu/playing/game-over example shows the initial frame only (e.g. `13_glide`'s
+  board with just its two seed tiles, never a rendered merge). That is exactly
+  where a bug in logic-that-drives-rendering hides: `13_glide` shipped a blocker
+  where every merged tile displayed the stale un-doubled number because the
+  move->entity classification (`merges` list always empty) was wrong, and it
+  passed a headless autopilot run (no panic) plus a state-entry screenshot because
+  neither observed a merge, and the moves-to-entity mapping had zero test coverage
+  (`docs/retros/20260705-101442-glide-example.md`). Rule: when a pure function
+  returns both a result and a list describing side effects (a grid *and* the
+  per-tile moves), test the *list*, not just the result -- a correct grid/score
+  actively masks a mishandled moves list downstream. Make the rendering-driver
+  logic pure and unit-test it (`13_glide`'s `classify_moves`); that is more
+  reliable than any screenshot. `ScreenshotPlugin` (app framebuffer) and
+  `AutopilotPlugin` (drives the states) are mutually exclusive, and `scrot` of the
+  X root is unreliable in a headless session (it returned a stale WM framebuffer
+  from an orphaned earlier run), so do not lean on a live gameplay grab to catch
+  these -- lean on the test.
