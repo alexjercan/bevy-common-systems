@@ -36,17 +36,34 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
 
 ## Module Map
 
-- `audio` - `SfxPlugin`: fire-and-forget one-shot sound effects. Game code
-  triggers `PlaySfx` (or calls `commands.play_sfx(handle)`) with an
-  `AudioSource` handle and the plugin spawns a self-despawning `AudioPlayer`;
-  a global `SfxMasterVolume` resource scales every sound. One concern: SFX
-  only, not music or a mixer. Demoed by `examples/06_fruitninja`.
+- `audio/`
+  - `SfxPlugin` (in `audio`) - fire-and-forget one-shot sound effects. Game
+    code triggers `PlaySfx` (or calls `commands.play_sfx(handle)`) with an
+    `AudioSource` handle and the plugin spawns a self-despawning `AudioPlayer`;
+    a global `SfxMasterVolume` resource scales every sound. One concern: SFX
+    only, not music or a mixer. Demoed by `examples/06_fruitninja`.
+  - `registry` - `SoundBank`: a named registry of loaded audio handles keyed
+    by a game-defined `Copy` enum. The game declares one key enum plus a list
+    of `(key, name)` pairs and the bank owns the loading (applying the
+    `sounds/<name>.wav` convention) and lookup (`SoundBank::get`), replacing
+    the flat hand-rolled struct of `Handle<AudioSource>` fields;
+    `SoundBank::all_loaded` / `sounds_loaded` drive a loading screen.
 - `camera/`
   - `chase` - `ChaseCameraPlugin`: third-person chase camera with offset,
     smoothing and look-ahead. Game code writes `ChaseCameraInput`.
   - `post` - `PostProcessingDefaultPlugin`: cameras marked with
     `PostProcessingCamera` automatically get `Tonemapping::TonyMcMapface`
     and `Bloom::NATURAL`.
+  - `project` - `pointer_on_plane` / `world_to_screen`: screen <-> world
+    projection helpers over a `Camera` + `GlobalTransform`. `pointer_on_plane`
+    casts a viewport pointer onto an infinite plane (turn a tap into a gameplay
+    position); `world_to_screen` projects a world point back to a pixel to
+    anchor UI (a "+N" popup), returning `None` when off-screen or behind.
+  - `shake` - `CameraShakePlugin`: trauma-driven camera shake. Game code adds
+    trauma (a `0..1` energy value) on impactful events, it decays to zero, and
+    while positive the camera is offset by a random jitter of magnitude
+    `trauma^exponent`. The offset is absolute from a fixed base
+    (`translation = BASE + offset`), never an accumulating `+=`.
   - `skybox` - `SkyboxPlugin` + `SkyboxConfig`: turns a single vertically
     stacked 6-face image into a cubemap and attaches Bevy's `Skybox`.
   - `wasd` - `WASDCameraPlugin`: first-person free camera math (yaw, pitch,
@@ -66,16 +83,44 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     `BCS_SHOT="WxH"`). Both are inert unless their env var is set, so a game
     adds them permanently. Replaces the throwaway harness the Gotchas used to
     prescribe; demoed by `08_dropzone` and `11_overload`.
+- `feedback/` - short-lived "juice" effects that give a hit or pickup a
+  visible kick:
+  - `flash` - `FlashPlugin`: insert `Flash` to briefly override an entity's
+    `StandardMaterial` emissive (or base color) with a flash color and ease it
+    back. Clones the material per-entity first, so flashing one entity does not
+    flash everything that shares the handle.
+  - `screen_flash` - `ScreenFlashPlugin`: spike a full-screen `ScreenFlash`
+    overlay's alpha to a peak and decay it back to transparent (the red hit /
+    game-over vignette); the caller picks the tint via `BackgroundColor`, the
+    plugin only animates the alpha.
 - `health` - `HealthPlugin`: `Health` component, `HealthApplyDamage` entity
   event (propagates up the hierarchy), `HealthZeroMarker` inserted when
   health hits zero. Trigger damage with `commands.trigger(...)`.
 - `helpers/`
   - `despawn` - `DespawnEntityPlugin`: insert `DespawnEntity` to despawn an
     entity immediately.
+  - `pointer` - `EnhancedInputPointerPlugin`: a `bevy_enhanced_input` bridge
+    that drives the crate's `UnifiedPointer` from an enhanced-input press
+    action, for games already routing input through enhanced-input (the pointer
+    analogue of `helpers/wasd`).
   - `temp` - `TempEntityPlugin`: `TempEntity(seconds)` auto-despawns after
     the duration.
   - `wasd` - `WASDCameraControllerPlugin`: binds WASD/mouse/space/shift via
     bevy_enhanced_input and writes `WASDCameraInput` for `camera/wasd`.
+- `input/`
+  - `pointer` - `UnifiedPointerPlugin` + `UnifiedPointer`: a per-frame resource
+    that collapses mouse, touch and cursor into one "where is the pointer, is
+    it down, did it just go down" abstraction (an active touch wins over the
+    mouse), maintained in `PreUpdate` with no input-framework dependency.
+  - `cursor` - `grab_cursor` / `release_cursor`: lock or release the mouse for
+    mouse-look over the Bevy 0.19 per-window `CursorOptions` component. The
+    policy (when to grab) stays with the game.
+  - `state` - `set_state_on_key`: a factory that returns a ready-to-add system
+    binding one key to a `States` transition ("press Escape to give up").
+- `material` - `glowing_material`: builds the emissive-that-actually-blooms
+  `StandardMaterial` games hand-write for glowing objects (bullets, thruster
+  flames, pickups), baking in the footgun that an emissive material must NOT be
+  `unlit` or it will not bloom under `camera/post`.
 - `mesh/`
   - `builder` - `TriangleMeshBuilder`: procedural triangle meshes -
     octahedron spheres, face subdivision, noise displacement, plane
@@ -100,6 +145,12 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     strings to registered constructors so `EventHandler`s can be authored in
     JSON (`HandlerSpec`) and built at runtime, the data-driven counterpart to
     the Rust `EventHandler` builder. Demoed by `examples/03_modding`.
+- `persist/` - `PersistPlugin<T>`: loads a serializable `Resource` from durable
+  storage on startup and writes it back whenever it changes, on both native
+  (JSON under `dirs::data_dir()/bevy_common_systems/<key>.json`, or
+  `$BCS_PERSIST_DIR`) and wasm (`localStorage`). The `backend` submodule owns
+  the platform storage detail behind one `load`/`save` string pair. Composes
+  with `scoring/high_score` for a persisted high score.
 - `physics/`
   - `pd_controller` - `PDControllerPlugin`: computes the PD torque needed
     to rotate an avian3d rigid body (the `PDControllerTarget` entity)
@@ -117,6 +168,20 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     `FirstPersonController` name for a future, more capable controller. Requires
     an axis-locked body (`LockedAxes::ROTATION_LOCKED`) + a `DoomEye` child.
     Harvested from `14_breach` (`docs/2026-07-05-fps-controller-harvest.md`).
+- `scoring/` - game-agnostic scoring building blocks (deliberately no `Score`
+  type -- a running score is a bare number the game owns):
+  - `streak` - `Streak`: a hit/combo counter that grows on each hit and decays
+    when the player goes quiet (bumps a count and refreshes a time window). Owns
+    only the count-and-decay bookkeeping, not what a hit is worth.
+  - `high_score` - `HighScore<T>`: a generic best-score resource holding the
+    best value and a per-run "new best" edge; `PartialOrd + Copy` value, derives
+    serde so it composes with `PersistPlugin` (the `new_best` flag is not
+    serialized).
+- `time/`
+  - `cooldown` - `Cooldown`: a countdown for fire gates and post-hit
+    invulnerability windows. A plain value (no plugin) `tick`ed each frame; a
+    fresh `Cooldown` is READY (unlike a fresh `Once` `Timer`, which reads
+    backwards).
 - `transform/` - motion driver components; each computes an Output that
   your systems apply or read:
   - `sphere_orbit` - orbit a sphere surface from explicit theta/phi input.
@@ -125,6 +190,12 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
   - `point_rotation` - accumulate a rotation from input deltas (mouse).
   - `smooth_look_rotation` - rotate around an axis toward a target angle
     with speed and optional min/max limits.
+- `tween` - `TweenPlugin` + `Tween<T>`: a narrow, duration-based value tween
+  animating from a fixed `start` to a fixed `end` over a fixed `duration`,
+  shaped by a Bevy `EaseFunction` (the counterpart to `meth/lerp`'s open-ended
+  smoothing toward a moving target). Like `transform/*` it is an output: a
+  `Tween<T>` component your system reads, plus a completion marker -- NOT a
+  keyframe-timeline system. `ui/animate` copies its output into UI-node fields.
 - `ui/`
   - `status` - `StatusBarPlugin` plus `status_bar()` / `status_bar_item()`
     bundle builders: a screen-corner metrics overlay (FPS, version, custom
@@ -140,6 +211,20 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     Builds on `tween`; harvested from `13_glide` (see
     `docs/2026-07-05-13glide-ui-juice-harvest.md`, which also records why the
     rolling-number readout stayed game-local).
+  - `menu` - `MenuPlugin` plus `centered_screen()` / `screen_text()` builders
+    and a `TitlePulse` component: the full-screen centered-column overlay and
+    text lines every menu / game-over screen copies verbatim, plus the sine
+    "breathe" the title does. Opinion-light pieces, not a menu framework -- the
+    game owns the content and the state machine.
+  - `popup` - `PopupPlugin`: animate a screen-space `Popup` text label that
+    rises and fades over a lifetime, then despawns itself (the floating "+N"
+    score / "-10" damage text). Screen-space, so the caller decides where (use
+    `camera/project::world_to_screen` to anchor a world event).
+  - `touchpad` - `TouchpadPlugin`: reveal-on-first-touch gating plus pure
+    hit-test primitives for on-screen touch controls. Maintains a `TouchSeen`
+    resource and `RevealOnTouch` / `HideOnTouch` markers (so a desktop session
+    never sees the pad, with no `wasm32` sniffing), and offers `button_grid_at`
+    / `stick_deflection`. Owns the primitives, not an opinionated pad widget.
 
 ## Conventions
 
@@ -211,16 +296,19 @@ Features (default: none):
 
 Key dependencies and why they are here:
 
-- `bevy` 0.18 - the engine; this crate tracks current Bevy APIs
+- `bevy` 0.19 - the engine; this crate tracks current Bevy APIs
   (observers, `EntityEvent`, required components).
-- `avian3d` 0.6 - 3D physics; used by the PD controller, the debug
+- `avian3d` 0.7 - 3D physics; used by the PD controller, the debug
   diagnostics and the examples.
 - `bevy_enhanced_input` 0.26 - input contexts/actions for the WASD
   controller in `helpers/wasd`.
+- `bevy_asset_loader` 0.27 - loading-state asset collections; backs the
+  `audio/registry` `SoundBank` and the examples' loading screens.
 - `noise` 0.9 - noise functions consumed by `TriangleMeshBuilder`.
 - `rand` 0.9 - randomness for orbits and mesh explosion.
-- `serde` / `serde_json` - event payloads in `modding`.
-- `bevy-inspector-egui` 0.36 (optional) - the `debug` inspector.
+- `serde` / `serde_json` - event payloads in `modding`, persisted resources
+  in `persist`.
+- `bevy-inspector-egui` 0.37 (optional) - the `debug` inspector.
 - dev-dependency `clap` 4.5 - every example is a small CLI.
 
 ## Environment and Toolchain
