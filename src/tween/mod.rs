@@ -213,7 +213,9 @@ impl Plugin for TweenPlugin {
 }
 
 /// Advance every `Tween<T>` by the frame delta and, on the frame one completes,
-/// apply its [`TweenOnComplete`] and mark it [`TweenFinished`].
+/// apply its [`TweenOnComplete`] and mark it [`TweenFinished`]. The completion
+/// commands are despawn-safe (`try_*`): a tween whose entity is despawned before this
+/// system's buffer flushes is a no-op, not a panic.
 fn advance_tween<T: TweenValue>(
     time: Res<Time>,
     mut commands: Commands,
@@ -231,18 +233,24 @@ fn advance_tween<T: TweenValue>(
         tween.advance(dt);
         if tween.finished() {
             tween.completed = true;
+            // Use the fallible `try_*` commands: another system (or an observer fired
+            // during a prior flush) may despawn this entity between here and when the
+            // command buffer applies -- a `feedback/flash` tween on an enemy the kill
+            // chain removes, a `ui/popup` fade whose node is despawned, etc. The plain
+            // `entity(..).insert/despawn` panics on a stale entity ("Entity despawned");
+            // the `try_*` variants are no-ops instead.
             match tween.on_complete {
                 TweenOnComplete::Keep => {
-                    commands.entity(entity).insert(TweenFinished);
+                    commands.entity(entity).try_insert(TweenFinished);
                 }
                 TweenOnComplete::Remove => {
                     commands
                         .entity(entity)
-                        .remove::<Tween<T>>()
-                        .insert(TweenFinished);
+                        .try_remove::<Tween<T>>()
+                        .try_insert(TweenFinished);
                 }
                 TweenOnComplete::Despawn => {
-                    commands.entity(entity).despawn();
+                    commands.entity(entity).try_despawn();
                 }
             }
         }
@@ -353,5 +361,69 @@ mod tests {
                 .with_on_complete(TweenOnComplete::Despawn),
         );
         assert!(app.world().get_entity(e).is_err(), "entity is despawned");
+    }
+
+    // Regression for the P100 breach crash: a tween completes and queues its completion
+    // command, but the entity is despawned by ANOTHER system before the command buffer
+    // applies (a flash tween on a killed enemy, a popup node despawned mid-fade). The
+    // despawner is ordered BEFORE `advance_tween`, so its despawn is queued first and
+    // applies first; `advance_tween`'s completion command then lands on a stale entity.
+    // With the plain `entity(..).insert/despawn` this panicked with "Entity despawned";
+    // the `try_*` commands make it a clean no-op.
+
+    #[derive(Component)]
+    struct Doomed;
+
+    fn despawn_doomed(mut commands: Commands, q: Query<Entity, With<Doomed>>) {
+        for e in &q {
+            commands.entity(e).try_despawn();
+        }
+    }
+
+    /// Build an app whose `Doomed` entity is despawned in the same frame its tween
+    /// completes, returning the entity so the caller can assert it is gone (no panic).
+    ///
+    /// `auto_insert_apply_deferred` is disabled so Bevy does NOT sync-point the despawn
+    /// before `advance_tween` runs: the despawner (ordered first) only *queues* its
+    /// despawn, `advance_tween` still sees the live entity in its query and queues its
+    /// completion command, then both buffers flush at the end of the schedule in system
+    /// order -- despawn first, completion second, landing on the stale entity. That is
+    /// exactly the cross-flush race breach hit (a killed enemy's flash tween); with the
+    /// auto sync point the despawn would apply too early and the race would never occur.
+    fn app_with_doomed_tween(tween: Tween<f32>) -> (App, Entity) {
+        use bevy::ecs::schedule::ScheduleBuildSettings;
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, TweenPlugin));
+        app.edit_schedule(Update, |schedule| {
+            schedule.set_build_settings(ScheduleBuildSettings {
+                auto_insert_apply_deferred: false,
+                ..default()
+            });
+        });
+        app.add_systems(Update, despawn_doomed.before(TweenSystems::Advance));
+        let entity = app.world_mut().spawn((Doomed, tween)).id();
+        app.update();
+        (app, entity)
+    }
+
+    #[test]
+    fn keep_completion_does_not_panic_if_entity_despawned_first() {
+        let (app, e) = app_with_doomed_tween(
+            Tween::new(0.0, 1.0, 0.0, EaseFunction::Linear).with_on_complete(TweenOnComplete::Keep),
+        );
+        assert!(
+            app.world().get_entity(e).is_err(),
+            "the Keep tween's try_insert is a no-op on the despawned entity, no panic"
+        );
+    }
+
+    #[test]
+    fn remove_completion_does_not_panic_if_entity_despawned_first() {
+        // `Tween::new` defaults to Remove (remove the tween + insert TweenFinished).
+        let (app, e) = app_with_doomed_tween(Tween::new(0.0, 1.0, 0.0, EaseFunction::Linear));
+        assert!(
+            app.world().get_entity(e).is_err(),
+            "the Remove tween's try_remove/try_insert are no-ops on the despawned entity"
+        );
     }
 }

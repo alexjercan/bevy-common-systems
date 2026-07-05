@@ -1,6 +1,6 @@
 # Bug discovered in breach game
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: bug,14_breach,crash
 
@@ -215,3 +215,15 @@ Encountered a panic in system `<Enable the debug feature to see the name>`!
 ⏎
 ⋊> ~/p/bevy-common-systems on master ↑
 ```
+
+## Resolution
+
+Fixed in `tasks/20260705-155230` (branch fix/tween-despawn-race). Root cause: the crate
+`tween` module's `advance_tween` used `commands.entity(entity).insert(TweenFinished)` /
+`.remove().insert()` / `.despawn()` on completion, which panics if the entity was
+despawned before that command buffer flushed (a `feedback/flash` tween on a killed enemy,
+a `ui/popup` fade whose node despawns). Switched to the fallible `try_insert` /
+`try_remove` / `try_despawn` (no-ops on a stale entity). Covered by a deterministic
+regression test that reproduces the exact "Entity despawned" panic (auto-inserted sync
+points disabled so the despawn and the tween completion land in the same flush) and a
+25s sustained-combat breach autopilot run with no crash.
