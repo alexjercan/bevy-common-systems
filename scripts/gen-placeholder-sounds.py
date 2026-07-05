@@ -17,6 +17,7 @@ needed.
 
 import math
 import os
+import random
 import struct
 import wave
 
@@ -41,6 +42,21 @@ SOUNDS = {
     "alarm": (1200.0, 0.18, 0.22),
 }
 
+# 14_breach combat cues, given more punch than a pure sine: noise bursts for the
+# gun / kill and pitch sweeps for the rest, all with a fast decay envelope so they
+# read as impacts rather than musical blips. `menu_select` / `game_over` stay shared
+# with the other games (generic UI cues).
+#   name -> (kind, freq_start, freq_end, duration, amp)
+# kind is "noise" (freqs ignored) or "sweep" (a sine gliding freq_start -> freq_end).
+BREACH_SOUNDS = {
+    "breach_shoot": ("noise", 0.0, 0.0, 0.09, 0.30),
+    "breach_hit": ("sweep", 620.0, 320.0, 0.06, 0.24),
+    "breach_kill": ("noise", 0.0, 0.0, 0.24, 0.30),
+    "breach_hurt": ("sweep", 150.0, 90.0, 0.22, 0.28),
+    "breach_wave": ("sweep", 300.0, 780.0, 0.34, 0.22),
+    "breach_pickup": ("sweep", 680.0, 1300.0, 0.13, 0.22),
+}
+
 
 def render(freq, duration, amp):
     """A mono 16-bit PCM sine with short linear fades to avoid click artifacts."""
@@ -58,19 +74,52 @@ def render(freq, duration, amp):
     return bytes(frames)
 
 
+def render_fx(kind, f0, f1, duration, amp):
+    """A punchier placeholder: a noise burst or a pitch-sweeping sine, with a fast
+    decay so it reads as an impact. Deterministic (the noise RNG is seeded by name
+    length via the caller, so regenerating gives identical bytes)."""
+    total = int(SAMPLE_RATE * duration)
+    fade = max(1, int(SAMPLE_RATE * 0.003))
+    frames = bytearray()
+    phase = 0.0
+    for i in range(total):
+        t = i / total if total else 0.0
+        # Fast (quadratic) decay for the body, short linear fade-in to kill the click.
+        env = amp * (1.0 - t) ** 2
+        if i < fade:
+            env *= i / fade
+        if kind == "noise":
+            sample = env * random.uniform(-1.0, 1.0)
+        else:  # "sweep": a sine gliding from f0 to f1
+            freq = f0 + (f1 - f0) * t
+            phase += 2.0 * math.pi * freq / SAMPLE_RATE
+            sample = env * math.sin(phase)
+        sample = max(-1.0, min(1.0, sample))
+        frames += struct.pack("<h", int(sample * 32767.0))
+    return bytes(frames)
+
+
+def write_wav(path, data):
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SAMPLE_RATE)
+        w.writeframes(data)
+    print("wrote", path)
+
+
 def main():
     out_dir = os.path.join(os.path.dirname(__file__), "..", "assets", "sounds")
     out_dir = os.path.normpath(out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
     for name, (freq, duration, amp) in SOUNDS.items():
-        path = os.path.join(out_dir, name + ".wav")
-        with wave.open(path, "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(SAMPLE_RATE)
-            w.writeframes(render(freq, duration, amp))
-        print("wrote", path)
+        write_wav(os.path.join(out_dir, name + ".wav"), render(freq, duration, amp))
+
+    for name, (kind, f0, f1, duration, amp) in BREACH_SOUNDS.items():
+        # Seed the noise per name so regenerating is byte-identical.
+        random.seed(name)
+        write_wav(os.path.join(out_dir, name + ".wav"), render_fx(kind, f0, f1, duration, amp))
 
 
 if __name__ == "__main__":

@@ -480,8 +480,11 @@ Examples:
   buffs decay, early waves are all grunts and later waves mix in rushers/brutes); the
   headless autopilot AIMS at the nearest enemy (an FPS gun can't be verified by
   fire-forward). Follows the `06_fruitninja` shape (states, sounds, wasm); touch is a
-  compromise, desktop is primary. See `docs/2026-07-05-breach-example.md` and the
-  harvest note `docs/2026-07-05-fps-controller-harvest.md` (`tasks/20260705-103238`).
+  compromise, desktop is primary. Has its own `breach_*` combat SFX (noise pops /
+  sweeps from `scripts/gen-placeholder-sounds.py`, not the borrowed fruit blips),
+  keeping the shared `menu_select`/`game_over`. See `docs/2026-07-05-breach-example.md`,
+  the harvest note `docs/2026-07-05-fps-controller-harvest.md` (`tasks/20260705-103238`)
+  and `docs/2026-07-05-breach-fun-pass.md` (combos/pickups/enemies/juice/sounds).
 
 ## Workflow
 

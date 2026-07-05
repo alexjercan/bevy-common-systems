@@ -584,12 +584,15 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(SoundBank::load(
         &asset_server,
         [
-            (Sfx::Shoot, "launch"),
-            (Sfx::Hit, "pickup"),
-            (Sfx::EnemyDown, "combo"),
-            (Sfx::Hurt, "hurt"),
-            (Sfx::Wave, "level_up"),
-            (Sfx::Pickup, "golden"),
+            // Breach-specific combat cues (noise pops / sweeps, see
+            // scripts/gen-placeholder-sounds.py). menu_select / game_over stay shared
+            // generic UI cues, the crate's established reuse pattern.
+            (Sfx::Shoot, "breach_shoot"),
+            (Sfx::Hit, "breach_hit"),
+            (Sfx::EnemyDown, "breach_kill"),
+            (Sfx::Hurt, "breach_hurt"),
+            (Sfx::Wave, "breach_wave"),
+            (Sfx::Pickup, "breach_pickup"),
             (Sfx::Select, "menu_select"),
             (Sfx::GameOver, "game_over"),
         ],

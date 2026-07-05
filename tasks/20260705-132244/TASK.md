@@ -1,6 +1,6 @@
 # breach -- dedicated placeholder sound pass
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 45
 - TAGS: spike,breach,example,audio
 
@@ -26,3 +26,21 @@ pickups task) and remap the `Sfx` table to them.
 - Coordinate with the pickups task if that adds a pickup SFX -- avoid duplicating.
 - Verify: `cargo clippy --all-targets`, then run the example and confirm each cue
   fires (audio can only be confirmed by running, not by build).
+
+## Steps
+
+- [x] **Extend the gen script.** Add a `render_fx(kind, f0, f1, dur, amp, decay, seed)`
+  supporting noise bursts and pitch sweeps with a punchy decay envelope (seeded, so
+  deterministic), and a `BREACH_SOUNDS` table: `breach_shoot` (noise pop), `breach_hit`
+  (short downward tick), `breach_kill` (noise burst), `breach_hurt` (low groan),
+  `breach_wave` (rising alert), `breach_pickup` (bright rise). Write them alongside the
+  existing sines.
+- [x] **Generate + commit the WAVs.** Run the script; commit the six
+  `assets/sounds/breach_*.wav`.
+- [x] **Remap breach's Sfx table.** Point Shoot/Hit/EnemyDown/Hurt/Wave/Pickup at the
+  new `breach_*` files; keep Select->menu_select and GameOver->game_over shared (generic
+  UI cues, the crate's established reuse pattern -- note this).
+- [x] **Docs + verify.** Update `assets/sounds/README.md` (breach section + required
+  files) and note in `docs/`. `cargo clippy --all-targets`, `cargo test --example
+  14_breach`, ascii, and a real run to confirm each cue fires (audio can only be
+  confirmed by running). Update the AGENTS note.

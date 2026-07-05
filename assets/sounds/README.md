@@ -19,6 +19,12 @@ plays
 `combo.wav` over the `pickup` blip once a collection streak reaches x2, pitched
 up with the chain, the same way fruit ninja uses it for slice combos.
 
+`14_breach` has its own combat cues, prefixed `breach_` (`breach_shoot`,
+`breach_hit`, `breach_kill`, `breach_hurt`, `breach_wave`, `breach_pickup`) --
+noise bursts and pitch sweeps rather than musical sines, so a gunshot does not
+sound like a fruit launch. It reuses the shared `menu_select` / `game_over` for
+the menu and game-over screens.
+
 ## Dropping in real audio
 
 Replace each file below with a real sound **at the same path and filename**.
@@ -51,6 +57,12 @@ audio module (`SfxPlugin`) plays whatever handle it is given.
 | `vent.wav` | `11_overload`: a gauge is vented back toward green | soft relief hiss, ~0.1-0.2 s |
 | `alarm.wav` | `11_overload`: a gauge is in the red (beeps while critical) | sharp warning beep, ~0.15-0.3 s |
 | `level_up.wav` | `07_orbit`: a new difficulty level is reached | rising ding, ~0.2 s |
+| `breach_shoot.wav` | `14_breach`: the hitscan gun fires | dry gunshot pop, ~0.1 s (played quietly, fires often) |
+| `breach_hit.wav` | `14_breach`: a shot connects with an enemy | short impact tick, ~0.06 s |
+| `breach_kill.wav` | `14_breach`: an enemy dies (bursts into gibs) | noisy burst / explosion, ~0.25 s |
+| `breach_hurt.wav` | `14_breach`: the player takes melee damage | low groan / thud, ~0.2 s |
+| `breach_wave.wav` | `14_breach`: a new wave spawns | rising alert sweep, ~0.35 s |
+| `breach_pickup.wav` | `14_breach`: a ground pickup is collected | bright ascending chime, ~0.13 s |
 
 ## Web (wasm) builds
 
