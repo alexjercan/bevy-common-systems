@@ -6,8 +6,10 @@
 //! Enemies spawn all around the border and crawl inward from every bearing; one
 //! that reaches the Core damages it, and when the Core's health hits zero the run
 //! ends. You earn credits by killing enemies and spend them to place towers on
-//! the ground around the Core and to upgrade them. Waves ramp the count, speed
-//! and toughness of the enemies.
+//! the ground around the Core and to upgrade them. Enemies arrive in *packs* --
+//! bursts that spawn together from spread-out bearings -- and each wave ramps the
+//! pack size, the number of packs, and the enemies' speed and toughness, so the
+//! total onslaught grows faster than linearly.
 //!
 //! It exists to exercise three crate modules interactively for the first time:
 //!
@@ -107,14 +109,20 @@ const START_CREDITS: u32 = 120;
 const TOWER_MIN_SPACING: f32 = 2.2;
 const TOWER_MIN_CORE_DIST: f32 = CORE_RADIUS + 1.4;
 
-/// Wave pacing. Each wave spawns `WAVE_BASE + wave * WAVE_PER` enemies; their hp
-/// and speed scale gently with the wave number.
-const WAVE_BASE: usize = 4;
-const WAVE_PER: usize = 2;
-const WAVE_HP_PER: f32 = 0.18; // +18% hp per wave
-const WAVE_SPEED_PER: f32 = 0.05; // +5% speed per wave
-const SPAWN_INTERVAL: f32 = 0.9; // seconds between spawns within a wave
-const WAVE_GAP: f32 = 3.0; // seconds of calm between waves
+/// Wave pacing. A wave is released in *packs*: a burst of several enemies that
+/// spawn together at spread-out bearings, with a short breather between packs and
+/// a longer one between waves. Both the pack size and the number of packs grow
+/// with the wave number, so the total enemy count ramps faster than linearly (see
+/// `pack_size`, `packs_in_wave`, `wave_size`), and their hp/speed scale on top of
+/// that -- the difficulty is felt on several axes at once.
+const PACK_SIZE_BASE: usize = 3; // enemies per pack at wave 1
+const PACK_SIZE_PER_WAVE: f32 = 0.5; // +0.5 enemy/pack per wave (floored)
+const PACKS_BASE: usize = 2; // packs in wave 1
+const PACKS_PER_WAVE: usize = 1; // +1 pack per wave
+const WAVE_HP_PER: f32 = 0.22; // +22% hp per wave
+const WAVE_SPEED_PER: f32 = 0.06; // +6% speed per wave
+const PACK_GAP: f32 = 2.2; // seconds between packs within a wave
+const WAVE_GAP: f32 = 3.5; // seconds of calm between waves
 
 /// Streak window: kills within this many seconds of each other chain a combo that
 /// multiplies the credit reward.
@@ -462,15 +470,18 @@ impl Default for Combo {
     }
 }
 
-/// Wave scheduling.
+/// Wave scheduling. A wave releases `packs_left` packs of `pack_size` enemies
+/// each; a pack spawns all at once when `pack_timer` elapses.
 #[derive(Resource)]
 struct WaveState {
     /// Current wave number (1-based once playing).
     number: usize,
-    /// Enemies still to spawn in the current wave.
-    to_spawn: usize,
-    /// Seconds until the next spawn.
-    spawn_timer: f32,
+    /// Packs still to release in the current wave.
+    packs_left: usize,
+    /// Enemies per pack this wave (fixed when the wave opens).
+    pack_size: usize,
+    /// Seconds until the next pack spawns.
+    pack_timer: f32,
     /// Seconds of calm before the next wave starts (0 while a wave is active).
     gap_timer: f32,
 }
@@ -479,8 +490,9 @@ impl Default for WaveState {
     fn default() -> Self {
         Self {
             number: 0,
-            to_spawn: 0,
-            spawn_timer: 0.0,
+            packs_left: 0,
+            pack_size: 0,
+            pack_timer: 0.0,
             gap_timer: 0.0,
         }
     }
@@ -992,8 +1004,9 @@ fn update_hud(
 // Waves + enemies
 // ---------------------------------------------------------------------------
 
-/// Advance the wave scheduler: trickle enemies out during a wave, and open a new
-/// (bigger) wave after a short gap once the field is clear.
+/// Advance the wave scheduler: release the wave's enemies pack by pack (a whole
+/// pack spawns at once, then a `PACK_GAP` breather), and once every pack is out
+/// and the field is clear, wait `WAVE_GAP` and open the next (bigger) wave.
 fn advance_waves(
     time: Res<Time>,
     mut commands: Commands,
@@ -1005,29 +1018,37 @@ fn advance_waves(
 ) {
     let dt = time.delta_secs();
 
-    // A wave is active while there are still enemies to spawn.
-    if wave.to_spawn > 0 {
-        wave.spawn_timer -= dt;
-        if wave.spawn_timer <= 0.0 {
-            wave.spawn_timer = SPAWN_INTERVAL;
-            wave.to_spawn -= 1;
-            spawn_enemy(&mut commands, &assets, &catalog, wave.number);
+    // A wave is active while it still has packs to release. When the pack timer
+    // elapses, spawn a whole pack at once: `spawn_enemy` picks an independent
+    // random ring bearing per enemy, so the pack fans out across the border.
+    if wave.packs_left > 0 {
+        wave.pack_timer -= dt;
+        if wave.pack_timer <= 0.0 {
+            wave.pack_timer = PACK_GAP;
+            wave.packs_left -= 1;
+            for _ in 0..wave.pack_size {
+                spawn_enemy(&mut commands, &assets, &catalog, wave.number);
+            }
         }
         return;
     }
 
-    // Wave cleared? Wait out the gap, then start the next wave.
+    // Every pack is out. Once the field is clear, wait out the gap and open the
+    // next (bigger) wave.
     if q_enemies.iter().next().is_none() {
         if wave.gap_timer > 0.0 {
             wave.gap_timer -= dt;
             return;
         }
         wave.number += 1;
-        wave.to_spawn = wave_size(wave.number);
-        wave.spawn_timer = 0.0;
+        wave.pack_size = pack_size(wave.number);
+        wave.packs_left = packs_in_wave(wave.number);
+        wave.pack_timer = 0.0; // release the first pack immediately
         wave.gap_timer = WAVE_GAP;
         if wave.number > 1 {
             commands.play_sfx_volume(sfx.get(Sfx::Wave), 0.7);
+            // NOTE: the juice task (20260705-085338) owns the wave-start camera
+            // shake so it is not double-added; only the sound cue lives here.
         }
     }
 }
@@ -1809,9 +1830,25 @@ fn upgrade_cost(catalog: &Catalog, spec_idx: usize, level: u32) -> u32 {
     catalog.towers[spec_idx].upgrade_cost * level
 }
 
-/// How many enemies wave `n` (1-based) spawns.
+/// Enemies per pack in wave `n` (1-based): a floored linear growth off
+/// `PACK_SIZE_BASE`, so packs get denser as the game climbs (always >= 1).
+fn pack_size(n: usize) -> usize {
+    PACK_SIZE_BASE + (n as f32 * PACK_SIZE_PER_WAVE) as usize
+}
+
+/// Number of packs released in wave `n` (1-based): grows by `PACKS_PER_WAVE`
+/// each wave off `PACKS_BASE`.
+fn packs_in_wave(n: usize) -> usize {
+    PACKS_BASE + n.saturating_sub(1) * PACKS_PER_WAVE
+}
+
+/// Total enemies wave `n` (1-based) spawns: `pack_size * packs_in_wave`. Because
+/// both factors climb with `n`, the total ramps super-linearly overall (wave 10
+/// spawns far more than a straight-line extrapolation of the early waves would).
+/// Individual per-wave jumps jitter, though, because `pack_size` grows in floored
+/// steps -- so the ramp is not strictly convex wave to wave, only over a range.
 fn wave_size(n: usize) -> usize {
-    WAVE_BASE + n * WAVE_PER
+    pack_size(n) * packs_in_wave(n)
 }
 
 // ---------------------------------------------------------------------------
@@ -1920,10 +1957,36 @@ mod tests {
     }
 
     #[test]
-    fn wave_size_grows() {
-        // Each wave adds WAVE_PER enemies over the base.
-        assert_eq!(wave_size(1), WAVE_BASE + WAVE_PER);
-        assert_eq!(wave_size(5), WAVE_BASE + 5 * WAVE_PER);
+    fn pack_size_and_count_grow() {
+        // Both the pack size and the number of packs strictly grow with the wave,
+        // and both stay at least 1 (an empty wave would stall the scheduler).
+        assert!(pack_size(1) >= 1);
+        assert!(packs_in_wave(1) >= 1);
+        assert!(pack_size(5) > pack_size(1));
+        assert!(packs_in_wave(5) > packs_in_wave(1));
+        // The wave-1 pack size matches the base (floor of 0.5 is 0).
+        assert_eq!(pack_size(1), PACK_SIZE_BASE);
+        assert_eq!(packs_in_wave(1), PACKS_BASE);
+    }
+
+    #[test]
+    fn wave_size_ramps_super_linearly() {
+        // Total = pack_size * packs. Because BOTH factors climb with the wave, the
+        // total grows faster than any straight line through the early waves. Take
+        // the wave 1->2 slope and project it out to wave 10; the real wave-10 total
+        // must overshoot that linear projection. A linear schedule (constant
+        // per-wave increment) would land exactly on it, so this proves the ramp
+        // accelerates. (Floored pack growth makes adjacent increments jitter, so a
+        // wide-range projection is the robust check, not a neighbour comparison.)
+        assert_eq!(wave_size(3), pack_size(3) * packs_in_wave(3));
         assert!(wave_size(5) > wave_size(1));
+        let slope = wave_size(2) - wave_size(1);
+        let linear_at_10 = wave_size(1) + 9 * slope;
+        assert!(
+            wave_size(10) > linear_at_10,
+            "ramp should steepen: wave_size(10)={} not above linear {}",
+            wave_size(10),
+            linear_at_10,
+        );
     }
 }
