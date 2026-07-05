@@ -77,6 +77,15 @@ export const GAMES: Game[] = [
       'Drag (or A/D) to orbit the camera. Press 1 or 2 to pick a tower, then tap the ground (or Space) to build it. Tap a tower and press U to upgrade. Escape gives up.',
     accent: '#5fd0ff',
   },
+  {
+    id: '13_glide',
+    title: 'Glide',
+    blurb:
+      'A slide-merge number puzzle rendered entirely in UI: swipe to slide every tile, collide equal ones to merge them into their sum, and chase a high score that saves across sessions.',
+    controls:
+      'Swipe (or use the arrow keys / WASD) to slide the board up, down, left or right. Equal tiles merge. Fill the board with no move left and the run ends.',
+    accent: '#5fbfff',
+  },
 ];
 
 /** Path (relative to the site base) to a game's wasm page. */

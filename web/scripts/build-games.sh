@@ -31,6 +31,7 @@ games=(
   "10_asteroids web/games/10_asteroids"
   "11_overload web/games/11_overload"
   "12_bastion web/games/12_bastion"
+  "13_glide web/games/13_glide"
 )
 
 for entry in "${games[@]}"; do

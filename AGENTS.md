@@ -377,6 +377,25 @@ Examples:
   = orbit, tap = place/select, disambiguated by a move threshold); Space is a
   keyboard/autopilot placement path. Follows the `06_fruitninja` shape (states,
   sounds, wasm). See `docs/2026-07-04-bastion-example.md`.
+- `13_glide` - "Glide": a slide-merge (2048-style) number puzzle rendered
+  entirely in Bevy UI, and the headline demo of `tween` plus `persist` +
+  `scoring/high_score` (the first example for any of the three, and the gallery's
+  first puzzle). Swipe or arrow-key input slides a 4x4 board; equal tiles merge
+  into their sum, a new tile spawns each move, and a full board with no legal
+  move ends the run. The best score is saved across launches via
+  `PersistPlugin::<HighScore<u32>>`. The whole board is UI, so every animation
+  drives a plain `Node`/`BackgroundColor` field from a `Tween` output (never
+  `Transform` scale, which UI layout owns): a tile slide is a `Tween<Vec2>` into
+  `Node { left, top }`, a spawn/merge pop a `Tween<f32>` into a `Node`'s
+  size-percent, a merge flash a `Tween<Vec4>` into `BackgroundColor`, and the
+  score readout rolls on another `Tween<f32>`. Each tile is a positioning wrapper
+  (moved by the slide tween) around a face (sized/coloured by the pop and flash
+  tweens), so the three animate independently and the pop grows from centre. The
+  pure move logic (`resolve_line` / `apply_move` / `is_game_over`) is unit-tested
+  off the ECS. Also reuses `ui/popup`, `ui/menu`, `input/pointer`, `input/state`
+  and `audio`; renders with a plain `Camera2d`. Follows the `06_fruitninja` shape
+  (states, sounds, wasm). See `docs/2026-07-05-glide-example.md`; the game-local
+  UI-juice helpers are the harvest follow-up `tasks/20260705-090557`.
 
 ## Workflow
 
