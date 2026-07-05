@@ -1,6 +1,6 @@
 # Dropzone: keep camera on crash site so the explosion is visible on game over
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: feature,example
 
