@@ -170,6 +170,14 @@ changing code; consistency is the crate's main defense against bloat.
     code reads;
   - private `*State` components the plugin manages internally - keep them
     out of the prelude.
+  - Ordering contract: a module whose `*Plugin` reads its `*Input` (or writes its
+    `*Output`) inside a named `*Systems` set MUST document, on that set's doc, the
+    contract for consumers -- write `*Input` `.before(TheSet)` and read `*Output`
+    `.after(TheSet)`. Without it every consumer races the set; `physics/doom_controller`
+    shipped its first consumer (`14_breach`) with the input feed *unordered* vs its
+    `Drive` set (a one-frame input lag) precisely because the write-before edge was
+    undocumented, and the autopilot could not catch it -- it force-writes the state,
+    bypassing the input path (`docs/retros/20260705-132542-doom-controller-harvest.md`).
 - Modules expose their public API through preludes: most files define
   `pub mod prelude`, parent modules aggregate child preludes (a few leaf
   files are re-exported directly by their parent), and `crate::prelude`
