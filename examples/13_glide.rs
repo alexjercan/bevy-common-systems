@@ -34,6 +34,13 @@
 //! move left and the run ends. Click, tap or press any key to start and to
 //! dismiss the game-over screen. Escape gives up.
 //!
+//! Auto-play: press Space during a run to hand control to a built-in solver
+//! that plays toward the 2048 tile on its own, one move every third of a second
+//! so each slide is easy to follow (a HUD "AUTO" tag shows while it is on).
+//! Press Space again to take back over. The solver is a shallow expectimax over
+//! the crate-agnostic pure move logic ([`best_move`] / [`score_grid`]) and
+//! drives the exact same [`start_move`] path a human move does.
+//!
 //! Run it: `cargo run --example 13_glide` (add `--features debug` for the
 //! inspector and the headless harness).
 
@@ -80,6 +87,9 @@ const SCORE_ROLL: f32 = 0.3;
 /// Minimum pointer travel (px) for a drag to count as a swipe.
 const SWIPE_MIN: f32 = 24.0;
 
+/// Seconds between auto-solver moves -- slow enough to watch each slide land.
+const SOLVER_INTERVAL: f32 = 0.32;
+
 /// The value at which the "you won" banner first shows (classic 2048 goal). The
 /// game keeps going afterwards.
 const WIN_VALUE: u32 = 2048;
@@ -117,27 +127,27 @@ fn main() {
         app.add_plugins(
             AutopilotPlugin::new()
                 .hold(GameState::Menu, 0.6)
-                .hold(GameState::Playing, 4.0)
+                .hold(GameState::Playing, 6.0)
                 .hold(GameState::GameOver, 0.8)
-                .input(|world, elapsed| {
-                    // Only drive moves while playing; tapping keys in the menu or
+                .input(|world, _elapsed| {
+                    // Only drive input while playing; tapping keys in the menu or
                     // game-over screen would trip their "any key" transitions.
                     if *world.resource::<State<GameState>>().get() != GameState::Playing {
                         return;
                     }
-                    // One arrow key per third of a second. `player_move` reads
-                    // `just_pressed`, so reset the input each frame to re-trigger
-                    // a fresh press.
-                    let beat = (elapsed * 3.0) as u32;
-                    let key = [
-                        KeyCode::ArrowLeft,
-                        KeyCode::ArrowUp,
-                        KeyCode::ArrowRight,
-                        KeyCode::ArrowDown,
-                    ][(beat % 4) as usize];
+                    // Turn the auto-solver on once (Space toggles it), then let it
+                    // play so the run exercises the real `best_move` path. Reading
+                    // `Solver.enabled` back makes this idempotent: press Space only
+                    // while it is still off, release once it is on, so it toggles
+                    // exactly once instead of flickering every frame.
+                    let enabled = world.resource::<Solver>().enabled;
                     let mut keys = world.resource_mut::<ButtonInput<KeyCode>>();
-                    keys.reset_all();
-                    keys.press(key);
+                    keys.clear();
+                    if enabled {
+                        keys.release(KeyCode::Space);
+                    } else {
+                        keys.press(KeyCode::Space);
+                    }
                 }),
         );
         app.add_plugins(ScreenshotPlugin::new(GameState::Playing).settle_frames(30));
@@ -159,6 +169,7 @@ fn main() {
     app.init_resource::<Score>();
     app.init_resource::<MoveAnim>();
     app.init_resource::<SwipeTracker>();
+    app.init_resource::<Solver>();
 
     app.init_state::<GameState>();
 
@@ -180,6 +191,7 @@ fn main() {
         Update,
         (
             player_move,
+            solver_step,
             tick_move_anim,
             set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
@@ -192,7 +204,7 @@ fn main() {
     // game-specific -- see the harvest note).
     app.add_systems(
         Update,
-        update_score_text
+        (update_score_text, update_auto_indicator)
             .after(TweenSystems::Advance)
             .run_if(in_state(GameState::Playing)),
     );
@@ -371,6 +383,194 @@ fn is_game_over(grid: &Grid) -> bool {
     true
 }
 
+// --- Solver -----------------------------------------------------------------
+
+/// Every direction in a fixed order, so the solver can enumerate its options
+/// deterministically.
+const ALL_DIRECTIONS: [Direction; 4] = [
+    Direction::Up,
+    Direction::Down,
+    Direction::Left,
+    Direction::Right,
+];
+
+/// Player moves the expectimax search looks ahead. Depth 3 is a good balance:
+/// it reliably climbs to 2048, and the branching stays cheap enough to run well
+/// inside a single 0.3s move interval.
+const SEARCH_DEPTH: u32 = 3;
+
+// Heuristic weights, tuned so the solver keeps the board open, ordered and
+// mergeable rather than chasing the immediate merge score.
+const W_EMPTY: f32 = 2.7;
+const W_MONO: f32 = 1.0;
+const W_SMOOTH: f32 = 0.1;
+const W_CORNER: f32 = 1.0;
+
+/// log2 of a tile value (0 for an empty cell), so a 1024 outweighs a 2 the way
+/// it should instead of scoring linearly.
+fn tile_weight(v: u32) -> f32 {
+    if v == 0 {
+        0.0
+    } else {
+        (v as f32).log2()
+    }
+}
+
+/// Transpose the grid so a column becomes a row. Lets the row-oriented line
+/// helpers score columns too, without a second index-only loop.
+fn transpose(grid: &Grid) -> Grid {
+    let mut out = [[0u32; BOARD_N]; BOARD_N];
+    for (r, row) in grid.iter().enumerate() {
+        for (c, &v) in row.iter().enumerate() {
+            out[c][r] = v;
+        }
+    }
+    out
+}
+
+/// Sum, over every adjacent pair in every line, minus the absolute log2
+/// difference: bigger neighbour gaps score worse, so a smooth board scores
+/// higher (closer to 0).
+fn line_smoothness(lines: &Grid) -> f32 {
+    let mut s = 0.0;
+    for line in lines {
+        for pair in line.windows(2) {
+            s -= (tile_weight(pair[0]) - tile_weight(pair[1])).abs();
+        }
+    }
+    s
+}
+
+/// Per line, reward being sorted in either direction by keeping the better of
+/// the increasing/decreasing penalty; sum across lines.
+fn line_monotonicity(lines: &Grid) -> f32 {
+    let mut m = 0.0;
+    for line in lines {
+        let (mut inc, mut dec) = (0.0, 0.0);
+        for pair in line.windows(2) {
+            let (a, b) = (tile_weight(pair[0]), tile_weight(pair[1]));
+            if a > b {
+                dec -= a - b;
+            } else {
+                inc -= b - a;
+            }
+        }
+        m += inc.max(dec);
+    }
+    m
+}
+
+/// Score a static board: higher is better. Blends four classic 2048 signals so
+/// the solver keeps the board healthy:
+///
+/// - empty cells (room to keep playing),
+/// - monotonicity (each row/column trends one way, so big tiles pile toward a
+///   corner instead of stranding in the middle),
+/// - smoothness (orthogonal neighbours are close in value, so they can merge),
+/// - a bonus for holding the largest tile in a corner.
+///
+/// Pure and deterministic, so it is unit-tested off the ECS.
+fn score_grid(grid: &Grid) -> f32 {
+    let empty = grid.iter().flatten().filter(|&&v| v == 0).count() as f32;
+
+    let cols = transpose(grid);
+    let smooth = line_smoothness(grid) + line_smoothness(&cols);
+    let mono = line_monotonicity(grid) + line_monotonicity(&cols);
+
+    // Corner bonus: the largest tile should sit in a corner.
+    let max_v = grid.iter().flatten().copied().max().unwrap_or(0);
+    let last = BOARD_N - 1;
+    let in_corner = [grid[0][0], grid[0][last], grid[last][0], grid[last][last]].contains(&max_v);
+    let corner = if in_corner { tile_weight(max_v) } else { 0.0 };
+
+    W_EMPTY * empty + W_MONO * mono + W_SMOOTH * smooth + W_CORNER * corner
+}
+
+/// Expectimax value of a board (player node): the best move's expected score,
+/// averaging over the random tile the game spawns after each move. `depth`
+/// counts remaining player moves; at depth 0, or when the board is stuck, it
+/// falls back to the static heuristic.
+fn expectimax(grid: &Grid, depth: u32) -> f32 {
+    if depth == 0 {
+        return score_grid(grid);
+    }
+    let mut best: Option<f32> = None;
+    for dir in ALL_DIRECTIONS {
+        let (next, _, _, changed) = apply_move(grid, dir);
+        if !changed {
+            continue;
+        }
+        let v = chance_value(&next, depth - 1);
+        best = Some(best.map_or(v, |b| b.max(v)));
+    }
+    // No legal move: dead line, score it where it stands.
+    best.unwrap_or_else(|| score_grid(grid))
+}
+
+/// Number of empty cells the chance node samples before averaging. The
+/// heuristic is smooth enough that a handful of representative cells tracks the
+/// full spawn expectation, which keeps the branching affordable.
+const CHANCE_SAMPLE: usize = 6;
+
+/// Chance node: average the search value over the tiles the game might spawn (a
+/// `2` with probability 0.9, a `4` with 0.1, uniform across empty cells). On
+/// sparse boards we sample at most `CHANCE_SAMPLE` cells, stepping across the
+/// empties (not just the first few) so the sample spreads over the board rather
+/// than clustering in one corner.
+fn chance_value(grid: &Grid, depth: u32) -> f32 {
+    let mut empties = Vec::new();
+    for (r, row) in grid.iter().enumerate() {
+        for (c, &v) in row.iter().enumerate() {
+            if v == 0 {
+                empties.push((r, c));
+            }
+        }
+    }
+    if empties.is_empty() {
+        return expectimax(grid, depth);
+    }
+    // Stride so at most CHANCE_SAMPLE evenly spread cells are visited.
+    let step = empties.len().div_ceil(CHANCE_SAMPLE);
+    let mut total = 0.0;
+    let mut count = 0.0;
+    for &(r, c) in empties.iter().step_by(step) {
+        for (val, p) in [(2u32, 0.9f32), (4u32, 0.1f32)] {
+            let mut g = *grid;
+            g[r][c] = val;
+            total += p * expectimax(&g, depth);
+        }
+        count += 1.0;
+    }
+    total / count
+}
+
+/// The solver's chosen move at the shipped search depth. `None` only when no
+/// direction changes the board (the same condition as game over), so a caller
+/// can treat `None` as "stuck".
+fn best_move(grid: &Grid) -> Option<Direction> {
+    best_move_with_depth(grid, SEARCH_DEPTH)
+}
+
+/// Score each legal direction with a `depth`-ply expectimax and return the best.
+/// A small immediate-merge bonus breaks near-ties toward progress. Pure and
+/// deterministic given `depth`, so it is unit-tested off the ECS (the tests use
+/// a shallower depth to keep a full simulated game cheap).
+fn best_move_with_depth(grid: &Grid, depth: u32) -> Option<Direction> {
+    let mut best: Option<(Direction, f32)> = None;
+    for dir in ALL_DIRECTIONS {
+        let (next, _, gained, changed) = apply_move(grid, dir);
+        if !changed {
+            continue;
+        }
+        let v = chance_value(&next, depth.saturating_sub(1)) + gained as f32 * 0.05;
+        let better = best.is_none_or(|(_, bv)| v > bv);
+        if better {
+            best = Some((dir, v));
+        }
+    }
+    best.map(|(d, _)| d)
+}
+
 // --- Resources --------------------------------------------------------------
 
 /// The board's logical state plus the wrapper entity occupying each cell.
@@ -435,6 +635,15 @@ struct SwipeTracker {
     prev_pressed: bool,
 }
 
+/// The auto-solver. While `enabled`, `solver_step` plays one `best_move` every
+/// `SOLVER_INTERVAL` seconds; `timer` counts down to the next move. Toggled with
+/// Space during a run.
+#[derive(Resource, Default)]
+struct Solver {
+    enabled: bool,
+    timer: f32,
+}
+
 // --- Components --------------------------------------------------------------
 
 /// A tile's positioning wrapper. Carries the slide `Tween<Vec2>` and points at
@@ -453,6 +662,10 @@ struct ScoreText;
 /// The menu title (pulses via `TitlePulse`).
 #[derive(Component)]
 struct MenuTitle;
+
+/// The HUD label that reads "AUTO" while the solver is driving.
+#[derive(Component)]
+struct AutoIndicator;
 
 // --- Geometry helpers -------------------------------------------------------
 
@@ -584,10 +797,16 @@ fn menu_start(
 
 // --- Run start / board build ------------------------------------------------
 
-fn start_run(mut board: ResMut<Board>, mut score: ResMut<Score>, mut anim: ResMut<MoveAnim>) {
+fn start_run(
+    mut board: ResMut<Board>,
+    mut score: ResMut<Score>,
+    mut anim: ResMut<MoveAnim>,
+    mut solver: ResMut<Solver>,
+) {
     board.reset();
     *score = Score::default();
     *anim = MoveAnim::default();
+    *solver = Solver::default();
 }
 
 fn spawn_board(mut commands: Commands, mut board: ResMut<Board>, high: Res<HighScore<u32>>) {
@@ -619,6 +838,11 @@ fn spawn_board(mut commands: Commands, mut board: ResMut<Board>, high: Res<HighS
                 hud.spawn((
                     ScoreText,
                     screen_text("0", 40.0, Color::srgb(0.95, 0.95, 1.0)),
+                ));
+                // Centre slot: lights up "AUTO" while the solver drives (Space).
+                hud.spawn((
+                    AutoIndicator,
+                    screen_text("", 22.0, Color::srgb(0.45, 0.85, 0.55)),
                 ));
                 hud.spawn(screen_text(
                     best_line(high.best()),
@@ -930,6 +1154,64 @@ fn start_move(
     anim.gained = gained;
 }
 
+// --- Solver driver ----------------------------------------------------------
+
+/// Toggle the solver with Space, and while it is on play one `best_move` every
+/// `SOLVER_INTERVAL` seconds. Shares the `anim.active` lock with `player_move`,
+/// so it never kicks off a move while one is still sliding; running after
+/// `player_move` in the chain means a same-frame human move wins and the solver
+/// simply waits.
+fn solver_step(
+    mut commands: Commands,
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    sfx: Res<SoundBank<Sfx>>,
+    mut solver: ResMut<Solver>,
+    mut board: ResMut<Board>,
+    mut anim: ResMut<MoveAnim>,
+) {
+    if keys.just_pressed(KeyCode::Space) {
+        solver.enabled = !solver.enabled;
+        // Act on the very next tick so flipping it on feels immediate.
+        solver.timer = 0.0;
+        commands.play_sfx_volume(sfx.get(Sfx::Select), 0.6);
+    }
+
+    if !solver.enabled {
+        return;
+    }
+
+    // Advance the interval clock every frame (even mid-animation) so the true
+    // cadence is SOLVER_INTERVAL, not SOLVER_INTERVAL + the slide time. Since the
+    // interval is longer than a slide, the clock has always expired well after a
+    // move finishes; the `anim.active` guard just holds the fired move until the
+    // current slide completes, without resetting the timer.
+    solver.timer -= time.delta_secs();
+    if solver.timer > 0.0 || anim.active {
+        return;
+    }
+    solver.timer = SOLVER_INTERVAL;
+
+    // `None` means the board is locked; `tick_move_anim` drives game over off the
+    // last real move, so just idle until then.
+    let Some(dir) = best_move(&board.grid) else {
+        return;
+    };
+
+    let (new_grid, moves, gained, changed) = apply_move(&board.grid, dir);
+    if !changed {
+        return;
+    }
+    start_move(
+        &mut commands,
+        &mut board,
+        &mut anim,
+        new_grid,
+        moves,
+        gained,
+    );
+}
+
 // --- Move resolution --------------------------------------------------------
 
 fn tick_move_anim(
@@ -1076,6 +1358,17 @@ fn update_score_text(
     if let Ok(mut text) = texts.single_mut() {
         let shown = score.shown.round().max(0.0) as u32;
         text.0 = shown.to_string();
+    }
+}
+
+/// Show "AUTO" in the HUD centre slot while the solver is driving, blank when
+/// the human is in control.
+fn update_auto_indicator(solver: Res<Solver>, mut q: Query<&mut Text, With<AutoIndicator>>) {
+    if let Ok(mut text) = q.single_mut() {
+        let label = if solver.enabled { "AUTO" } else { "" };
+        if text.0 != label {
+            text.0 = label.to_string();
+        }
     }
 }
 
@@ -1270,5 +1563,101 @@ mod tests {
         assert!(plan.merges.is_empty());
         assert!(plan.despawns.is_empty());
         assert_eq!(plan.survivors, vec![((0, 2), (0, 0))]);
+    }
+
+    // --- Solver -------------------------------------------------------------
+
+    #[test]
+    fn best_move_never_returns_a_stuck_direction() {
+        // Whenever a legal move exists, best_move must return a direction that
+        // actually changes the board -- never a no-op.
+        let boards = [
+            [[2, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+            [[2, 4, 8, 16], [0, 0, 0, 0], [0, 0, 0, 0], [2, 0, 0, 0]],
+            // Full but with one mergeable pair on the top row.
+            [[2, 2, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 4, 2]],
+        ];
+        for grid in boards {
+            let dir = best_move(&grid).expect("a legal move exists");
+            let (_, _, _, changed) = apply_move(&grid, dir);
+            assert!(changed, "best_move returned a no-op direction for {grid:?}");
+        }
+    }
+
+    #[test]
+    fn best_move_is_none_on_a_locked_board() {
+        let locked = [[2, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 4, 2]];
+        assert!(is_game_over(&locked));
+        assert_eq!(best_move(&locked), None);
+    }
+
+    #[test]
+    fn best_move_takes_the_free_merge() {
+        // A single matching pair on the top row: the two directions that merge
+        // it (Left / Right) both yield a 4, the two that do not (Up / Down)
+        // leave two 2s. The solver must pick a merging move.
+        let grid = [[2, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+        let dir = best_move(&grid).expect("a legal move exists");
+        let (next, _, _, _) = apply_move(&grid, dir);
+        let max = next.iter().flatten().copied().max().unwrap();
+        assert_eq!(max, 4, "solver should take the free merge, got {next:?}");
+    }
+
+    /// A cheap deterministic stand-in for the game's random tile spawner: an LCG
+    /// picks an empty cell and drops a `2` (90%) or `4` (10%), matching
+    /// `spawn_random_tile`.
+    fn lcg(state: &mut u64) -> u64 {
+        *state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        *state >> 33
+    }
+
+    fn spawn_sim_tile(grid: &mut Grid, state: &mut u64) {
+        let mut empties = Vec::new();
+        for (r, row) in grid.iter().enumerate() {
+            for (c, &v) in row.iter().enumerate() {
+                if v == 0 {
+                    empties.push((r, c));
+                }
+            }
+        }
+        if empties.is_empty() {
+            return;
+        }
+        let (r, c) = empties[(lcg(state) as usize) % empties.len()];
+        grid[r][c] = if lcg(state) % 10 == 0 { 4 } else { 2 };
+    }
+
+    #[test]
+    fn solver_climbs_toward_2048_over_a_full_game() {
+        // Drive a whole game with the solver against the deterministic spawner
+        // and confirm it climbs well past the early tiers -- proof the heuristic
+        // actually progresses toward 2048, not just that it returns a legal
+        // move. Uses depth 2 (not the shipped depth 3) so the several-hundred-
+        // move game stays fast; depth 3 in-game only climbs higher.
+        let mut grid: Grid = [[0; BOARD_N]; BOARD_N];
+        let mut state: u64 = 0x1234_5678_9abc_def0;
+        spawn_sim_tile(&mut grid, &mut state);
+        spawn_sim_tile(&mut grid, &mut state);
+
+        let mut max_tile = 0;
+        for _ in 0..4000 {
+            let Some(dir) = best_move_with_depth(&grid, 2) else {
+                break;
+            };
+            let (next, _, _, changed) = apply_move(&grid, dir);
+            assert!(changed, "solver picked a no-op move");
+            grid = next;
+            max_tile = grid.iter().flatten().copied().max().unwrap();
+            spawn_sim_tile(&mut grid, &mut state);
+        }
+
+        // Even at this reduced depth the solver reaches the 2048 goal tile with
+        // this seed; the shipped depth-3 search only does better.
+        assert!(
+            max_tile >= WIN_VALUE,
+            "solver only reached {max_tile}, expected to reach the {WIN_VALUE} goal tile"
+        );
     }
 }

@@ -427,7 +427,12 @@ Examples:
   game-local (see `docs/2026-07-05-13glide-ui-juice-harvest.md`). Also reuses
   `ui/popup`, `ui/menu`, `input/pointer`, `input/state` and `audio`; renders with
   a plain `Camera2d`. Follows the `06_fruitninja` shape (states, sounds, wasm).
-  See `docs/2026-07-05-glide-example.md`.
+  Press Space during a run to hand control to a built-in auto-solver: a shallow
+  expectimax (`best_move`/`score_grid`, pure and unit-tested off the ECS, with a
+  headless test that plays a full game to the 2048 tile) that plays toward 2048
+  on its own, paced at one move / 0.32s so each slide is watchable, driving the
+  same `start_move` path a human move does. See `docs/2026-07-05-glide-example.md`
+  and `docs/2026-07-05-glide-solver.md`.
 - `14_breach` - "Breach": a grounded, Doom-like first-person arena shooter, and the
   gallery's first first-person game. It headlines three things no prior example
   showed: the first-person viewpoint as a real game (`camera/wasd` only ever
