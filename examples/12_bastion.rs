@@ -18,9 +18,10 @@
 //!   tower.
 //! - `transform/point_rotation` drives an **orbit camera**: an invisible pivot at
 //!   the Core carries `PointRotation`, and dragging the pointer (or A/D) feeds it
-//!   yaw/pitch deltas so the whole view orbits the battlefield. The camera is a
-//!   child at a fixed angled offset, so the starting framing is decoupled from the
-//!   orbit; pitch is clamped in-game (the module itself has no min/max).
+//!   a yaw-only delta so the whole view spins around the battlefield. Pitch is
+//!   never touched, so it is a flat yaw orbit. The camera is a child at a fixed
+//!   angled offset, so the pleasant top-down framing holds no matter how far you
+//!   orbit.
 //! - `transform/smooth_look_rotation` drives every **tower turret**: a tower
 //!   auto-targets the nearest enemy in range and its turret rotates toward it at a
 //!   rate-limited `speed`, so a fast enemy can briefly out-slew a cheap turret
@@ -38,7 +39,8 @@
 //! iterate the catalog so new JSON entries participate automatically. See
 //! `docs/2026-07-05-bastion-data-catalog.md`.
 //!
-//! Controls: drag the pointer (or A/D / arrow keys) to orbit the camera. Press a
+//! Controls: drag the pointer (or A/D / left-right arrow keys) to spin the yaw
+//! orbit around the Core (the tilt never changes). Press a
 //! number key (1..N, one per catalogued tower) to pick a tower to build, then tap
 //! the ground (or press Space) to place it at the ghost. Tap a placed tower to
 //! select it and press U to upgrade it. Escape gives up. On a touchscreen the
@@ -86,13 +88,12 @@ const CORE_HEALTH: f32 = 100.0;
 const CAM_BACK: f32 = 26.0;
 const CAM_UP: f32 = 20.0;
 
-/// Orbit control. Yaw is unclamped (full 360); pitch is clamped so the view never
-/// flips under the ground or looks up past the horizon. The bounds are on the
-/// pivot's forward.y (its `-Z` after rotation).
+/// Orbit control. The camera is a pure yaw orbit: A/D and pointer drag spin the
+/// view around the vertical axis (full 360, unclamped) and the pitch never
+/// changes, so the pleasant angled top-down framing (set by the fixed camera
+/// child offset) is preserved no matter how far you orbit.
 const ORBIT_YAW_RATE: f32 = 1.6; // radians/sec from A/D
 const ORBIT_DRAG_RATE: f32 = 0.005; // radians per pixel dragged
-const PITCH_FORWARD_Y_MIN: f32 = -0.45;
-const PITCH_FORWARD_Y_MAX: f32 = 0.35;
 
 /// A press that moves less than this many pixels before release is a tap (place /
 /// select); more than this is a drag (orbit). Keeps one pointer doing both.
@@ -758,10 +759,10 @@ fn setup(
 // Orbit camera (transform/point_rotation)
 // ---------------------------------------------------------------------------
 
-/// Feed yaw/pitch deltas into the rig's `PointRotationInput` from A/D + arrow keys
-/// and pointer drag, and clamp pitch by gating the pitch delta against the pivot's
-/// current forward (the module has no built-in clamp). Also maintains `DragState`
-/// so `place_or_select` can tell a tap from an orbit drag.
+/// Feed a yaw delta into the rig's `PointRotationInput` from A/D + left/right
+/// arrow keys and pointer horizontal drag. Pitch is never touched, so the view
+/// only orbits around the vertical axis. Also maintains `DragState` so
+/// `place_or_select` can tell a tap from an orbit drag.
 fn orbit_camera(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -788,20 +789,13 @@ fn orbit_camera(
     transform.rotation = out.0;
 
     let mut yaw = 0.0;
-    let mut pitch = 0.0;
 
-    // Keyboard orbit.
+    // Keyboard orbit (yaw only).
     if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
         yaw += ORBIT_YAW_RATE * dt;
     }
     if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
         yaw -= ORBIT_YAW_RATE * dt;
-    }
-    if keys.pressed(KeyCode::ArrowUp) {
-        pitch += ORBIT_YAW_RATE * dt;
-    }
-    if keys.pressed(KeyCode::ArrowDown) {
-        pitch -= ORBIT_YAW_RATE * dt;
     }
 
     // Pointer drag orbit + tap/drag bookkeeping.
@@ -819,8 +813,8 @@ fn orbit_camera(
                 drag.moved = true;
             }
             if drag.moved {
+                // Horizontal drag only: yaw orbit, pitch left untouched.
                 yaw -= delta.x * ORBIT_DRAG_RATE;
-                pitch -= delta.y * ORBIT_DRAG_RATE;
             }
         }
     }
@@ -835,16 +829,9 @@ fn orbit_camera(
     }
     drag.was_pressed = pointer.pressed;
 
-    // Clamp pitch: the pivot's forward is `out * -Z`; a positive pitch delta raises
-    // forward.y. Gate the delta so forward.y stays within the comfortable band.
-    let forward_y = (out.0 * Vec3::NEG_Z).y;
-    if (pitch > 0.0 && forward_y >= PITCH_FORWARD_Y_MAX)
-        || (pitch < 0.0 && forward_y <= PITCH_FORWARD_Y_MIN)
-    {
-        pitch = 0.0;
-    }
-
-    input.0 = Vec2::new(yaw, pitch);
+    // Yaw only: the pitch axis of `PointRotationInput` is always zero, so the
+    // camera never tilts up or down from input.
+    input.0 = Vec2::new(yaw, 0.0);
 }
 
 // ---------------------------------------------------------------------------
