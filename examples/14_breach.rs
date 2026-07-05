@@ -725,8 +725,8 @@ fn spawn_menu(mut commands: Commands, mut screen: ResMut<MenuScreen>, high: Res<
     *screen = MenuScreen::Main;
 
     // The Playing scene's `Camera3d` is a child of the player and despawns with it, so
-    // the menu (and game-over) states have no camera of their own -- Bevy UI needs one
-    // to render to. Give the menu a 2D camera for its lifetime.
+    // the menu state has no camera of its own -- Bevy UI needs one to render to. Give the
+    // menu a 2D camera for its lifetime. (Game-over gets its own the same way.)
     commands.spawn((
         Name::new("Menu Camera"),
         Camera2d,
@@ -2083,6 +2083,16 @@ fn spawn_game_over(
     high: Res<HighScore<u32>>,
 ) {
     let new_best = high.is_new_best();
+
+    // The Playing scene's `Camera3d` is a child of the player and despawns with it, so the
+    // game-over state (like the menu) has no camera of its own -- Bevy UI needs one to
+    // render to. Give game-over a 2D camera for its lifetime.
+    commands.spawn((
+        Name::new("Game Over Camera"),
+        Camera2d,
+        DespawnOnExit(GameState::GameOver),
+    ));
+
     commands
         .spawn((
             Name::new("Game Over"),

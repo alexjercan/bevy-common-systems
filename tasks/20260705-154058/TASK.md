@@ -1,8 +1,16 @@
 # breach -- game-over screen has no camera (UI invisible), add one
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 55
 - TAGS: bug,breach,example,ui
+
+## Resolution
+
+`spawn_game_over` now spawns a `Name::new("Game Over Camera")` + `Camera2d` +
+`DespawnOnExit(GameState::GameOver)`, mirroring the menu's own 2D camera. Verified with a
+real windowed autopilot run + `xdotool`/`import` grab of the GameOver state: "YOU DIED",
+the score line, best-score line and dismiss hint all render. Fmt/clippy(+debug)/ascii and
+`cargo test --examples --features debug` (22 passed) are green.
 
 
 ## Goal
