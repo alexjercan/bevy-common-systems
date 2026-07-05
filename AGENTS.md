@@ -458,7 +458,11 @@ Examples:
   mixed by a wave-weighted spawn roll (`archetype_weights`/`pick_archetype`) -- path
   toward you (straight-line, so the arena is open -- no interior cover to snag
   the AI) and melee via continuous per-enemy-dps proximity damage (spikes a
-  `feedback/screen_flash` vignette + `camera/shake`); zero health ends the run. Kills chained inside a short
+  `feedback/screen_flash` vignette + `camera/shake`); zero health ends the run. Juice:
+  a confirmed hit blips a crosshair hit marker, each shot pops an emissive muzzle flash,
+  enemies telegraph with a brief spawn beacon, and near death (`is_low_health`) the
+  vignette throbs red (a re-spiked `ScreenFlash` with `despawn_on_end: false`, since the
+  vignette is persistent). Kills chained inside a short
   window build a combo (`scoring/streak`) that multiplies the points each kill is
   worth, floats a "+N" and flashes a "COMBO xN +P" tally (`ui/popup`); the points
   score (not the raw kill count) is the persisted `HighScore`. Slain enemies have a

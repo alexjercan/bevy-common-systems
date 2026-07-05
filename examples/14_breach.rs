@@ -19,7 +19,9 @@
 //! in the crosshair takes damage (`HealthPlugin`), flashes (`feedback/flash`) and
 //! on death bursts into physics gibs (`mesh/explode`). Clearing a wave spawns a
 //! bigger, faster one. A hit spikes a red damage vignette (`feedback/screen_flash`)
-//! and kicks the camera (`camera/shake`); zero health ends the run. Kills chained
+//! and kicks the camera (`camera/shake`); a confirmed hit blips a crosshair hit marker,
+//! each shot pops a muzzle flash, and near death the screen throbs red. Zero health ends
+//! the run. Kills chained
 //! inside a short window build a combo (`scoring/streak`) that multiplies the points
 //! they are worth, floats a "+N" and flashes a "COMBO xN" tally (`ui/popup`); the
 //! points score is saved across launches (`persist` + `HighScore`). Slain enemies
@@ -89,6 +91,12 @@ const GRAVITY: f32 = 22.0;
 const GUN_COOLDOWN: f32 = 0.14;
 const GUN_RANGE: f32 = 120.0;
 const GUN_DAMAGE: f32 = 12.0;
+
+/// Juice: how long the hit marker stays lit after a confirmed hit, the health
+/// fraction below which the screen throbs red, and that throb's period.
+const HITMARK_TIME: f32 = 0.14;
+const LOW_HP_FRAC: f32 = 0.3;
+const LOW_HP_PULSE: f32 = 0.7;
 
 /// Scoring: each kill is worth `BASE_KILL_POINTS * streak`, so chaining kills
 /// inside `COMBO_WINDOW` seconds ramps the payout (streak 1 -> 10, 2 -> 20, ...).
@@ -217,6 +225,7 @@ fn main() {
     app.init_resource::<Score>();
     app.init_resource::<Combo>();
     app.init_resource::<KillFeed>();
+    app.init_resource::<HitFlash>();
     app.init_resource::<Buffs>();
     app.init_resource::<PickupDrops>();
     app.init_resource::<Wave>();
@@ -264,6 +273,7 @@ fn main() {
                 apply_speed_buff,
                 update_buff_text,
             ),
+            (update_hit_marker, low_health_warning),
             check_run_over,
             set_state_on_key(KeyCode::Escape, GameState::GameOver),
         )
@@ -352,6 +362,10 @@ impl Default for Combo {
 /// popups. Decouples the (headlessly testable) death observer from the UI.
 #[derive(Resource, Default)]
 struct KillFeed(Vec<u32>);
+
+/// Seconds left on the crosshair hit-marker flash (set on a confirmed enemy hit).
+#[derive(Resource, Default)]
+struct HitFlash(f32);
 
 /// The three ground pickups. Health heals instantly; Speed and FireRate grant a
 /// timed buff tracked in [`Buffs`].
@@ -508,6 +522,10 @@ impl EnemyKind {
 
 #[derive(Component)]
 struct DamageVignette;
+
+/// The crosshair hit-marker box, flashed on a confirmed enemy hit.
+#[derive(Component)]
+struct HitMarker;
 
 #[derive(Component)]
 struct MenuTitle;
@@ -669,6 +687,7 @@ fn start_run(
     mut score: ResMut<Score>,
     mut combo: ResMut<Combo>,
     mut feed: ResMut<KillFeed>,
+    mut hitflash: ResMut<HitFlash>,
     mut buffs: ResMut<Buffs>,
     mut drops: ResMut<PickupDrops>,
     mut wave: ResMut<Wave>,
@@ -678,6 +697,7 @@ fn start_run(
     *score = Score::default();
     *combo = Combo::default();
     feed.0.clear();
+    hitflash.0 = 0.0;
     *buffs = Buffs::default();
     drops.0.clear();
     *wave = Wave::default();
@@ -887,6 +907,19 @@ fn spawn_hud(mut commands: Commands) {
                 },
                 BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.8)),
             ));
+            // Hit-marker box: a bordered square that blips on a confirmed hit
+            // (alpha driven by `update_hit_marker`), overlapping the dot.
+            p.spawn((
+                HitMarker,
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: Val::Px(22.0),
+                    height: Val::Px(22.0),
+                    border: UiRect::all(Val::Px(2.5)),
+                    ..default()
+                },
+                BorderColor::all(Color::srgba(1.0, 0.9, 0.6, 0.0)),
+            ));
         });
 
     // Live combo readout, centred just above the crosshair; hidden until a
@@ -1053,6 +1086,7 @@ fn player_shoot(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     sfx: Res<SoundBank<Sfx>>,
+    mut hitflash: ResMut<HitFlash>,
     player: Single<(Entity, &mut Gun), With<Player>>,
     cam: Single<&GlobalTransform, With<DoomEye>>,
     enemies: Query<(), With<Enemy>>,
@@ -1099,6 +1133,8 @@ fn player_shoot(
                 amount: GUN_DAMAGE,
             });
             commands.play_sfx_volume(sfx.get(Sfx::Hit), 0.35);
+            // Light the crosshair hit marker to confirm the hit.
+            hitflash.0 = HITMARK_TIME;
         }
     }
 
@@ -1115,6 +1151,20 @@ fn player_shoot(
         Mesh3d(meshes.add(Cuboid::new(0.03, 0.03, len))),
         MeshMaterial3d(tracer_mat),
         Transform::from_translation(mid).looking_at(end, Vec3::Y),
+        TempEntity(0.05),
+        DespawnOnExit(GameState::Playing),
+    ));
+
+    // Muzzle flash: a brief bright emissive puff at the muzzle (blooms via camera/post).
+    let flash_mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(1.0, 0.9, 0.5),
+        emissive: LinearRgba::rgb(10.0, 7.0, 2.0),
+        ..default()
+    });
+    commands.spawn((
+        Mesh3d(meshes.add(Sphere::new(0.12))),
+        MeshMaterial3d(flash_mat),
+        Transform::from_translation(muzzle + dir.as_vec3() * 0.15),
         TempEntity(0.05),
         DespawnOnExit(GameState::Playing),
     ));
@@ -1176,6 +1226,22 @@ fn spawn_wave(
             ),
             MeshMaterial3d(mat),
             Transform::from_translation(pos),
+            DespawnOnExit(GameState::Playing),
+        ));
+
+        // Spawn tell: a brief bright beacon pillar in the archetype colour so the
+        // enemy telegraphs its arrival instead of popping in cold.
+        let beacon_mat = materials.add(StandardMaterial {
+            base_color: stats.color,
+            emissive: stats.emissive * 2.0,
+            ..default()
+        });
+        commands.spawn((
+            Name::new("Spawn tell"),
+            Mesh3d(meshes.add(Cylinder::new(0.12, WALL_H))),
+            MeshMaterial3d(beacon_mat),
+            Transform::from_translation(pos.with_y(WALL_H * 0.5)),
+            TempEntity(0.6),
             DespawnOnExit(GameState::Playing),
         ));
     }
@@ -1590,6 +1656,55 @@ fn mirror_player_hp(player: Single<&Health, With<Player>>, mut hp: ResMut<Player
     hp.max = player.max;
 }
 
+// --- Juice: hit marker + low-health warning ---------------------------------
+
+/// Whether the player's health is in the danger zone (drives the red throb).
+fn is_low_health(current: f32, max: f32) -> bool {
+    max > 0.0 && current / max < LOW_HP_FRAC
+}
+
+/// Fade the crosshair hit marker after a confirmed hit lit it.
+fn update_hit_marker(
+    time: Res<Time>,
+    mut hitflash: ResMut<HitFlash>,
+    mut marker: Query<&mut BorderColor, With<HitMarker>>,
+) {
+    hitflash.0 = (hitflash.0 - time.delta_secs()).max(0.0);
+    if let Ok(mut border) = marker.single_mut() {
+        let alpha = (hitflash.0 / HITMARK_TIME).clamp(0.0, 1.0);
+        *border = BorderColor::all(Color::srgba(1.0, 0.9, 0.6, alpha));
+    }
+}
+
+/// While the player is near death, throb the damage vignette so the danger reads
+/// even between hits.
+fn low_health_warning(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut pulse: Local<f32>,
+    hp: Res<PlayerHp>,
+    vignette: Query<Entity, With<DamageVignette>>,
+) {
+    if !is_low_health(hp.current, hp.max) {
+        *pulse = 0.0;
+        return;
+    }
+    *pulse -= time.delta_secs();
+    if *pulse > 0.0 {
+        return;
+    }
+    *pulse = LOW_HP_PULSE;
+    if let Ok(overlay) = vignette.single() {
+        // despawn_on_end MUST be false: this overlay is the persistent DamageVignette,
+        // re-spiked (not spawned) each pulse, like the melee hit flash.
+        commands.entity(overlay).insert(ScreenFlash {
+            peak_alpha: 0.28,
+            decay: 2.2,
+            despawn_on_end: false,
+        });
+    }
+}
+
 fn check_run_over(over: Res<RunOver>, mut next: ResMut<NextState<GameState>>) {
     if over.0 {
         next.set(GameState::GameOver);
@@ -1819,6 +1934,20 @@ mod tests {
         // Rusher: faster, weaker than the grunt. Brute: slower, tankier, hits harder.
         assert!(r.speed_mult > g.speed_mult && r.health < g.health);
         assert!(b.speed_mult < g.speed_mult && b.health > g.health && b.dps > g.dps);
+    }
+
+    #[test]
+    fn low_health_threshold() {
+        assert!(is_low_health(20.0, 100.0), "20% is low");
+        assert!(!is_low_health(50.0, 100.0), "50% is not low");
+        assert!(
+            !is_low_health(0.0, 0.0),
+            "a zero max does not divide-by-zero into low"
+        );
+        assert!(
+            is_low_health(LOW_HP_FRAC * 100.0 - 0.01, 100.0),
+            "just under the fraction is low"
+        );
     }
 
     // The lose condition and score accounting live in the `on_health_zero` observer

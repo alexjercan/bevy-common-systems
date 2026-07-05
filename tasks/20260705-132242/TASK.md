@@ -1,6 +1,6 @@
 # breach -- juice pass (hit markers, kill/combo popups, muzzle flash, low-HP pulse)
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 50
 - TAGS: spike,breach,example,juice
 
@@ -29,3 +29,23 @@ kick, damage vignette, hit-flash, tracers and gibs -- this fills the gaps.
   state-entry screenshot only shows the initial scene, so drive with the
   autopilot and grab externally for mid-gameplay.
 - Verify: `cargo clippy --all-targets`, headless run, then run for real.
+
+## Steps
+
+- [x] **Hit marker.** `HitFlash(f32)` resource (seconds of marker visibility) + a
+  `HitMarker` bordered box centred on the crosshair. `player_shoot` sets `HitFlash` on a
+  confirmed enemy hit; `update_hit_marker` fades the border alpha from the timer. Reset
+  in `start_run`.
+- [x] **Muzzle flash.** In `player_shoot`, on each shot spawn a small bright emissive
+  sphere at the muzzle with `TempEntity` (blooms via `camera/post`), alongside the
+  existing tracer.
+- [x] **Low-health pulse.** `low_health_warning` reads `PlayerHp`; while
+  `is_low_health(current, max)` (pure, `< LOW_HP_FRAC`), pulse the `DamageVignette`
+  `ScreenFlash` every `LOW_HP_PULSE` seconds so the screen throbs red near death.
+- [x] **Enemy spawn tell.** In `spawn_wave`, at each spawn position drop a short-lived
+  emissive beacon (`TempEntity`) in the archetype colour, so enemies telegraph instead
+  of popping in cold.
+- [x] **Tests + verify.** Unit-test the pure `is_low_health`. `cargo fmt`, `cargo clippy
+  --all-targets`, `cargo test --example 14_breach`, ascii, headless `BCS_AUTOPILOT`,
+  and a real run (screenshot if `$DISPLAY`, since this is a visual task). Update the
+  `//!` header and AGENTS note.
