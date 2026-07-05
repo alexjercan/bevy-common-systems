@@ -86,6 +86,15 @@ export const GAMES: Game[] = [
       'Swipe (or use the arrow keys / WASD) to slide the board up, down, left or right. Equal tiles merge. Fill the board with no move left and the run ends.',
     accent: '#5fbfff',
   },
+  {
+    id: '14_breach',
+    title: 'Breach',
+    blurb:
+      'A grounded first-person arena shooter: stand your ground as waves of glowing enemies close in from every side, and gun them down with a hitscan rifle before they overwhelm you.',
+    controls:
+      'Best on desktop: WASD to move, mouse to look, left-click to fire. Touch is supported but clunky -- drag the left half to move, the right half to look, tap FIRE.',
+    accent: '#ff6a4a',
+  },
 ];
 
 /** Path (relative to the site base) to a game's wasm page. */

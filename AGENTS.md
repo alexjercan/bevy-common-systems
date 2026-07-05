@@ -408,6 +408,35 @@ Examples:
   `ui/popup`, `ui/menu`, `input/pointer`, `input/state` and `audio`; renders with
   a plain `Camera2d`. Follows the `06_fruitninja` shape (states, sounds, wasm).
   See `docs/2026-07-05-glide-example.md`.
+- `14_breach` - "Breach": a grounded, Doom-like first-person arena shooter, and the
+  gallery's first first-person game. It headlines three things no prior example
+  showed: the first-person viewpoint as a real game (`camera/wasd` only ever
+  appeared in the free-fly tech demos), the crate's first avian `SpatialQuery`
+  raycast (the hitscan gun), and a game-local first-person character controller.
+  Because `camera/wasd` is a free-fly spectator camera (no gravity/ground/collision/
+  cursor-grab), the player is built locally: a `RigidBody::Dynamic` capsule with
+  `LockedAxes::ROTATION_LOCKED` driven by writing `LinearVelocity`, so avian's
+  solver does collide-and-slide against the static level for free (a kinematic body
+  is NOT pushed back by statics -- that was the key call). The body stays
+  axis-aligned; yaw lives on a `FirstPersonController` and the `Camera3d` is a child
+  at eye height carrying the full view rotation, with the WASD move intent rotated by
+  the same yaw. Look is always-on from `AccumulatedMouseMotion` with the cursor
+  grabbed via the 0.19 `CursorOptions` component (a per-window component, not
+  `window.cursor`) and a pitch clamp. Left-click (a `time/cooldown` gate) fires
+  `SpatialQuery::cast_ray` masked to `[Enemy, World]` and excluding the player; the
+  first enemy hit takes `HealthApplyDamage` + `feedback/flash` and on death bursts
+  into `mesh/explode` physics gibs. Waves of octahedron enemies (`mesh/builder`)
+  path toward you (straight-line, so the arena is open -- no interior cover to snag
+  the AI) and melee via continuous proximity damage (spikes a `feedback/screen_flash`
+  vignette + `camera/shake`); zero health ends the run. Reuses `camera/post` (bloom
+  on tracers/enemies), `helpers/temp`, `ui/status` HUD + crosshair, `ui/menu`,
+  `audio`, `persist`+`HighScore`, `ui/touchpad` (dual-stick touch), `input/state`.
+  The pure controller math (`move_dir`/`wave_size`/`ring_positions`/pitch clamp) is
+  unit-tested off the ECS; the headless autopilot AIMS at the nearest enemy (an FPS
+  gun can't be verified by fire-forward). Follows the `06_fruitninja` shape (states,
+  sounds, wasm); touch is a compromise, desktop is primary. See
+  `docs/2026-07-05-breach-example.md`; the FP-controller harvest is the follow-up
+  `tasks/20260705-103238`.
 
 ## Workflow
 
