@@ -70,7 +70,10 @@
 
 pub mod doom_controller;
 pub mod pd_controller;
+pub mod rigid_body;
 
 pub mod prelude {
-    pub use super::{doom_controller::prelude::*, pd_controller::prelude::*};
+    pub use super::{
+        doom_controller::prelude::*, pd_controller::prelude::*, rigid_body::prelude::*,
+    };
 }
