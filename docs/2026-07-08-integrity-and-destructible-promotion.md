@@ -53,8 +53,9 @@ The full nova test suites came across intact: the avian-free core unit tests (le
 derivation, disable/destroy transitions, the full damage -> destruction sequence, the
 chain reaction) and the real-avian `physics_tests` (impact damage from computed mass, the
 velocity gate, blast falloff, the blast-owns-its-events regression, single-hit dedup,
-out-of-range). `examples/15_integrity` is the interactive demo and integration check: a grid
-wall you blast a hole in and watch collapse, with the destroy seam feeding the mesh slicer,
+out-of-range). `examples/15_integrity` is the interactive demo and integration check: a
+zero-g grid structure you click to blast holes in (blocks tint by damage, and a disabled
+patch cascades apart from its edges inward), with the destroy seam feeding the mesh slicer,
 plus the health display (aggregate health summed onto a core entity) and an objectives panel.
 
 ## Follow-up

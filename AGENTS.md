@@ -608,13 +608,16 @@ Examples:
   See `docs/2026-07-05-breach-example.md`,
   the harvest note `docs/2026-07-05-fps-controller-harvest.md` (`tasks/20260705-103238`)
   and `docs/2026-07-05-breach-fun-pass.md` (combos/pickups/enemies/juice/sounds).
-- `15_integrity` - a destructible-structure demo for the `integrity` module. A grid wall of
-  connected blocks; press Space / Left Mouse Button to detonate a `blast_damage` sensor at
-  the centre of the survivors, and watch the hole cascade outward as disabled leaves are
-  destroyed and pruned from their neighbours. The destroy seam
-  (`On<Add, IntegrityDestroyMarker>`) is hooked to `ExplodeMeshPlugin` so each block slices
-  into flying fragments; `ui/health_display` tracks the wall's aggregate health and
-  `ui/objectives` flips its objective to done once it is levelled. See
+- `15_integrity` - a destructible-structure demo for the `integrity` module. A grid of
+  connected blocks floats in zero-g; click a block (cursor picked onto the z = 0 plane via
+  `camera/project::pointer_on_plane`) to detonate a `blast_damage` sensor there. Blocks tint
+  from blue-grey to red as they take falloff damage, and a fully-disabled patch cascades
+  apart from its edges inward - disabled leaves are destroyed and pruned from their
+  neighbours, which makes *them* leaves. The destroy seam (`On<Add, IntegrityDestroyMarker>`)
+  is hooked to `ExplodeMeshPlugin` so each destroyed block slices into flying fragments (real
+  avian motion, no fake integrator); `ui/health_display` tracks the structure's aggregate
+  health and `ui/objectives` flips its goal to done once it is gone. Tuned so one blast
+  disables a whole patch, so the cascade is the visible headline. See
   `docs/2026-07-08-integrity-and-destructible-promotion.md`.
 
 ## Workflow
