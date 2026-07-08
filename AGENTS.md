@@ -117,6 +117,21 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     policy (when to grab) stays with the game.
   - `state` - `set_state_on_key`: a factory that returns a ready-to-add system
     binding one key to a `States` transition ("press Escape to give up").
+- `integrity/` - `IntegrityPlugin`: a destruction pipeline over a graph of connected,
+  health-bearing nodes.
+  - `components` - the graph model: `IntegrityRoot` (the owning body), `ConnectedTo`
+    (each node's own neighbour list), and the `IntegrityLeafMarker` /
+    `IntegrityDisabledMarker` / `IntegrityDestroyMarker` lifecycle markers.
+  - `blast` - `blast_damage()`: a radial `BlastDamageConfig` sensor bundle that owns its
+    collision events and deals linear-falloff damage to everything it overlaps.
+  - `plugin` - `IntegrityPlugin`: turns impacts (impulse/energy from relative velocity and
+    mass) and blast overlaps into `HealthApplyDamage`, disables nodes at zero health,
+    destroys disabled *leaves* (or a disabled root), and prunes destroyed nodes from their
+    neighbours to cascade the collapse. The game owns both ends of the seam: it builds the
+    graph (`ConnectedTo`/`IntegrityRoot`) and reacts to `On<Add, IntegrityDestroyMarker>`
+    (the public "destroyed" signal) to explode/despawn. Demoed by `examples/15_integrity`.
+    Promoted from nova-protocol; the section-grid graph builder and mesh-slice reaction stay
+    game-side.
 - `material` - `glowing_material`: builds the emissive-that-actually-blooms
   `StandardMaterial` games hand-write for glowing objects (bullets, thruster
   flames, pickups), baking in the footgun that an emissive material must NOT be
@@ -168,6 +183,10 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     `FirstPersonController` name for a future, more capable controller. Requires
     an axis-locked body (`LockedAxes::ROTATION_LOCKED`) + a `DoomEye` child.
     Harvested from `14_breach` (`docs/2026-07-05-fps-controller-harvest.md`).
+  - `rigid_body` - two small helpers (no plugin): `rigid_body_point_velocity`
+    (`v = v_lin + omega x (p - com)`, the muzzle-velocity of a point on a spinning body)
+    and `destructible_body(health, density)` (the Health + density + Visibility bundle a
+    destructible body shares; pair with `integrity`). Promoted from nova-protocol.
 - `scoring/` - game-agnostic scoring building blocks (deliberately no `Score`
   type -- a running score is a bare number the game owns):
   - `streak` - `Streak`: a hit/combo counter that grows on each hit and decays
@@ -225,6 +244,13 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     resource and `RevealOnTouch` / `HideOnTouch` markers (so a desktop session
     never sees the pad, with no `wasm32` sniffing), and offers `button_grid_at`
     / `stick_deflection`. Owns the primitives, not an opinionated pad widget.
+  - `health_display` - `HealthDisplayPlugin` plus the `health_display()` bundle: a one-line
+    "Health: N%" readout that tracks a target entity's `Health` each frame. The turnkey
+    counterpart to hand-wiring a `status` item. Promoted from nova-protocol.
+  - `objectives` - `ObjectivesPlugin` plus the `objectives_panel()` bundle: a generic
+    on-screen objectives list rebuilt from the `GameObjectives` resource (opaque
+    id + message per line, so game code can address a specific line). Promoted from
+    nova-protocol.
 
 ## Conventions
 
@@ -582,6 +608,14 @@ Examples:
   See `docs/2026-07-05-breach-example.md`,
   the harvest note `docs/2026-07-05-fps-controller-harvest.md` (`tasks/20260705-103238`)
   and `docs/2026-07-05-breach-fun-pass.md` (combos/pickups/enemies/juice/sounds).
+- `15_integrity` - a destructible-structure demo for the `integrity` module. A grid wall of
+  connected blocks; press Space / Left Mouse Button to detonate a `blast_damage` sensor at
+  the centre of the survivors, and watch the hole cascade outward as disabled leaves are
+  destroyed and pruned from their neighbours. The destroy seam
+  (`On<Add, IntegrityDestroyMarker>`) is hooked to `ExplodeMeshPlugin` so each block slices
+  into flying fragments; `ui/health_display` tracks the wall's aggregate health and
+  `ui/objectives` flips its objective to done once it is levelled. See
+  `docs/2026-07-08-integrity-and-destructible-promotion.md`.
 
 ## Workflow
 
