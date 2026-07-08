@@ -60,18 +60,43 @@ impl Plugin for IntegrityPlugin {
 fn on_collider_of_spawn_insert_collision_events(
     add: On<Add, ColliderOf>,
     mut commands: Commands,
-    q_collider: Query<Entity, (With<ColliderOf>, With<Health>)>,
+    q_collider: Query<(), With<ColliderOf>>,
+    q_health: Query<(), With<Health>>,
+    q_parent: Query<&ChildOf>,
 ) {
     let entity = add.entity;
     trace!("on_collider_of_spawn: entity {:?}", entity);
 
-    let Ok(_) = q_collider.get(entity) else {
+    if !q_collider.contains(entity) {
         trace!(
             "on_collider_of_spawn: entity {:?} not found in q_collider",
             entity
         );
         return;
+    }
+
+    // Enable collision events when the collider itself carries `Health`, or when an ancestor
+    // does. A collider can live on a separate child entity from the `Health` it protects (e.g. a
+    // ship section whose collider is a dedicated child), and `HealthApplyDamage` auto-propagates
+    // up `ChildOf` to reach that `Health`, so such a collider must still emit collision events.
+    let mut current = entity;
+    let has_health = loop {
+        if q_health.contains(current) {
+            break true;
+        }
+        match q_parent.get(current) {
+            Ok(&ChildOf(parent)) => current = parent,
+            Err(_) => break false,
+        }
     };
+
+    if !has_health {
+        trace!(
+            "on_collider_of_spawn: collider {:?} has no Health on itself or an ancestor",
+            entity
+        );
+        return;
+    }
 
     debug!(
         "on_collider_of_spawn: adding CollisionEventsEnabled to entity {:?}",
@@ -504,6 +529,66 @@ mod physics_tests {
 
     fn health(app: &App, entity: Entity) -> f32 {
         app.world().get::<Health>(entity).unwrap().current
+    }
+
+    #[test]
+    fn a_collider_gets_events_when_an_ancestor_carries_health() {
+        // A collider can live on a dedicated child entity while the `Health` it protects sits on
+        // an ancestor (e.g. a ship section whose collider is a separate child). Such a collider
+        // must still get `CollisionEventsEnabled`, because `HealthApplyDamage` propagates up to
+        // the ancestor's `Health`.
+        let mut app = integrity_physics_app();
+        let body = app
+            .world_mut()
+            .spawn((RigidBody::Dynamic, Transform::default()))
+            .id();
+        // The "section": carries Health but no collider.
+        let section = app
+            .world_mut()
+            .spawn((ChildOf(body), Transform::default(), Health::new(100.0)))
+            .id();
+        // The collider child: a collider, no Health of its own.
+        let collider = app
+            .world_mut()
+            .spawn((
+                ChildOf(section),
+                Transform::default(),
+                Collider::sphere(1.0),
+                ColliderDensity(1.0),
+            ))
+            .id();
+        settle(&mut app);
+
+        assert!(
+            app.world().get::<CollisionEventsEnabled>(collider).is_some(),
+            "a collider whose Health lives on an ancestor should still emit collision events"
+        );
+    }
+
+    #[test]
+    fn a_collider_with_no_health_anywhere_gets_no_events() {
+        // The other side of the ancestor walk: no `Health` on the collider or any ancestor means
+        // no collision events (the body is not a damageable node).
+        let mut app = integrity_physics_app();
+        let body = app
+            .world_mut()
+            .spawn((RigidBody::Dynamic, Transform::default()))
+            .id();
+        let collider = app
+            .world_mut()
+            .spawn((
+                ChildOf(body),
+                Transform::default(),
+                Collider::sphere(1.0),
+                ColliderDensity(1.0),
+            ))
+            .id();
+        settle(&mut app);
+
+        assert!(
+            app.world().get::<CollisionEventsEnabled>(collider).is_none(),
+            "a collider with no Health on itself or an ancestor must not emit collision events"
+        );
     }
 
     #[test]
