@@ -26,8 +26,10 @@
 
 use bevy::prelude::*;
 
+pub mod direction;
+
 pub mod prelude {
-    pub use super::glowing_material;
+    pub use super::{direction::prelude::*, glowing_material};
 }
 
 /// A `StandardMaterial` with `base_color` and an `emissive` glow, left lit so

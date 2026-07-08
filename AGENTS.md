@@ -132,10 +132,18 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     (the public "destroyed" signal) to explode/despawn. Demoed by `examples/15_integrity`.
     Promoted from nova-protocol; the section-grid graph builder and mesh-slice reaction stay
     game-side.
-- `material` - `glowing_material`: builds the emissive-that-actually-blooms
-  `StandardMaterial` games hand-write for glowing objects (bullets, thruster
-  flames, pickups), baking in the footgun that an emissive material must NOT be
-  `unlit` or it will not bloom under `camera/post`.
+- `material/`
+  - `glowing_material` - builds the emissive-that-actually-blooms `StandardMaterial`
+    games hand-write for glowing objects (bullets, thruster flames, pickups), baking
+    in the footgun that an emissive material must NOT be `unlit` or it will not bloom
+    under `camera/post`.
+  - `direction` - `DirectionMaterialsPlugin` plus two `StandardMaterial` extensions for
+    a direction+magnitude gauge (a velocity arrow, a thrust vector): `DirectionMagnitudeMaterial`
+    displaces a mesh's vertices along local +Y by a driven `magnitude_input` (a needle whose
+    length tracks "how much"), and `DirectionSphereMaterial` brightens the fragments facing the
+    mesh's local -Z raised to `sharpness` (a highlight that points where the object faces). Both
+    are `ExtendedMaterial`s; the plugin registers them and embeds their wgsl (no shader files to
+    ship). Promoted from nova-protocol's velocity HUD; demoed by `16_direction`.
 - `mesh/`
   - `builder` - `TriangleMeshBuilder`: procedural triangle meshes -
     octahedron spheres, face subdivision, noise displacement, plane
@@ -619,6 +627,11 @@ Examples:
   health and `ui/objectives` flips its goal to done once it is gone. Tuned so one blast
   disables a whole patch, so the cascade is the visible headline. See
   `docs/2026-07-08-integrity-and-destructible-promotion.md`.
+- `16_direction` - the `material/direction` shader materials as a direction+magnitude gauge.
+  A direction vector spins while its magnitude pulses; a translucent sphere
+  (`DirectionSphereMaterial`) shows a highlight pointing along it, and a cone
+  (`DirectionMagnitudeMaterial`) is a needle whose length tracks the magnitude. The shaders
+  are embedded by `DirectionMaterialsPlugin`, so the example ships no wgsl.
 
 ## Workflow
 
