@@ -105,10 +105,19 @@ impl Plugin for HealthPlugin {
 /// Reduces the target's current health by the damage amount. If health
 /// reaches zero, adds `HealthZeroMarker`.
 ///
-/// We always bubble up the damage event, even if the entity is already destroyed,
-/// to allow parent entities to react accordingly.
+/// The event still bubbles up the hierarchy so parent entities (e.g. an aggregate
+/// hull that sums its sections) react to a hit on a child. Crucially, we bubble up
+/// only the amount that *actually landed* on this node, not the raw incoming amount:
+/// `damage.amount` is clamped to the node's remaining health before propagation
+/// continues. This is what stops overkill on a child from teleporting into a parent
+/// aggregate - a 1000-damage hit on a 100 hp section costs the parent 100, not 1000.
+/// Entity-event propagation reuses this same event instance for every ancestor, so
+/// mutating `damage.amount` here is what the next node up sees.
+///
+/// A node that is already destroyed or at zero health absorbs nothing, so it zeroes
+/// the propagated amount: hitting a corpse must not charge its parents.
 fn on_damage(
-    damage: On<HealthApplyDamage>,
+    mut damage: On<HealthApplyDamage>,
     mut commands: Commands,
     mut q_health: Query<(Entity, &mut Health, Has<HealthZeroMarker>)>,
 ) {
@@ -116,23 +125,122 @@ fn on_damage(
     trace!("on_damage: target {:?}, damage {:?}", target, damage.amount);
 
     let Ok((entity, mut health, destroyed)) = q_health.get_mut(target) else {
+        // No `Health` on this node (e.g. an intermediate transform parent). Leave the
+        // amount unchanged so it keeps bubbling to the next ancestor that does have one.
         trace!("on_damage: entity {:?} not found in q_health", target);
         return;
     };
 
     if destroyed {
         trace!("on_damage: entity {:?} is already destroyed", entity);
+        damage.amount = 0.0;
         return;
     }
 
     if health.current <= 0.0 {
         trace!("on_damage: entity {:?} health is already zero", entity);
+        damage.amount = 0.0;
         return;
     }
 
-    health.current -= damage.amount;
+    // Apply at most the node's remaining health, and propagate only what landed.
+    let applied = damage.amount.min(health.current);
+    health.current -= applied;
+    damage.amount = applied;
     if health.current <= 0.0 {
         health.current = 0.0;
         commands.entity(entity).insert(HealthZeroMarker);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn health_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(HealthPlugin);
+        app
+    }
+
+    /// Overkill on a child must not teleport into its parent aggregate: the parent
+    /// is charged only what the child could actually absorb (its remaining health).
+    #[test]
+    fn overkill_on_a_child_only_costs_the_parent_the_childs_remaining_health() {
+        let mut app = health_app();
+        let parent = app.world_mut().spawn(Health::new(200.0)).id();
+        let child = app
+            .world_mut()
+            .spawn((Health::new(100.0), ChildOf(parent)))
+            .id();
+
+        // A 1000-damage hit on the 100 hp child.
+        app.world_mut().trigger(HealthApplyDamage {
+            entity: child,
+            source: None,
+            amount: 1000.0,
+        });
+        app.world_mut().flush();
+
+        // The child is destroyed...
+        assert_eq!(app.world().get::<Health>(child).unwrap().current, 0.0);
+        assert!(app.world().get::<HealthZeroMarker>(child).is_some());
+
+        // ...but the parent loses only the child's 100 and survives.
+        assert_eq!(app.world().get::<Health>(parent).unwrap().current, 100.0);
+        assert!(app.world().get::<HealthZeroMarker>(parent).is_none());
+    }
+
+    /// The clamp must not break fatal propagation: when the parent aggregate equals
+    /// the dying child, the lethal hit still bubbles up and zeroes the parent.
+    #[test]
+    fn a_lethal_hit_still_bubbles_to_zero_a_matching_parent() {
+        let mut app = health_app();
+        let parent = app.world_mut().spawn(Health::new(100.0)).id();
+        let child = app
+            .world_mut()
+            .spawn((Health::new(100.0), ChildOf(parent)))
+            .id();
+
+        app.world_mut().trigger(HealthApplyDamage {
+            entity: child,
+            source: None,
+            amount: 1000.0,
+        });
+        app.world_mut().flush();
+
+        assert_eq!(app.world().get::<Health>(parent).unwrap().current, 0.0);
+        assert!(app.world().get::<HealthZeroMarker>(child).is_some());
+        assert!(app.world().get::<HealthZeroMarker>(parent).is_some());
+    }
+
+    /// Hitting an already-dead child must not charge the parent at all: a corpse
+    /// absorbs nothing, so the propagated amount is zero.
+    #[test]
+    fn hitting_a_destroyed_child_does_not_charge_the_parent() {
+        let mut app = health_app();
+        let parent = app.world_mut().spawn(Health::new(200.0)).id();
+        let child = app
+            .world_mut()
+            .spawn((Health::new(100.0), ChildOf(parent)))
+            .id();
+
+        // Kill the child exactly; parent drops by the child's 100.
+        app.world_mut().trigger(HealthApplyDamage {
+            entity: child,
+            source: None,
+            amount: 100.0,
+        });
+        app.world_mut().flush();
+        assert_eq!(app.world().get::<Health>(parent).unwrap().current, 100.0);
+
+        // A second hit on the now-dead child leaves the parent untouched.
+        app.world_mut().trigger(HealthApplyDamage {
+            entity: child,
+            source: None,
+            amount: 50.0,
+        });
+        app.world_mut().flush();
+        assert_eq!(app.world().get::<Health>(parent).unwrap().current, 100.0);
     }
 }
