@@ -383,6 +383,14 @@ mod tests {
     /// the inertia is a symmetric top with the smallest moment about z - the
     /// same shape nova's flight tests fly. Returns (body, controller).
     fn spawn_spinning_ship(app: &mut App, spin: Vec3) -> (Entity, Entity) {
+        spawn_spinning_ship_with_torque(app, spin, 40.0)
+    }
+
+    fn spawn_spinning_ship_with_torque(
+        app: &mut App,
+        spin: Vec3,
+        max_torque: f32,
+    ) -> (Entity, Entity) {
         let body = app
             .world_mut()
             .spawn((RigidBody::Dynamic, Transform::default()))
@@ -402,7 +410,7 @@ mod tests {
                 PDController {
                     frequency: 4.0,
                     damping_ratio: 4.0,
-                    max_torque: 40.0,
+                    max_torque,
                 },
                 PDControllerTarget(body),
                 Transform::default(),
@@ -525,6 +533,30 @@ mod tests {
         assert!(
             rate < 0.1,
             "a fast off-principal spin should despin on a skewed body, still at {rate} rad/s"
+        );
+    }
+
+    /// The release scenario at nova's test-rig torque budget (100): one
+    /// tick's saturated impulse (100 * dt / I_roll = 3.1 rad/s) exceeds
+    /// twice the 1.5 rad/s spin - the regime where nova task
+    /// 20260709-125640's corkscrew locked into a per-tick flip-flop.
+    /// Saturation coverage only: this configuration stays in the
+    /// z-commuting subspace, so it passes under either composition order;
+    /// the discriminating test remains the both-frames closed form.
+    #[test]
+    fn fast_roll_despins_under_a_saturating_torque_budget() {
+        let mut app = physics_app();
+        let (body, _) = spawn_spinning_ship_with_torque(&mut app, Vec3::new(0.0, 0.0, 1.5), 100.0);
+
+        // 30 s of sim at 60 Hz.
+        for _ in 0..1800 {
+            app.update();
+        }
+
+        let rate = spin_rate(&app, body);
+        assert!(
+            rate < 0.1,
+            "a saturating torque budget must not limit-cycle: still at {rate} rad/s"
         );
     }
 
