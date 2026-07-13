@@ -120,6 +120,13 @@ fn inspector_ui(world: &mut World) {
 /// holder just became a render-to-texture camera - the first window camera
 /// takes it. Removal and insertion flush together, so there is no frame
 /// with zero primary contexts.
+///
+/// Scope: this plugin owns primary-context placement (auto-creation is
+/// disabled); a consumer-placed `PrimaryEguiContext` on a non-camera entity
+/// is outside the contract and would duplicate the multipass schedule.
+/// "Window" here means any non-`Image` target (`TextureView` included), and
+/// "first" is query order, not spawn order - sufficient for the
+/// single-window debug tooling this serves.
 fn keep_inspector_on_window_camera(
     mut commands: Commands,
     q_cameras: Query<(Entity, Option<&RenderTarget>, Has<PrimaryEguiContext>), With<Camera>>,
