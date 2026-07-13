@@ -1,5 +1,5 @@
 use avian3d::prelude::*;
-use bevy::prelude::*;
+use bevy::{camera::RenderTarget, prelude::*};
 use bevy_inspector_egui::{
     bevy_egui,
     bevy_egui::{EguiContext, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext},
@@ -50,8 +50,13 @@ impl Plugin for InspectorDebugPlugin {
             ..Default::default()
         });
 
-        // Add observer so that new cameras automatically get the PrimaryEguiContext.
-        app.add_observer(on_add_camera);
+        // Keep the PrimaryEguiContext parked on a window camera, every
+        // frame. This replaces the old "first camera added wins" observer,
+        // which handed the inspector to whichever camera spawned first -
+        // including render-to-texture cameras, where the egui UI ends up
+        // inside an offscreen image (nova-protocol's target-inset camera,
+        // task 20260710-104421; root-fixed here per 20260712-201603).
+        app.add_systems(Update, keep_inspector_on_window_camera);
 
         // Physics debug plugins.
         app.add_plugins((
@@ -103,21 +108,41 @@ fn inspector_ui(world: &mut World) {
     });
 }
 
-/// When a camera is added, assign it the PrimaryEguiContext so it can display UI.
-fn on_add_camera(
-    add: On<Add, Camera>,
+/// Keep the inspector's `PrimaryEguiContext` on a window-targeting camera,
+/// and off any camera that renders to an `Image`.
+///
+/// A per-frame reconcile instead of an `Add` observer, so the placement is
+/// order-independent AND survives retargeting: an `Image`-target camera
+/// never owns the context (the inspector would render into the offscreen
+/// texture), and when no window camera holds it - first spawn, or the
+/// holder just became a render-to-texture camera - the first window camera
+/// takes it. Removal and insertion flush together, so there is no frame
+/// with zero primary contexts.
+fn keep_inspector_on_window_camera(
     mut commands: Commands,
-    q_context: Query<&PrimaryEguiContext>,
+    q_cameras: Query<(Entity, Option<&RenderTarget>, Has<PrimaryEguiContext>), With<Camera>>,
 ) {
-    let entity = add.entity;
-    debug!("on_add_camera: entity {:?}", entity);
+    let renders_to_image =
+        |target: Option<&RenderTarget>| matches!(target, Some(RenderTarget::Image(_)));
 
-    if !q_context.is_empty() {
-        debug!("on_add_camera: PrimaryEguiContext already exists, skipping");
-        return;
+    let mut window_has_context = false;
+    let mut first_window_camera = None;
+    for (entity, target, has_context) in &q_cameras {
+        if renders_to_image(target) {
+            if has_context {
+                commands.entity(entity).remove::<PrimaryEguiContext>();
+            }
+        } else {
+            first_window_camera.get_or_insert(entity);
+            window_has_context |= has_context;
+        }
     }
 
-    commands.entity(entity).insert(PrimaryEguiContext);
+    if !window_has_context {
+        if let Some(entity) = first_window_camera {
+            commands.entity(entity).insert(PrimaryEguiContext);
+        }
+    }
 }
 
 /// Enable or disable physics gizmos based on the DebugEnabled resource.
@@ -141,5 +166,90 @@ fn enable_physics_ui(mut settings: ResMut<PhysicsDiagnosticsUiSettings>, debug: 
 fn toggle_debug_mode(mut debug: ResMut<DebugEnabled>, keyboard: Res<ButtonInput<KeyCode>>) {
     if keyboard.just_pressed(DEBUG_TOGGLE_KEYCODE) {
         **debug = !**debug;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// App-driven rig for the reconcile alone: no egui/render stack needed -
+    /// the system only moves the `PrimaryEguiContext` marker between camera
+    /// entities.
+    fn rig() -> App {
+        let mut app = App::new();
+        app.add_systems(Update, keep_inspector_on_window_camera);
+        app
+    }
+
+    fn rtt_target() -> RenderTarget {
+        RenderTarget::Image(Handle::default().into())
+    }
+
+    #[test]
+    fn an_rtt_camera_spawned_first_never_takes_the_context() {
+        // The regression this replaces the first-camera-wins observer for:
+        // a render-to-texture camera whose Add fires first must not own the
+        // inspector UI (nova-protocol's target inset, task 20260710-104421).
+        let mut app = rig();
+        let rtt = app
+            .world_mut()
+            .spawn((Camera::default(), rtt_target()))
+            .id();
+        let window = app.world_mut().spawn(Camera::default()).id();
+        app.update();
+        app.update();
+
+        assert!(
+            app.world().get::<PrimaryEguiContext>(window).is_some(),
+            "the window camera must hold the context"
+        );
+        assert!(
+            app.world().get::<PrimaryEguiContext>(rtt).is_none(),
+            "the RTT camera must never hold the context"
+        );
+    }
+
+    #[test]
+    fn the_context_rehomes_when_its_holder_becomes_rtt() {
+        // Retargeting a live camera to an image must hand the inspector to
+        // a window camera - placement is a per-frame reconcile, not a
+        // spawn-time decision.
+        let mut app = rig();
+        let first = app.world_mut().spawn(Camera::default()).id();
+        let second = app.world_mut().spawn(Camera::default()).id();
+        app.update();
+        app.update();
+        assert!(
+            app.world().get::<PrimaryEguiContext>(first).is_some(),
+            "the first window camera holds the context initially"
+        );
+
+        app.world_mut().entity_mut(first).insert(rtt_target());
+        app.update();
+        app.update();
+        assert!(
+            app.world().get::<PrimaryEguiContext>(first).is_none(),
+            "a camera that became RTT must lose the context"
+        );
+        assert!(
+            app.world().get::<PrimaryEguiContext>(second).is_some(),
+            "the remaining window camera must take the context"
+        );
+    }
+
+    #[test]
+    fn no_window_camera_means_no_context_and_no_panic() {
+        let mut app = rig();
+        let rtt = app
+            .world_mut()
+            .spawn((Camera::default(), rtt_target()))
+            .id();
+        app.update();
+        app.update();
+        assert!(
+            app.world().get::<PrimaryEguiContext>(rtt).is_none(),
+            "an RTT-only world gets no primary context"
+        );
     }
 }
