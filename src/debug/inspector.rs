@@ -2,7 +2,9 @@ use avian3d::prelude::*;
 use bevy::{camera::RenderTarget, prelude::*};
 use bevy_inspector_egui::{
     bevy_egui,
-    bevy_egui::{EguiContext, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext},
+    bevy_egui::{
+        EguiContext, EguiMultipassSchedule, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext,
+    },
     egui, DefaultInspectorConfigPlugin,
 };
 
@@ -130,7 +132,15 @@ fn keep_inspector_on_window_camera(
     for (entity, target, has_context) in &q_cameras {
         if renders_to_image(target) {
             if has_context {
-                commands.entity(entity).remove::<PrimaryEguiContext>();
+                // Shed the WHOLE egui cluster, not just the marker:
+                // `PrimaryEguiContext` requires `EguiContext` (which does
+                // not cascade on removal) and its on_insert hook adds
+                // `EguiMultipassSchedule` under multipass - leaving either
+                // behind means two entities run the same egui schedule and
+                // bevy_egui panics on the next pass.
+                commands
+                    .entity(entity)
+                    .remove::<(PrimaryEguiContext, EguiContext, EguiMultipassSchedule)>();
             }
         } else {
             first_window_camera.get_or_insert(entity);
@@ -251,5 +261,62 @@ mod tests {
             app.world().get::<PrimaryEguiContext>(rtt).is_none(),
             "an RTT-only world gets no primary context"
         );
+    }
+}
+
+#[cfg(test)]
+mod rehome_hazard_tests {
+    use bevy_inspector_egui::bevy_egui::EnableMultipassForPrimaryContext;
+
+    use super::*;
+
+    /// The multipass composition hazard (nova-protocol task 20260712-201603,
+    /// review R1.1): `PrimaryEguiContext`'s on_insert hook adds
+    /// `EguiMultipassSchedule(EguiPrimaryContextPass)` whenever
+    /// `EnableMultipassForPrimaryContext` exists (it does under
+    /// `EguiPlugin::default()`), and removing the marker alone leaves the
+    /// demoted camera with the schedule (and the required `EguiContext`) -
+    /// two entities then run the same egui schedule and bevy_egui panics.
+    /// The resource arms the REAL component hook without the full plugin.
+    #[test]
+    fn a_demoted_holder_sheds_the_whole_egui_cluster() {
+        let mut app = App::new();
+        app.insert_resource(EnableMultipassForPrimaryContext);
+        app.add_systems(Update, keep_inspector_on_window_camera);
+
+        let first = app.world_mut().spawn(Camera::default()).id();
+        let second = app.world_mut().spawn(Camera::default()).id();
+        app.update();
+        app.update();
+        assert!(
+            app.world().get::<EguiMultipassSchedule>(first).is_some(),
+            "the hook must arm the holder's multipass schedule (rig guard)"
+        );
+
+        // Retarget the holder to an image: the reconcile rehomes the context.
+        app.world_mut()
+            .entity_mut(first)
+            .insert(RenderTarget::Image(Handle::default().into()));
+        app.update();
+        app.update();
+
+        assert!(
+            app.world().get::<PrimaryEguiContext>(second).is_some(),
+            "the window camera took the context"
+        );
+        assert!(
+            app.world().get::<EguiMultipassSchedule>(first).is_none(),
+            "the demoted camera must shed EguiMultipassSchedule, or two \
+             entities run the same egui schedule and bevy_egui panics"
+        );
+        assert!(
+            app.world().get::<EguiContext>(first).is_none(),
+            "the demoted camera must shed the required EguiContext too"
+        );
+        let schedules = {
+            let mut q = app.world_mut().query::<&EguiMultipassSchedule>();
+            q.iter(app.world()).count()
+        };
+        assert_eq!(schedules, 1, "exactly one multipass schedule holder");
     }
 }
