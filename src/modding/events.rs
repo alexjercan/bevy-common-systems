@@ -4,14 +4,18 @@
 //! in a flexible way. Events are queued and processed in a world-specific context,
 //! allowing complex systems to react to game state changes.
 
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use bevy::{ecs::component::Mutable, prelude::*};
 
 pub mod prelude {
     pub use super::{
-        CommandsGameEventExt, EventAction, EventFilter, EventHandler, EventKind, EventWorld,
-        GameEvent, GameEventInfo, GameEventsPlugin,
+        CommandsGameEventExt, EventAction, EventFilter, EventHandler, EventHandlerIndex, EventKind,
+        EventWorld, GameEvent, GameEventInfo, GameEventsPlugin,
     };
 }
 
@@ -65,11 +69,25 @@ pub trait EventFilter<W: EventWorld>: Send + Sync {
 }
 
 /// Component that handles game events by applying filters and executing actions.
-#[derive(Component, Clone, Reflect)]
+#[derive(Component, Reflect)]
 pub struct EventHandler<W: EventWorld> {
     pub(super) name: &'static str,
     pub(super) filters: Vec<Arc<dyn EventFilter<W>>>,
     pub(super) actions: Vec<Arc<dyn EventAction<W>>>,
+}
+
+// Hand-written so the bound is `W: EventWorld`, not the `W: Clone` a derive would
+// add: the fields are a `&'static str` and `Vec`s of `Arc` trait objects, none of
+// which need the world itself to be `Clone`. The event-handler index clones
+// handler snapshots for cache-friendly dispatch, which requires this.
+impl<W: EventWorld> Clone for EventHandler<W> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name,
+            filters: self.filters.clone(),
+            actions: self.actions.clone(),
+        }
+    }
 }
 
 impl<W> EventHandler<W>
@@ -205,10 +223,18 @@ where
     fn build(&self, app: &mut bevy::prelude::App) {
         debug!("GameEventsPlugin: build");
         app.init_resource::<GameEventQueue<W>>();
+        app.init_resource::<EventHandlerIndex<W>>();
         app.init_resource::<super::registry::EventHandlerRegistry<W>>();
         app.add_observer(on_game_event::<W>);
 
         app.init_resource::<W>();
+        // The index maintenance runs every frame, ungated, so a handler spawned
+        // or despawned on a quiet frame is still reflected before the next
+        // event - and ordered before the dispatch that reads it.
+        app.add_systems(
+            PostUpdate,
+            maintain_handler_index::<W>.before(queue_system::<W>),
+        );
         app.add_systems(
             PostUpdate,
             (
@@ -245,11 +271,87 @@ where
     queue.events.push_back(event.clone());
 }
 
+/// Index of spawned handlers keyed by their event name, holding contiguous
+/// handler snapshots the dispatcher iterates directly.
+///
+/// The dispatcher ([`queue_system`]) used to scan *every* handler in the world
+/// for *every* fired event, matching on `handler.name == event.name`. That is
+/// `O(handlers)` per event regardless of how many actually react - fine for the
+/// handful a first-party scenario spawns, but wasteful once a large community
+/// mod brings hundreds of handlers most of which are for other event names.
+///
+/// A first attempt indexed *entity ids* and looked each up with `Query::get`
+/// during dispatch. Benchmarking (task 20260714-083331) showed that lost most of
+/// the win at scale: it trades Bevy's fast linear archetype iteration for
+/// random-access component lookups that thrash cache as the handler count grows.
+/// So the index instead stores cheap **clones** of the handlers themselves
+/// (an [`EventHandler`] is just a `&'static str` plus two `Vec`s of `Arc` trait
+/// objects), grouped by event name. Dispatch then walks a single contiguous
+/// `Vec` for the fired event, touching neither the ECS nor scattered memory.
+///
+/// The snapshot is valid because a handler is built, spawned once, and never
+/// mutated in place; [`maintain_handler_index`] refreshes it on add/despawn.
+#[derive(Resource)]
+pub struct EventHandlerIndex<W: EventWorld> {
+    by_name: HashMap<&'static str, Vec<(Entity, EventHandler<W>)>>,
+    names: HashMap<Entity, &'static str>,
+    _marker: PhantomData<W>,
+}
+
+impl<W: EventWorld> Default for EventHandlerIndex<W> {
+    fn default() -> Self {
+        Self {
+            by_name: HashMap::new(),
+            names: HashMap::new(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<W: EventWorld> EventHandlerIndex<W> {
+    /// Handlers registered for `name`, in spawn order. Empty slice when nothing
+    /// reacts to that event.
+    pub fn handlers(&self, name: &str) -> &[(Entity, EventHandler<W>)] {
+        self.by_name.get(name).map(Vec::as_slice).unwrap_or(&[])
+    }
+}
+
+/// Keeps [`EventHandlerIndex`] in sync with the spawned handler entities.
+///
+/// Runs every frame *unconditionally* - unlike the gated dispatch chain - so an
+/// added or despawned handler is reflected before the next event is processed,
+/// and `RemovedComponents` is drained each frame rather than overflowing its
+/// double-buffer. A handler entity is spawned once and never changes its event
+/// name, so the `Added` filter is sufficient; the reverse map guards against a
+/// (theoretical) double insert.
+fn maintain_handler_index<W: EventWorld>(
+    mut index: ResMut<EventHandlerIndex<W>>,
+    added: Query<(Entity, &EventHandler<W>), Added<EventHandler<W>>>,
+    mut removed: RemovedComponents<EventHandler<W>>,
+) {
+    for entity in removed.read() {
+        if let Some(name) = index.names.remove(&entity) {
+            if let Some(bucket) = index.by_name.get_mut(name) {
+                bucket.retain(|(e, _)| *e != entity);
+            }
+        }
+    }
+    for (entity, handler) in &added {
+        if index.names.insert(entity, handler.name).is_none() {
+            index
+                .by_name
+                .entry(handler.name)
+                .or_default()
+                .push((entity, handler.clone()));
+        }
+    }
+}
+
 /// Processes the event queue by applying handlers and executing actions.
 fn queue_system<W: EventWorld>(
     mut queue: ResMut<GameEventQueue<W>>,
     mut world: ResMut<W>,
-    q_handler: Query<&EventHandler<W>>,
+    index: Res<EventHandlerIndex<W>>,
 ) {
     while let Some(event) = queue.events.pop_front() {
         trace!(
@@ -258,8 +360,11 @@ fn queue_system<W: EventWorld>(
             event.info
         );
 
-        for handler in &q_handler {
-            if handler.name == event.name && handler.filter(&*world, &event.info) {
+        // Only the handlers registered for this event name, walked contiguously
+        // from the index - not a scan over every handler in the world, and no
+        // per-handler ECS lookup.
+        for (_entity, handler) in index.handlers(event.name) {
+            if handler.filter(&*world, &event.info) {
                 trace!("queue_system: handler {:?} passed filters", handler.name);
 
                 for action in &handler.actions {
@@ -268,5 +373,98 @@ fn queue_system<W: EventWorld>(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::prelude::*;
+    use std::collections::HashMap as StdHashMap;
+
+    /// Minimal event world that just counts action fires by tag.
+    #[derive(Resource, Default)]
+    struct Counts(StdHashMap<&'static str, u32>);
+
+    impl EventWorld for Counts {
+        fn world_to_state_system(_: &mut World) {}
+        fn state_to_world_system(_: &mut World) {}
+    }
+
+    /// Action that bumps the counter for its tag when it runs.
+    struct Bump(&'static str);
+    impl EventAction<Counts> for Bump {
+        fn action(&self, world: &mut Counts, _: &GameEventInfo) {
+            *world.0.entry(self.0).or_default() += 1;
+        }
+    }
+
+    fn app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_plugins(GameEventsPlugin::<Counts>::default());
+        app
+    }
+
+    fn spawn_handler(app: &mut App, event: &'static str, tag: &'static str) -> Entity {
+        let mut handler = EventHandler::<Counts>::from_event_name(event);
+        handler.add_action(Bump(tag));
+        app.world_mut().spawn(handler).id()
+    }
+
+    /// Push one event of `name` and run a frame so the index dispatches it.
+    fn fire(app: &mut App, name: &'static str) {
+        app.world_mut()
+            .resource_mut::<GameEventQueue<Counts>>()
+            .events
+            .push_back(GameEvent::new(name, GameEventInfo::default()));
+        app.update();
+    }
+
+    fn count(app: &App, tag: &str) -> u32 {
+        app.world().resource::<Counts>().0.get(tag).copied().unwrap_or(0)
+    }
+
+    #[test]
+    fn dispatch_routes_by_event_name_via_index() {
+        let mut app = app();
+        spawn_handler(&mut app, "alpha", "a1");
+        spawn_handler(&mut app, "alpha", "a2");
+        spawn_handler(&mut app, "beta", "b1");
+        app.update(); // maintain_handler_index picks up the added handlers
+
+        fire(&mut app, "alpha");
+        assert_eq!(count(&app, "a1"), 1);
+        assert_eq!(count(&app, "a2"), 1);
+        assert_eq!(count(&app, "b1"), 0, "beta handler must not run on alpha");
+
+        fire(&mut app, "beta");
+        assert_eq!(count(&app, "b1"), 1);
+        assert_eq!(count(&app, "a1"), 1, "alpha handlers must not re-run on beta");
+
+        // An event with no registered handler must be a harmless no-op.
+        fire(&mut app, "gamma");
+        assert_eq!(count(&app, "a1"), 1);
+    }
+
+    #[test]
+    fn despawned_handler_is_pruned_from_the_index() {
+        let mut app = app();
+        let a1 = spawn_handler(&mut app, "alpha", "a1");
+        spawn_handler(&mut app, "alpha", "a2");
+        app.update();
+
+        fire(&mut app, "alpha");
+        assert_eq!(count(&app, "a1"), 1);
+        assert_eq!(count(&app, "a2"), 1);
+
+        // Despawn one handler; the ungated maintenance system must prune it on
+        // the next frame even though the dispatch chain itself is idle.
+        app.world_mut().entity_mut(a1).despawn();
+        app.update();
+
+        fire(&mut app, "alpha");
+        assert_eq!(count(&app, "a1"), 1, "despawned handler must not run");
+        assert_eq!(count(&app, "a2"), 2);
     }
 }
