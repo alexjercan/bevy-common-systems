@@ -378,9 +378,11 @@ fn queue_system<W: EventWorld>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use bevy::prelude::*;
     use std::collections::HashMap as StdHashMap;
+
+    // `bevy::prelude::*` (App, World, Resource, ...) comes in via `super::*`,
+    // which re-globs the parent module's own prelude import.
+    use super::*;
 
     /// Minimal event world that just counts action fires by tag.
     #[derive(Resource, Default)]
@@ -422,7 +424,12 @@ mod tests {
     }
 
     fn count(app: &App, tag: &str) -> u32 {
-        app.world().resource::<Counts>().0.get(tag).copied().unwrap_or(0)
+        app.world()
+            .resource::<Counts>()
+            .0
+            .get(tag)
+            .copied()
+            .unwrap_or(0)
     }
 
     #[test]
@@ -440,7 +447,11 @@ mod tests {
 
         fire(&mut app, "beta");
         assert_eq!(count(&app, "b1"), 1);
-        assert_eq!(count(&app, "a1"), 1, "alpha handlers must not re-run on beta");
+        assert_eq!(
+            count(&app, "a1"),
+            1,
+            "alpha handlers must not re-run on beta"
+        );
 
         // An event with no registered handler must be a harmless no-op.
         fire(&mut app, "gamma");
