@@ -1,8 +1,31 @@
 # bevy_common_systems web showcase
 
-A tiny static site (TypeScript + HTML + webpack) that showcases the crate's
-example games as playable WebAssembly builds. The landing page is a gallery of
-cards; clicking one opens the game's wasm build in a full-screen iframe overlay.
+A small static site (TypeScript + HTML + webpack) that showcases the crate. It
+has three parts:
+
+- **Landing** (`/`) -- the pitch, an install line, and a module grid rendered
+  from the docs manifest so it never drifts.
+- **Docs** (`/wiki/`) -- a "bevy book" style handbook: one page per module, each
+  written in markdown under `src/wiki/` and rendered to HTML at build time
+  (`markdown.js`), with a manifest-driven sidebar, search and see-also
+  (`src/wiki.ts` + `src/wiki-pages.ts`). No-JS readers still get the full
+  article; the JS only adds the chrome.
+- **Examples** (`/play/`) -- a gallery of cards; clicking one opens the game's
+  wasm build in a full-screen iframe overlay (`src/games-page.ts` + `games.ts`).
+
+The shared header/footer live in `src/_header.html` / `src/_footer.html` and are
+injected into every generated page by `webpack-partials.js`. The visual language
+is a sharp, Bevy-inspired engine/tooling theme in `src/style.css`.
+
+## Adding a docs page
+
+1. Drop `src/wiki/<slug>.md` (start with a `# Title` H1).
+2. Add a `{ slug, title }` entry to `WIKI_DOC_PAGES` in `webpack.config.js`.
+3. Add a matching `WikiPage` entry to `src/wiki-pages.ts` (category, tags,
+   summary, related, headings) so the sidebar, search and index pick it up.
+
+Cross-link between docs pages with relative links (`[mesh](../mesh/)`) so they
+resolve under any `PUBLIC_PATH`.
 
 ## Build
 
@@ -15,9 +38,9 @@ npm install
 npm run build        # builds the games (trunk) then the gallery (webpack)
 ```
 
-The combined static site lands in `web/dist/` (gallery at the root, each game
-under `dist/games/<name>/`). Serve `dist/` with any static server, or use the
-dev server:
+The combined static site lands in `web/dist/` (landing at the root, docs under
+`dist/wiki/`, the gallery at `dist/play/`, each game under `dist/games/<name>/`).
+Serve `dist/` with any static server, or use the dev server:
 
 ```sh
 npm run serve        # http://localhost:8080  (run `npm run build:games` once first)

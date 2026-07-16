@@ -3,52 +3,150 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>bevy_common_systems - game showcase</title>
+    <title>bevy_common_systems - build Bevy games faster</title>
     <meta
       name="description"
-      content="Playable WebAssembly builds of the bevy_common_systems example games."
+      content="A copy-pastable crate of common Bevy gameplay systems - cameras, health, meshes, physics, a modding event bus, UI and more - plus fourteen playable example games."
     />
   </head>
   <body>
-    <header class="site-header">
-      <h1>bevy_common_systems</h1>
-      <p>Playable WebAssembly builds of the example games.</p>
-    </header>
-
+    <div id="header"></div>
     <main>
-      <ul id="game-grid" class="game-grid" aria-label="Games"></ul>
+      <!-- Hero -->
+      <section class="hero">
+        <span class="hero__badge">
+          <b>v0.19</b> &nbsp;//&nbsp; tracks Bevy 0.19 &nbsp;//&nbsp; avian3d 0.7
+        </span>
+        <h1 class="hero__title">Build Bevy games <span class="mono">faster</span></h1>
+        <p class="hero__tagline">
+          <b>bevy_common_systems</b> is a collection of copy-pastable Bevy utilities - the gameplay
+          components, systems and plugins that almost every game ends up needing, so a new project
+          does not have to rewrite them.
+        </p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" href="wiki/introduction/">Read the docs</a>
+          <a class="btn btn--ghost" href="play/">Play the examples</a>
+        </div>
+        <div class="hero__install">
+          <div class="codeline">
+            <span class="codeline__prompt">cargo&nbsp;add</span>
+            <span>bevy_common_systems --git https://github.com/alexjercan/bevy-common-systems</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- What's inside: the module grid, rendered from the manifest -->
+      <section class="section">
+        <div class="container">
+          <p class="section__eyebrow">Modules</p>
+          <h2 class="section__title">What's inside</h2>
+          <p class="section__lead">
+            Each module is one small, game-agnostic concern with an obvious API. Most add runtime
+            behaviour through a single
+            <code>*Plugin</code>; pure-utility modules export plain types and functions. Every card
+            links to its handbook page.
+          </p>
+          <div id="module-grid" class="module-grid"></div>
+        </div>
+      </section>
+
+      <!-- Feature highlights -->
+      <section class="section">
+        <div class="container">
+          <p class="section__eyebrow">Highlights</p>
+          <h2 class="section__title">A few things it does well</h2>
+          <div class="feature-list">
+            <div class="feature-row">
+              <div class="feature-row__text">
+                <span class="feature-row__num">01</span>
+                <h3 class="feature-row__title">One shape for every module</h3>
+                <p class="feature-row__body">
+                  Add a <code>*Plugin</code>, spawn its config component, write an
+                  <code>*Input</code> each frame, and read an <code>*Output</code> (or direct
+                  <code>Transform</code> writes). Learn one module and you know them all.
+                </p>
+                <a href="wiki/conventions/">Module conventions &rarr;</a>
+              </div>
+              <div class="feature-row__media">
+                <pre class="code-panel"><span class="kw">use</span> bevy::prelude::*;
+<span class="kw">use</span> bevy_common_systems::prelude::*;
+
+App::new()
+    .add_plugins(DefaultPlugins)
+    .add_plugins(<span class="ty">HealthPlugin</span>)
+    .run();</pre>
+              </div>
+            </div>
+
+            <div class="feature-row">
+              <div class="feature-row__text">
+                <span class="feature-row__num">02</span>
+                <h3 class="feature-row__title">Procedural meshes and juice</h3>
+                <p class="feature-row__body">
+                  Build octahedron spheres and noise planets with <code>TriangleMeshBuilder</code>,
+                  slice any mesh into flying fragments, then sell the hit with a material flash and
+                  a screen vignette.
+                </p>
+                <a href="wiki/mesh/">The mesh module &rarr;</a>
+              </div>
+              <div class="feature-row__media">
+                <pre
+                  class="code-panel"
+                ><span class="kw">let</span> mesh = <span class="ty">TriangleMeshBuilder</span>::octahedron(<span class="st">1.0</span>)
+    .<span class="fn">subdivide</span>(<span class="st">3</span>)
+    .<span class="fn">displace_noise</span>(&amp;fbm, <span class="st">0.5</span>)
+    .<span class="fn">build</span>();</pre>
+              </div>
+            </div>
+
+            <div class="feature-row">
+              <div class="feature-row__text">
+                <span class="feature-row__num">03</span>
+                <h3 class="feature-row__title">A modding event bus</h3>
+                <p class="feature-row__body">
+                  A generic, serde-friendly event bus for modding and scripting: JSON-authored
+                  handlers react to typed events whose payloads travel as
+                  <code>serde_json::Value</code>. One example game is built entirely on it.
+                </p>
+                <a href="wiki/modding/">The modding module &rarr;</a>
+              </div>
+              <div class="feature-row__media">
+                <pre class="code-panel"><span class="cm">// a handler, authored as data</span>
+{
+  <span class="st">"on"</span>: <span class="st">"ReactorTick"</span>,
+  <span class="st">"do"</span>: [
+    { <span class="st">"action"</span>: <span class="st">"AddEnergy"</span>, <span class="st">"amount"</span>: <span class="st">1</span> }
+  ]
+}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Examples teaser -->
+      <section class="section">
+        <div class="container">
+          <p class="section__eyebrow">Examples</p>
+          <h2 class="section__title">Fourteen playable games</h2>
+          <p class="section__lead">
+            The numbered examples are small, complete games that each headline one or more modules -
+            and they double as the integration tests. Every one runs in your browser as a
+            WebAssembly build.
+          </p>
+          <div class="hero__cta" style="justify-content: flex-start">
+            <a class="btn btn--primary" href="play/">Play the examples</a>
+            <a
+              class="btn btn--ghost"
+              href="https://github.com/alexjercan/bevy-common-systems/tree/master/examples"
+              target="_blank"
+              rel="noopener"
+              >Read the source</a
+            >
+          </div>
+        </div>
+      </section>
     </main>
-
-    <!-- Full-screen, scrollable game page (itch.io style): the game embed sits
-         centered at a mobile-ish portrait size, with instructions below it. -->
-    <div id="game-overlay" class="game-overlay" hidden>
-      <div class="game-page">
-        <div class="game-page__topbar">
-          <button id="game-overlay-back" class="game-page__back" type="button">
-            &larr; Back to games
-          </button>
-          <span id="game-overlay-title" class="game-page__title"></span>
-        </div>
-
-        <div class="game-embed">
-          <iframe
-            id="game-frame"
-            class="game-embed__frame"
-            title="Game"
-            allow="autoplay; fullscreen; gamepad"
-          ></iframe>
-        </div>
-
-        <section class="game-info">
-          <h2 class="game-info__heading">How to play</h2>
-          <p id="game-overlay-controls" class="game-info__controls"></p>
-        </section>
-      </div>
-    </div>
-
-    <footer class="site-footer">
-      Built with <a href="https://bevyengine.org">Bevy</a> and
-      <a href="https://trunkrs.dev">Trunk</a>.
-    </footer>
+    <div id="footer"></div>
   </body>
 </html>

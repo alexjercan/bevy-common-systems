@@ -1,0 +1,292 @@
+import './style.css';
+import { initSite } from './site';
+import { WIKI_PAGES, WIKI_SECTIONS, WikiPage } from './wiki-pages';
+
+initSite();
+
+// The whole wiki chrome is rendered here from the manifest, so the sidebar,
+// search, tag chips, see-also and index all stay in sync with wiki-pages.ts.
+// Each wiki page (index or sub-page) supplies placeholder elements by id; we
+// only fill the ones present, so index and sub-pages share this one script.
+
+// basePath is not available to bundled JS, so read it off the header brand link
+// the same way site.ts does (works at "/" locally and "/bevy-common-systems/" on
+// project pages).
+function basePath(): string {
+  const brand = document.querySelector<HTMLAnchorElement>('.site-header__brand');
+  if (!brand) return '/';
+  return new URL(brand.href).pathname.replace(/\/*$/, '/');
+}
+
+function currentSlug(base: string): string | null {
+  const path = window.location.pathname;
+  const rel = path.startsWith(base) ? path.slice(base.length) : path;
+  const segs = rel.split('/').filter(Boolean);
+  // /wiki/<slug>/ -> slug (multi-segment for child pages); /wiki/ -> null.
+  return segs[0] === 'wiki' && segs[1] ? segs.slice(1).join('/') : null;
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className?: string,
+  text?: string,
+): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function pageUrl(base: string, slug: string): string {
+  return `${base}wiki/${slug}/`;
+}
+
+function bySlug(slug: string): WikiPage | undefined {
+  return WIKI_PAGES.find((p) => p.slug === slug);
+}
+
+function haystack(p: WikiPage): string {
+  return [p.title, p.summary, p.tags.join(' '), p.headings.join(' ')].join(' ').toLowerCase();
+}
+
+// ---- sidebar + search -----------------------------------------------------
+
+function makeNavLink(p: WikiPage, base: string, active: string | null): HTMLElement {
+  const soon = !!p.comingSoon;
+  const link = el(soon ? 'span' : 'a', 'wiki-nav__link', p.title);
+  if (!soon) (link as HTMLAnchorElement).href = pageUrl(base, p.slug);
+  link.dataset.search = haystack(p);
+  const isActive = active === p.slug || (active !== null && active.startsWith(p.slug + '/'));
+  if (isActive) {
+    link.classList.add('is-active');
+    if (active === p.slug) link.setAttribute('aria-current', 'page');
+  }
+  if (soon) {
+    link.classList.add('is-soon');
+    link.appendChild(el('span', 'wiki-nav__soon', 'soon'));
+  }
+  return link;
+}
+
+function renderSidebar(nav: HTMLElement, base: string, active: string | null): void {
+  const search = el('input', 'wiki-search');
+  search.type = 'search';
+  search.placeholder = 'Search the docs...';
+  search.setAttribute('aria-label', 'Search the docs');
+  nav.appendChild(search);
+
+  const home = el('a', 'wiki-nav__home', 'Docs home');
+  home.href = `${base}wiki/`;
+  if (active === null) {
+    home.classList.add('is-active');
+    home.setAttribute('aria-current', 'page');
+  }
+  nav.appendChild(home);
+
+  const groups: { heading: HTMLElement; items: HTMLElement[] }[] = [];
+  const bands: { header: HTMLElement; cats: { heading: HTMLElement }[] }[] = [];
+
+  for (const section of WIKI_SECTIONS) {
+    const bandHeader = el('p', 'wiki-nav__section', section.name);
+    nav.appendChild(bandHeader);
+    const bandCats: { heading: HTMLElement }[] = [];
+
+    for (const category of section.categories) {
+      const pages = WIKI_PAGES.filter((p) => p.category === category);
+      if (pages.length === 0) continue;
+
+      const group = el('div', 'wiki-nav__group');
+      const heading = el('p', 'wiki-nav__cat', category);
+      group.appendChild(heading);
+
+      const items: HTMLElement[] = [];
+      for (const p of pages.filter((x) => !x.parent)) {
+        const link = makeNavLink(p, base, active);
+        group.appendChild(link);
+        items.push(link);
+
+        const kids = WIKI_PAGES.filter((c) => c.parent === p.slug);
+        if (kids.length > 0) {
+          const sub = el('div', 'wiki-nav__sub');
+          for (const c of kids) {
+            const clink = makeNavLink(c, base, active);
+            clink.classList.add('wiki-nav__child');
+            sub.appendChild(clink);
+            items.push(clink);
+          }
+          group.appendChild(sub);
+        }
+      }
+      nav.appendChild(group);
+      const cat = { heading, items };
+      groups.push(cat);
+      bandCats.push(cat);
+    }
+    bandHeader.hidden = bandCats.length === 0;
+    bands.push({ header: bandHeader, cats: bandCats });
+  }
+
+  const empty = el('p', 'wiki-nav__empty', 'No pages match.');
+  empty.hidden = true;
+  nav.appendChild(empty);
+
+  const filter = (): void => {
+    const q = search.value.trim().toLowerCase();
+    const terms = q.split(/\s+/).filter(Boolean);
+    let anyVisible = false;
+    for (const { heading, items } of groups) {
+      let groupVisible = false;
+      for (const link of items) {
+        const hay = link.dataset.search ?? '';
+        const match = terms.length === 0 || terms.every((t) => hay.includes(t));
+        link.hidden = !match;
+        if (match) groupVisible = true;
+      }
+      heading.hidden = !groupVisible;
+      if (groupVisible) anyVisible = true;
+    }
+    for (const band of bands) {
+      band.header.hidden = !band.cats.some((c) => !c.heading.hidden);
+    }
+    empty.hidden = anyVisible;
+  };
+  search.addEventListener('input', filter);
+}
+
+// ---- current-page tag chips ----------------------------------------------
+
+function renderTags(container: HTMLElement, page: WikiPage): void {
+  if (page.tags.length === 0) return;
+  for (const tag of page.tags) {
+    container.appendChild(el('span', 'wiki-tag', tag));
+  }
+}
+
+// ---- see also -------------------------------------------------------------
+
+function renderSeeAlso(container: HTMLElement, base: string, page: WikiPage): void {
+  const seen = new Set<string>([page.slug]);
+  const picks: WikiPage[] = [];
+
+  const add = (slug: string): void => {
+    if (seen.has(slug)) return;
+    const p = bySlug(slug);
+    if (!p || p.comingSoon) return;
+    seen.add(slug);
+    picks.push(p);
+  };
+
+  page.related.forEach(add);
+  for (const other of WIKI_PAGES) {
+    if (picks.length >= 5) break;
+    if (other.tags.some((t) => page.tags.includes(t))) add(other.slug);
+  }
+  if (picks.length === 0) return;
+
+  container.appendChild(el('h2', 'wiki-seealso__title', 'See also'));
+  const list = el('ul', 'wiki-seealso__list');
+  for (const p of picks.slice(0, 5)) {
+    const li = el('li');
+    const link = el('a', undefined, p.title);
+    link.href = pageUrl(base, p.slug);
+    li.appendChild(link);
+    li.appendChild(el('span', 'wiki-seealso__sum', ` - ${p.summary}`));
+    list.appendChild(li);
+  }
+  container.appendChild(list);
+}
+
+// ---- index page -----------------------------------------------------------
+
+function renderIndex(container: HTMLElement, base: string): void {
+  const topLevel = (category: string): WikiPage[] =>
+    WIKI_PAGES.filter((p) => p.category === category && !p.parent);
+
+  for (const section of WIKI_SECTIONS) {
+    if (!section.categories.some((c) => topLevel(c).length > 0)) continue;
+    container.appendChild(el('h2', 'wiki-index__band', section.name));
+
+    for (const category of section.categories) {
+      const pages = topLevel(category);
+      if (pages.length === 0) continue;
+
+      container.appendChild(el('h3', 'wiki-index__cat', category));
+      const grid = el('div', 'wiki-index__grid');
+      for (const p of pages) {
+        const card = p.comingSoon
+          ? el('div', 'wiki-index__card is-soon')
+          : el('a', 'wiki-index__card');
+        if (!p.comingSoon) {
+          (card as HTMLAnchorElement).href = pageUrl(base, p.slug);
+        }
+        const titleRow = el('div', 'wiki-index__cardhead');
+        titleRow.appendChild(el('h3', 'wiki-index__cardtitle', p.title));
+        if (p.comingSoon) {
+          titleRow.appendChild(el('span', 'wiki-index__soon', 'soon'));
+        }
+        card.appendChild(titleRow);
+        card.appendChild(el('p', 'wiki-index__cardsum', p.summary));
+        grid.appendChild(card);
+      }
+      container.appendChild(grid);
+    }
+  }
+}
+
+// ---- drawer scroll persistence --------------------------------------------
+
+const NAV_SCROLL_KEY = 'wiki-nav-scroll';
+
+function persistNavScroll(nav: HTMLElement): void {
+  const read = (): string | null => {
+    try {
+      return sessionStorage.getItem(NAV_SCROLL_KEY);
+    } catch {
+      return null;
+    }
+  };
+  const write = (v: number): void => {
+    try {
+      sessionStorage.setItem(NAV_SCROLL_KEY, String(v));
+    } catch {
+      // storage unavailable; scroll simply will not persist.
+    }
+  };
+
+  const saved = read();
+  if (saved !== null) nav.scrollTop = Number(saved) || 0;
+
+  let queued = 0;
+  nav.addEventListener('scroll', () => {
+    if (queued) return;
+    queued = requestAnimationFrame(() => {
+      queued = 0;
+      write(nav.scrollTop);
+    });
+  });
+  window.addEventListener('pagehide', () => write(nav.scrollTop));
+}
+
+// ---- boot -----------------------------------------------------------------
+
+const base = basePath();
+const slug = currentSlug(base);
+
+const nav = document.getElementById('wiki-nav');
+if (nav) {
+  renderSidebar(nav, base, slug);
+  persistNavScroll(nav);
+}
+
+const indexHost = document.getElementById('wiki-index');
+if (indexHost) renderIndex(indexHost, base);
+
+if (slug) {
+  const page = bySlug(slug);
+  if (page) {
+    const tagHost = document.getElementById('wiki-tags');
+    if (tagHost) renderTags(tagHost, page);
+    const seeAlsoHost = document.getElementById('wiki-seealso');
+    if (seeAlsoHost) renderSeeAlso(seeAlsoHost, base, page);
+  }
+}

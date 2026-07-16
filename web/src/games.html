@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Examples - bevy_common_systems</title>
+    <meta
+      name="description"
+      content="Fourteen playable WebAssembly example games built with bevy_common_systems. Each headlines one or more of the crate's modules."
+    />
+    <link rel="icon" href="<%= htmlWebpackPlugin.options.basePath %>favicon.svg" />
+  </head>
+  <body>
+    <div id="header"></div>
+    <main>
+      <section class="play-intro">
+        <p class="play-intro__eyebrow">Examples</p>
+        <h1 class="play-intro__title">Playable example games</h1>
+        <p class="play-intro__lead">
+          Each of these is a small, complete game built on bevy_common_systems - and each doubles as
+          an integration test for the modules it headlines. Pick one to play it right here in the
+          browser; the docs link back to the modules it shows off.
+        </p>
+      </section>
+
+      <ul id="game-grid" class="game-grid" aria-label="Games"></ul>
+
+      <!-- Full-screen, scrollable game page (itch.io style): the embed sits
+                 centered at a portrait size, with instructions below it. -->
+      <div id="game-overlay" class="game-overlay" hidden>
+        <div class="game-page">
+          <div class="game-page__topbar">
+            <button id="game-overlay-back" class="game-page__back" type="button">
+              &larr; Back to examples
+            </button>
+            <span id="game-overlay-title" class="game-page__title"></span>
+          </div>
+
+          <div class="game-embed">
+            <iframe
+              id="game-frame"
+              class="game-embed__frame"
+              title="Game"
+              allow="autoplay; fullscreen; gamepad"
+            ></iframe>
+          </div>
+
+          <section class="game-info">
+            <h2 class="game-info__heading">How to play</h2>
+            <p id="game-overlay-controls" class="game-info__controls"></p>
+            <p id="game-overlay-links" class="game-info__links"></p>
+          </section>
+        </div>
+      </div>
+    </main>
+    <div id="footer"></div>
+  </body>
+</html>
