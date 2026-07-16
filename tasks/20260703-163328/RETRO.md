@@ -12,7 +12,7 @@
   autoplay risk) and correctly isolated the dominant break -- assets never
   copied -- from the secondary risk (autoplay). The fix was then a one-line
   directive, not a hunt.
-- **Applied the prior retro directly.** `docs/retros/20260703-web-showcase-gotchas.md`
+- **Applied the prior retro directly.** `tasks/20260703-000001/NOTES.md`
   had two lessons that paid off immediately: (1) never `| tail` a build whose
   exit code matters -- logged to a file and checked `$?`; (2) verify through
   the real entry point. That second lesson turned into actually running

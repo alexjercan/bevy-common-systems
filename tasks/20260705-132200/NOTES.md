@@ -11,7 +11,7 @@ A batch of gameplay/polish upgrades to the `14_breach` FPS example, seeded by th
 fun-pass spike after it found that several of the original asks (menu, mobile,
 sounds) already existed, so the real gaps were combos, pickups, enemy variety and
 juice. Each landed as its own `/flow` task (implement -> review -> squash-merge ->
-retro); the per-task retros in `docs/retros/2026070*-breach-*.md` hold the details.
+retro); the per-task retros in `the breach tasks (tasks/<id>/RETRO.md)` hold the details.
 
 - **Combos** (`scoring/streak` + `ui/popup`): kills chained inside a window
   multiply the points they are worth; a "+N" floats up per kill and a "COMBO xN +P"

@@ -27,7 +27,7 @@ cover. It centers on **player input and the camera-to-screen glue around it**,
 plus two smaller gameplay primitives. Crucially, the input cluster is not
 speculative: mobile touch support alone already has FOUR design docs
 (`docs/2026-07-0{3,4}-*touch*.md`) and THREE retros
-(`docs/retros/*touch*.md`), each re-deriving the same pattern in a different
+(`tasks/<id>/RETRO.md (the *touch* tasks)`), each re-deriving the same pattern in a different
 game, and the asteroids `Pointer`, fruitninja `Pointer` and dropzone
 `TouchControl` are three independent re-implementations of "collapse
 mouse+touch+keys into one thing this frame".

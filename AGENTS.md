@@ -28,8 +28,8 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
   the code. Every record tied to a task lives in that task's folder - see
   "Where records go" below. Check here for planned and in-progress work.
 - `docs/` - reference documentation only (`dev-harness.md`,
-  `wasm-web-builds.md`) plus `docs/retros/` which keeps the `LESSONS.md`
-  ledger and a few task-less records. Per-task records do NOT go here.
+  `wasm-web-builds.md`), the `docs/LESSONS.md` ledger, and `docs/plans/`
+  (multi-task plans). Per-task records do NOT go here.
 - `web/` - a static TypeScript + webpack showcase site that serves the example
   games as WebAssembly builds (trunk). See `web/README.md` and
   `docs/wasm-web-builds.md`.
@@ -49,12 +49,11 @@ under `docs/`:
 - `tasks/<id>/NOTES.md` - the design/fix record for the shipped change
   (what changed and why, alternatives, difficulties).
 
-`docs/` keeps only the reference docs and `docs/retros/`, which holds the
-`LESSONS.md` ledger (read it before starting work; /compound appends to it)
-plus a few old records whose task folder no longer exists. When a task is
-pruned but its record is worth keeping, recreate the folder as a CLOSED
-archive-stub `TASK.md` (a folder without `TASK.md` breaks `tatr ls`) and put
-the record beside it.
+`docs/` keeps only the reference docs, `docs/plans/` (multi-task plans), and
+the `docs/LESSONS.md` ledger (read it before starting work; /compound appends
+to it). When a task is pruned but its record is worth keeping, recreate the
+folder as a CLOSED archive-stub `TASK.md` (a folder without `TASK.md` breaks
+`tatr ls`) and put the record beside it.
 
 ## Module Map
 
@@ -651,7 +650,7 @@ Examples:
   after review. Do not push without being asked.
 - Record the design/fix in the task's `tasks/<id>/NOTES.md` and the
   retrospective in `tasks/<id>/RETRO.md` (see "Where records go"); reference
-  docs and the `docs/retros/LESSONS.md` ledger live under `docs/`.
+  docs and the `docs/LESSONS.md` ledger live under `docs/`.
 
 ## Gotchas
 

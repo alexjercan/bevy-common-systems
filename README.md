@@ -168,8 +168,9 @@ cargo run --example 01_sphere --features debug
 - [`web/`](web/) - the TypeScript + webpack showcase site that serves the
   examples as WebAssembly builds; see `web/README.md` and
   `docs/wasm-web-builds.md`.
-- [`docs/`](docs/) - decision notes at the top level, retrospectives in
-  `docs/retros/`.
+- [`docs/`](docs/) - reference docs, the `docs/LESSONS.md` ledger, and
+  `docs/plans/`. Per-task records (spikes, reviews, retros, design notes)
+  live next to their task under `tasks/<id>/`.
 
 ## License
 

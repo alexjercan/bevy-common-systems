@@ -15,16 +15,18 @@ under `docs/`:
 - Top-level dated design notes `docs/2026-MM-DD-*.md` -> `tasks/<id>/NOTES.md`
   (31 files), resolving each file's task id from its header (or by slug/body
   where the header was absent).
-- 29 task folders that had been pruned were recreated as CLOSED archive-stub
-  `TASK.md`s (`TAGS: archive`) so their moved record has a home and `tatr ls`
-  does not break on a folder without a `TASK.md`.
-- 4 genuinely task-less records (cross-cutting dev knowledge with no single
-  task) stay under `docs/retros/` as the task-less bucket.
+- 33 task folders that had been pruned (or were task-less records) were
+  recreated as CLOSED archive-stub `TASK.md`s (`TAGS: archive`) so every
+  record has a home and `tatr ls` does not break on a folder without a
+  `TASK.md`. This includes the 4 formerly task-less records (test-memory,
+  web-showcase-gotchas, defaultplugins-doctest, release-license-gate), each
+  given a synthetic archive id and its record as `NOTES.md`.
 
 `docs/` now holds only the reference docs (`dev-harness.md`,
-`wasm-web-builds.md`), plus `docs/retros/` with the new `LESSONS.md` ledger,
-a `README.md`, and the 4 task-less records. Added a `docs/README.md` index
-and documented the "Where records go" convention in `AGENTS.md`.
+`wasm-web-builds.md`), the `LESSONS.md` ledger at the docs root, `docs/plans/`
+(README only, no plans yet), and a `docs/README.md` index. `docs/retros/` and
+`docs/spikes/` were dissolved entirely - matching nova-protocol's end state.
+The "Where records go" convention is documented in `AGENTS.md`.
 
 All ~200 references to the old `docs/` paths across `AGENTS.md`, task files
 and source comments were rewritten to the new locations via a rename-map pass.

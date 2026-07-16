@@ -49,7 +49,7 @@ documented.
       trunk asset hash/rewrite, if any, still leaves them fetchable at the path
       the AssetServer uses. Redirect build output to a file and check the exit
       code -- do NOT pipe the build through `| tail` (a piped build hides the
-      real exit code; see docs/retros/20260703-web-showcase-gotchas.md).
+      real exit code; see tasks/20260703-000001/NOTES.md).
 - [x] Generalize for future games: update the "adding a game" guidance so a new
       showcased game with assets does not rediscover this wall. Add an
       assets/copy-dir note to the checklist in `web/README.md` and to the
