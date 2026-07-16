@@ -20,10 +20,12 @@ that double as the integration tests and the quickstart documentation, plus a
 
 ```toml
 [dependencies]
-bevy_common_systems = { git = "https://github.com/alexjercan/bevy-common-systems" }
+bevy_common_systems = { git = "https://github.com/alexjercan/bevy-common-systems", tag = "v0.19.0" }
 ```
 
-The crate targets Bevy 0.19 and avian3d 0.7. It has no default features:
+The crate's version tracks Bevy's minor: `0.19.x` targets Bevy `0.19.x`. Pin to a
+release tag (`tag = "v0.19.0"`) for a stable build, or drop the `tag` to follow
+the default branch. It also targets avian3d 0.7. It has no default features:
 
 - `debug` - compiles the `debug` module (wireframe toggle, egui world
   inspector, avian gizmos, and the headless test harness). Pulls in

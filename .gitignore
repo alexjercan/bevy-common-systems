@@ -10,3 +10,7 @@ dist/
 
 dump.dot
 dump.svg
+
+# Generated at release time by cargo-about (see scripts/gen-licenses.sh); the
+# output is not byte-stable so it is not committed.
+credits/THIRD-PARTY-LICENSES.md
