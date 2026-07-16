@@ -17,10 +17,10 @@ pickups task) and remap the `Sfx` table to them.
 
 ## Notes
 
-- Spike: docs/spikes/20260705-132024-breach-fun-pass.md
+- Spike: tasks/20260705-132024/SPIKE.md
 - Follow the established placeholder-audio pattern: extend
   `scripts/gen-placeholder-sounds.py`, regenerate into `assets/sounds/`, update
-  `assets/sounds/README.md` (see `docs/2026-07-03-audio-and-fruitninja-sounds.md`).
+  `assets/sounds/README.md` (see `tasks/20260703-152544/NOTES.md`).
 - Keep them clearly placeholder-quality; the point is distinct, readable audio
   cues, not final sound design.
 - Coordinate with the pickups task if that adds a pickup SFX -- avoid duplicating.

@@ -17,8 +17,8 @@ delivers taps as `Touch` events with no synthesized mouse) and the web canvas,
 which does not yet swallow touch gestures.
 
 This mirrors the additive-writer, touch-nav approach proven in
-`08_dropzone` (`docs/2026-07-04-dropzone-touch-controls.md`) and reused in
-`11_overload` (`docs/2026-07-04-overload-touch-controls.md`). Desktop keyboard
+`08_dropzone` (`tasks/20260704-103517/NOTES.md`) and reused in
+`11_overload` (`tasks/20260704-130314/NOTES.md`). Desktop keyboard
 + mouse behaviour stays byte-for-byte unchanged.
 
 ## Steps
@@ -35,7 +35,7 @@ This mirrors the additive-writer, touch-nav approach proven in
 - [x] Verify: `cargo fmt --check`, `cargo clippy --example 09_reactor`,
   `cargo test --example 09_reactor`, `scripts/check-ascii.sh`, and boot the
   example under `DISPLAY=:0` to confirm it reaches the render loop.
-- [x] Write `docs/2026-07-04-reactor-touch-controls.md` (what/why, per the
+- [x] Write `tasks/20260704-142016/NOTES.md` (what/why, per the
   dropzone/overload docs).
 
 ## Notes

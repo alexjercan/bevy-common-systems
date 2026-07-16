@@ -5,7 +5,7 @@
 - TAGS: feature,example
 
 Top pick from the 01-05 games spike (see
-`docs/2026-07-03-example-games-ideation.md`). Ride a marker on a sphere's
+`tasks/20260703-165138/NOTES.md`). Ride a marker on a sphere's
 surface steering with `directional_sphere_orbit`; obstacles/pickups wander via
 `random_sphere_orbit`; a `ChaseCamera` follows with `LerpSnap` smoothing; a hit
 ends the run via `HealthPlugin`. Follow the 06_fruitninja shape: menu/playing/

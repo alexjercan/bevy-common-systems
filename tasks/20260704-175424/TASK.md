@@ -4,7 +4,7 @@
 - PRIORITY: 45
 - TAGS: spike,ui,feature
 
-> Spike: docs/spikes/20260704-175058-dev-harness-and-app-scaffolding.md (read
+> Spike: tasks/20260704-175058/SPIKE.md (read
 > first). Wave 2 -- the low-risk half of the deferred ui/menu proposal
 > (tasks/20260704-134800); fold this evidence into that task rather than racing
 > it.

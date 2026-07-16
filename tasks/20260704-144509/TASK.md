@@ -6,8 +6,8 @@
 
 
 > Follow-up from tasks/20260704-134500 (camera/shake module). See
-> docs/2026-07-04-camera-shake-module.md and
-> docs/retros/20260704-134500-camera-shake-module.md.
+> tasks/20260704-134500/NOTES.md and
+> tasks/20260704-134500/RETRO.md.
 
 ## Goal
 

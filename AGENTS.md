@@ -25,14 +25,36 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
 - `examples/` - runnable examples, numbered `NN_name.rs`. These double as
   the integration tests and the quickstart documentation.
 - `tasks/` - tatr task tracker files (`tasks/<id>/TASK.md`), versioned with
-  the code. Check here for planned and in-progress work.
-- `docs/` - project documentation: decision notes at the top level, retros
-  in `docs/retros/`.
+  the code. Every record tied to a task lives in that task's folder - see
+  "Where records go" below. Check here for planned and in-progress work.
+- `docs/` - reference documentation only (`dev-harness.md`,
+  `wasm-web-builds.md`) plus `docs/retros/` which keeps the `LESSONS.md`
+  ledger and a few task-less records. Per-task records do NOT go here.
 - `web/` - a static TypeScript + webpack showcase site that serves the example
   games as WebAssembly builds (trunk). See `web/README.md` and
   `docs/wasm-web-builds.md`.
 - `flake.nix`, `rust-toolchain.toml`, `rustfmt.toml`, `.cargo/config.toml` -
   toolchain setup, see Environment below.
+
+## Where records go (/plan, /spike, /work, /review, /compound, /flow)
+
+Everything tied to one task lives in that task's folder, so an `ls` of
+`tasks/<id>/` shows the whole story. Never write loose per-task `.md` files
+under `docs/`:
+
+- `tasks/<id>/TASK.md` - the task itself (tatr).
+- `tasks/<id>/SPIKE.md` - research that scoped the task (/spike).
+- `tasks/<id>/REVIEW.md` - review rounds and verdicts (/review).
+- `tasks/<id>/RETRO.md` - the retrospective (/compound).
+- `tasks/<id>/NOTES.md` - the design/fix record for the shipped change
+  (what changed and why, alternatives, difficulties).
+
+`docs/` keeps only the reference docs and `docs/retros/`, which holds the
+`LESSONS.md` ledger (read it before starting work; /compound appends to it)
+plus a few old records whose task folder no longer exists. When a task is
+pruned but its record is worth keeping, recreate the folder as a CLOSED
+archive-stub `TASK.md` (a folder without `TASK.md` breaks `tatr ls`) and put
+the record beside it.
 
 ## Module Map
 
@@ -182,7 +204,7 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     living here. Named `Doom` on purpose -- it reserves the premium
     `FirstPersonController` name for a future, more capable controller. Requires
     an axis-locked body (`LockedAxes::ROTATION_LOCKED`) + a `DoomEye` child.
-    Harvested from `14_breach` (`docs/2026-07-05-fps-controller-harvest.md`).
+    Harvested from `14_breach` (`tasks/20260705-103238/NOTES.md`).
   - `rigid_body` - two small helpers (no plugin): `rigid_body_point_velocity`
     (`v = v_lin + omega x (p - com)`, the muzzle-velocity of a point on a spinning body)
     and `destructible_body(health, density)` (the Health + density + Visibility bundle a
@@ -228,7 +250,7 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
     percent), `TweenNodeBackground` (`Tween<Vec4>` -> `BackgroundColor`), with
     `color_to_vec4`/`vec4_to_color` helpers and a `node_flash()` constructor.
     Builds on `tween`; harvested from `13_glide` (see
-    `docs/2026-07-05-13glide-ui-juice-harvest.md`, which also records why the
+    `tasks/20260705-090557/NOTES.md`, which also records why the
     rolling-number readout stayed game-local).
   - `menu` - `MenuPlugin` plus `centered_screen()` / `screen_text()` builders
     and a `TitlePulse` component: the full-screen centered-column overlay and
@@ -272,7 +294,7 @@ changing code; consistency is the crate's main defense against bloat.
     `ChaseCameraSystems::Sync`, which is empty for static-camera games, so the
     two were unordered and could drift; the passing test masked it because the
     executor resolved the ambiguity in insertion order
-    (`docs/retros/20260704-134500-camera-shake-module.md`).
+    (`tasks/20260704-134500/RETRO.md`).
 - Config / Input / Output / State component split:
   - a public config component named after the feature (`WASDCamera`,
     `ChaseCamera`, `PDController`, `SphereOrbit`, ...);
@@ -288,7 +310,7 @@ changing code; consistency is the crate's main defense against bloat.
     shipped its first consumer (`14_breach`) with the input feed *unordered* vs its
     `Drive` set (a one-frame input lag) precisely because the write-before edge was
     undocumented, and the autopilot could not catch it -- it force-writes the state,
-    bypassing the input path (`docs/retros/20260705-132542-doom-controller-harvest.md`).
+    bypassing the input path (`tasks/20260705-132542/RETRO.md`).
 - Modules expose their public API through preludes: most files define
   `pub mod prelude`, parent modules aggregate child preludes (a few leaf
   files are re-exported directly by their parent), and `crate::prelude`
@@ -386,8 +408,8 @@ note) claims the test exercises some behaviour, back that claim with an
 assertion in the same edit -- do not write the aspirational comment and test
 only the easy half. Reaching a `pub(super)` field or adding a small helper to
 actually drive the behaviour is cheaper than the review round that catches the
-gap (bit two consecutive cycles: `docs/retros/20260704-165400-overload-example.md`
-and `docs/retros/20260703-165439-modding-json-registry.md`).
+gap (bit two consecutive cycles: `tasks/20260704-165400/RETRO.md`
+and `tasks/20260703-165439/RETRO.md`).
 
 Examples:
 
@@ -410,7 +432,7 @@ Examples:
   Every gameplay event plays a one-shot sound via `SfxPlugin`; the files in
   `assets/sounds/` are generated placeholders (`scripts/gen-placeholder-sounds.py`),
   see `assets/sounds/README.md` and
-  `docs/2026-07-03-audio-and-fruitninja-sounds.md`.
+  `tasks/20260703-152544/NOTES.md`.
 - `07_orbit` - "Orbit Runner": a surface-dodge game on a sphere. Ride a glowing
   marker around a planet steering with `DirectionalSphereOrbit` (A/D, arrow
   keys, or drag), sweep up wandering orbs and dodge wandering red hazards, both
@@ -421,7 +443,7 @@ Examples:
   one-shots (`pickup`/`hurt`/`level_up`, sharing `menu_select`/`game_over`), and
   a wasm/trunk showcase build. Exercises the whole `transform/*` orbit family,
   `camera/chase` and `meth` under gameplay; grows out of `01_sphere`. See
-  `docs/2026-07-03-orbit-runner.md`.
+  `tasks/20260703-165427/NOTES.md`.
 - `08_dropzone` - a lunar-lander game and the headline demo of
   `PDControllerPlugin`. A noise-displaced planet (the `02_planet` recipe) sits
   at the origin with radial gravity; you fly a lander down onto it. Space/Up
@@ -442,8 +464,8 @@ Examples:
   (altitude/speed/fuel/hull/wind) and `audio`. The planet's avian trimesh
   collider is built inline from `TriangleMeshBuilder::vertices_and_indices()`.
   Follows the `06_fruitninja` shape (states, sounds, wasm). See
-  `docs/2026-07-03-dropzone-example.md`, `docs/2026-07-04-dropzone-tier-a-fun.md`
-  and `docs/2026-07-04-dropzone-hazards.md`; the flight constants were
+  `tasks/20260703-165432/NOTES.md`, `tasks/20260704-103544/NOTES.md`
+  and `tasks/20260704-103553/NOTES.md`; the flight constants were
   play-tested and tuned in `tasks/20260703-213510`.
 - `09_reactor` - "Reactor": a rules-as-machine incremental and the headline demo
   of `modding`. The whole simulation runs on the `03_modding` event bus, but the
@@ -462,7 +484,7 @@ Examples:
   `pickup`/`golden`/`alarm`/`level_up` plus shared `menu_select`/`game_over`,
   no new sound files). No 3D scene -- renders with a plain `Camera2d`. Follows
   the `06_fruitninja` shape (states, sounds, wasm). Grows out of `03_modding`.
-  See `docs/2026-07-04-reactor-example.md`.
+  See `tasks/20260704-170738/NOTES.md`.
 
 - `10_asteroids` - a top-down "asteroids" shooter and the crate's physics-
   fragments showcase, the counterpoint to `06_fruitninja`. You fly a ship around
@@ -479,7 +501,7 @@ Examples:
   `Gravity::ZERO`). Controls are unified keyboard + pointer (A/D rotate, W
   thrust, Space fire, or hold the mouse / a finger to fly toward it and
   auto-fire) so the wasm build is touch-playable. Follows the `06_fruitninja`
-  shape (states, sounds, wasm). See `docs/2026-07-04-asteroids-example.md`.
+  shape (states, sounds, wasm). See `tasks/20260703-170744/NOTES.md`.
 - `11_overload` - "Overload": a dashboard-survival game and the headline demo of
   `ui/status` as a game surface. The whole game lives on the `status_bar`: four
   gauges (HEAT/PRES/FLUX/CHRG) climb and random-walk on their own, each a
@@ -493,8 +515,8 @@ Examples:
   menu/meltdown screens take a tap; touch is an additive writer of the same
   `apply_vent` path, keyboard unchanged. Grows out of `04_status_item`, follows
   the `06_fruitninja` shape (states, sounds, wasm). See
-  `docs/2026-07-04-overload-example.md` and
-  `docs/2026-07-04-overload-touch-controls.md`.
+  `tasks/20260704-165400/NOTES.md` and
+  `tasks/20260704-130314/NOTES.md`.
 - `12_bastion` - "Bastion": a defend-the-core tower defense and the headline demo
   of `camera/project` plus the two aim/track halves of the `transform` family
   that no other example showed. A glowing `Core` (a `Health` pool) sits at the
@@ -511,7 +533,7 @@ Examples:
   the file so stats/new types need no recompile, wasm uses a compiled-in copy),
   with the build key bindings and weighted enemy spawn iterating the catalog so a
   new tower/enemy is added purely in JSON (`tasks/20260704-220719`,
-  `docs/2026-07-05-bastion-data-catalog.md`; the spike concluded the loader -- not
+  `tasks/20260704-220719/NOTES.md`; the spike concluded the loader -- not
   a `SpecCatalog<T>` type -- is the only reusable nugget and should wait for a
   second user). Reuses `mesh/explode` (own `On<Insert,
   ExplodeFragments>` observer -- the crate has no fragment observer), `ui/popup`,
@@ -519,7 +541,7 @@ Examples:
   `helpers/temp`, `input/pointer` and `audio`. One pointer does double duty (drag
   = orbit, tap = place/select, disambiguated by a move threshold); Space is a
   keyboard/autopilot placement path. Follows the `06_fruitninja` shape (states,
-  sounds, wasm). See `docs/2026-07-04-bastion-example.md`.
+  sounds, wasm). See `tasks/20260704-220736/NOTES.md`.
 - `13_glide` - "Glide": a slide-merge (2048-style) number puzzle rendered
   entirely in Bevy UI, and the headline demo of `tween` plus `persist` +
   `scoring/high_score` (the first example for any of the three, and the gallery's
@@ -538,15 +560,15 @@ Examples:
   off the ECS. The slide/pop/flash appliers are now the crate's `ui/animate`
   markers (`TweenNodeOffset`/`TweenNodeScale`/`TweenNodeBackground` + `node_flash`,
   harvested by `tasks/20260705-090557`); the rolling score readout stayed
-  game-local (see `docs/2026-07-05-13glide-ui-juice-harvest.md`). Also reuses
+  game-local (see `tasks/20260705-090557/NOTES.md`). Also reuses
   `ui/popup`, `ui/menu`, `input/pointer`, `input/state` and `audio`; renders with
   a plain `Camera2d`. Follows the `06_fruitninja` shape (states, sounds, wasm).
   Press Space during a run to hand control to a built-in auto-solver: a shallow
   expectimax (`best_move`/`score_grid`, pure and unit-tested off the ECS, with a
   headless test that plays a full game to the 2048 tile) that plays toward 2048
   on its own, paced at one move / 0.32s so each slide is watchable, driving the
-  same `start_move` path a human move does. See `docs/2026-07-05-glide-example.md`
-  and `docs/2026-07-05-glide-solver.md`.
+  same `start_move` path a human move does. See `tasks/20260705-090624/NOTES.md`
+  and `tasks/20260705-143000/NOTES.md`.
 - `14_breach` - "Breach": a grounded, Doom-like first-person arena shooter, and the
   gallery's first first-person game. It headlines three things no prior example
   showed: the first-person viewpoint as a real game (`camera/wasd` only ever
@@ -605,9 +627,9 @@ Examples:
   the menu spawns its own `Camera2d` (the Playing `Camera3d` is a child of the player,
   so menu/game-over states otherwise have NO camera and Bevy UI never renders -- a
   latent gap the force-transition autopilot + black headless captures had hidden).
-  See `docs/2026-07-05-breach-example.md`,
-  the harvest note `docs/2026-07-05-fps-controller-harvest.md` (`tasks/20260705-103238`)
-  and `docs/2026-07-05-breach-fun-pass.md` (combos/pickups/enemies/juice/sounds).
+  See `tasks/20260705-103236/NOTES.md`,
+  the harvest note `tasks/20260705-103238/NOTES.md` (`tasks/20260705-103238`)
+  and `tasks/20260705-132200/NOTES.md` (combos/pickups/enemies/juice/sounds).
 - `15_integrity` - a destructible-structure demo for the `integrity` module. A grid of
   connected blocks floats in zero-g; click a block (cursor picked onto the z = 0 plane via
   `camera/project::pointer_on_plane`) to detonate a `blast_damage` sensor there. Blocks tint
@@ -618,7 +640,7 @@ Examples:
   avian motion, no fake integrator); `ui/health_display` tracks the structure's aggregate
   health and `ui/objectives` flips its goal to done once it is gone. Tuned so one blast
   disables a whole patch, so the cascade is the visible headline. See
-  `docs/2026-07-08-integrity-and-destructible-promotion.md`.
+  `tasks/20260708-112713/NOTES.md`.
 
 ## Workflow
 
@@ -627,7 +649,9 @@ Examples:
   work.
 - Feature branches per task, merged into `master` (the default branch)
   after review. Do not push without being asked.
-- Document decisions in `docs/`, retrospectives in `docs/retros/`.
+- Record the design/fix in the task's `tasks/<id>/NOTES.md` and the
+  retrospective in `tasks/<id>/RETRO.md` (see "Where records go"); reference
+  docs and the `docs/retros/LESSONS.md` ledger live under `docs/`.
 
 ## Gotchas
 
@@ -650,9 +674,9 @@ Examples:
   component) - spawning `BorderRadius` in the bundle fails the `Bundle` bound.
   Grepping `06_fruitninja`/`08_dropzone` for `font_size:`, `TextLayout`,
   `AmbientLight` and `border_radius:` up front avoids a batch of compile errors
-  (this has bitten three cycles now: `docs/retros/20260703-150200-bevy-019-migration.md`,
-  `docs/retros/20260703-165432-dropzone-example.md` and
-  `docs/retros/20260704-103517-dropzone-touch-controls.md`). The same "copy /
+  (this has bitten three cycles now: `tasks/20260703-150200/RETRO.md`,
+  `tasks/20260703-165432/RETRO.md` and
+  `tasks/20260704-103517/RETRO.md`). The same "copy /
   verify, do not improvise the visual layer" rule extends past compile errors to
   things that render wrong silently (a background run cannot see the screen, so
   they are not panics): a `StandardMaterial` with an HDR `emissive` must NOT set
@@ -663,7 +687,7 @@ Examples:
   from a fixed base (`translation = BASE + offset`, per `06_fruitninja`), never
   an accumulating `+=`, or the camera drifts. All three slipped past
   implementation and were caught in review in `10_asteroids`
-  (`docs/retros/20260703-170744-asteroids-example.md`).
+  (`tasks/20260703-170744/RETRO.md`).
 - Running examples: the examples open a window and are the de facto integration
   tests, so a new or changed example is not "done" until it has actually been
   run once - `cargo build` only proves it compiles, not that it boots. Even a
@@ -671,7 +695,7 @@ Examples:
   `cargo run --example NN_name` under a `timeout` and confirm it reaches the
   render loop (a `bevy_render::view::window` swap-chain log line means startup
   finished). Not doing this shipped a startup hang in 08_dropzone
-  (`docs/retros/20260703-165432-dropzone-example.md`). Booting only reaches the
+  (`tasks/20260703-165432/RETRO.md`). Booting only reaches the
   menu, though; to exercise a stateful example's actual gameplay
   (menu -> playing -> result) headlessly when no input-injection tool
   (`xdotool`) is around, do NOT hand-roll a throwaway autopilot any more (it was
@@ -692,7 +716,7 @@ Examples:
   fire (its settle-frame count never accumulates). To capture a mid-gameplay
   frame, use `ScreenshotPlugin` alone, or drive with `AutopilotPlugin` and grab
   the window externally with `scrot`
-  (`docs/retros/20260704-220736-bastion-example.md`). (History, for context: verified 07/08 gameplay via the old
+  (`tasks/20260704-220736/RETRO.md`). (History, for context: verified 07/08 gameplay via the old
   hand-rolled harness in `tasks/20260703-213510`, `tasks/20260704-103544`.)
 - Seeing the screen (do not treat "a background run cannot see the screen" as a
   hard limit): when `$DISPLAY` is set, a background session CAN screenshot the
@@ -711,7 +735,7 @@ Examples:
   example permanently. This caught a real 09_reactor layout regression -- at phone width four
   of six shop buttons rendered below the fold, invisible to `cargo build`,
   clippy and the boot check but obvious in a screenshot
-  (`docs/retros/20260704-143000-reactor-overload-mobile-touch.md`). For a
+  (`tasks/20260704-143000/RETRO.md`). For a
   responsive Bevy 0.19 grid that must hold N columns at any width, use percentage
   item widths, not fixed px + `flex_wrap` (flexbox wraps before it shrinks, so
   fixed-px cards collapse to one column on a narrow frame).
@@ -724,7 +748,7 @@ Examples:
   examples are the integration tests). Use `cargo clippy --all-targets` (or
   `cargo build --examples`) as the real compile gate. Missing this hid eight
   example errors behind a "clean" build in `input/pointer`
-  (`docs/retros/20260704-161508-input-pointer.md`).
+  (`tasks/20260704-161508/RETRO.md`).
 - Tests that embed a data file (`include_str!`) go stale when the same task edits
   that file. If a `#[cfg(test)]` assertion checks the contents of a JSON/asset the
   task also changes (e.g. an `include_str!`ed catalog), assert the *final shipped*
@@ -732,7 +756,7 @@ Examples:
   code edit -- a green example-test run before the data was finalized is a false
   green for anything embedding it. Bit `12_bastion`'s data-driven catalog: a
   roster-count test passed at 2+2 then failed once the "prove it" step made the
-  embedded catalog 3+3 (`docs/retros/20260704-220719-bastion-data-catalog.md`).
+  embedded catalog 3+3 (`tasks/20260704-220719/RETRO.md`).
 - Prelude name collisions with bevy: a public type re-exported through
   `crate::prelude` must not share a name with anything in `bevy::prelude`.
   A game-local `struct Foo` silently shadows a bevy-prelude `Foo`, so it never
@@ -742,7 +766,7 @@ Examples:
   natural name `Pointer` collides with bevy's `bevy_picking` `Pointer` event --
   it had to become `UnifiedPointer`. Check new prelude names against
   `bevy::prelude` before committing to them
-  (`docs/retros/20260704-161508-input-pointer.md`).
+  (`tasks/20260704-161508/RETRO.md`).
 - Doctests that construct and configure an `App` are runtime tests, not just
   compile checks -- `cargo test --doc` actually runs them. `init_state` /
   `NextState` / any state transition panics at runtime without the state
@@ -750,7 +774,7 @@ Examples:
   panics with "The `StateTransition` schedule is missing. Did you forget to add
   StatesPlugin or DefaultPlugins?". Give such doctests
   `(MinimalPlugins, bevy::state::app::StatesPlugin)` (or `DefaultPlugins`), the
-  plugins the real app would have (`docs/retros/20260704-175425-leaf-helpers.md`).
+  plugins the real app would have (`tasks/20260704-175425/RETRO.md`).
 - Web/wasm builds: `trunk` must run from the repo root (it fails with
   `Unable to find any Trunk configuration` from a subdir like `web/`), and
   `rand` on wasm needs the getrandom `wasm_js` backend. Both are handled in
@@ -769,7 +793,7 @@ Examples:
   Pages deploy (`pages.yml`) also retries `actions/deploy-pages` once because
   that step intermittently returns a transient "Deployment failed, try again
   later." -- do not remove the retry as redundant
-  (`docs/2026-07-04-pages-deploy-retry.md`).
+  (`tasks/20260704-101608/NOTES.md`).
 - A state-machine example screenshot at *state entry* is not gameplay
   verification. `ScreenshotPlugin` snaps as soon as it reaches the target state,
   before any input has driven the game, so a `BCS_SHOT` grab of a
@@ -780,7 +804,7 @@ Examples:
   move->entity classification (`merges` list always empty) was wrong, and it
   passed a headless autopilot run (no panic) plus a state-entry screenshot because
   neither observed a merge, and the moves-to-entity mapping had zero test coverage
-  (`docs/retros/20260705-101442-glide-example.md`). Rule: when a pure function
+  (`tasks/20260705-101442/RETRO.md`). Rule: when a pure function
   returns both a result and a list describing side effects (a grid *and* the
   per-tile moves), test the *list*, not just the result -- a correct grid/score
   actively masks a mishandled moves list downstream. Make the rendering-driver
@@ -798,7 +822,7 @@ Examples:
   effectively broken (a defenceless player survived 30s+) and the player-death path
   (`Health` zero -> `RunOver` -> `GameOver`) never actually fired: the observed
   GameOver was always the `.hold(Playing, N)` timer, and the "kills" only proved the
-  offence side (`docs/retros/20260705-114236-breach-example.md`). Rule: verify any
+  offence side (`tasks/20260705-114236/RETRO.md`). Rule: verify any
   game-driven transition (lose/win/level-up) with a headless `App` unit test
   (`MinimalPlugins` + `bevy::state::app::StatesPlugin` + the relevant crate plugin)
   that drives the trigger and asserts the state/resource flips -- write it before
@@ -821,7 +845,7 @@ Examples:
   `08_dropzone` fed the same expression into both the ship's PD attitude target and
   the chase camera, so flying around the planet yawed the hull around and rolled the
   camera with it (`tasks/20260705-154507`,
-  `docs/2026-07-05-dropzone-orbit-rotation-fix.md`). Fix: when you need a full
+  `tasks/20260705-154507/NOTES.md`). Fix: when you need a full
   orientation on a surface, anchor the yaw to an explicit heading -- build the frame
   from `up` plus a `forward_ref` projected into the tangent plane
   (`surface_frame(up, forward_ref)` in `08_dropzone`), never from a bare

@@ -21,7 +21,7 @@ should stay game-local. Depends on the MVP (20260705-090624) shipping first.
 
 ## Notes
 
-Spike: docs/spikes/20260705-090421-ui-forward-slide-merge-puzzle.md
+Spike: tasks/20260705-090421/SPIKE.md
 
 Stepless direction-level task -- `/plan` before `/work`. This is the "harvest
 after proof" step: the concrete `13_glide` reference must exist before deciding
@@ -43,7 +43,7 @@ what to promote.
 - [x] 4. Evaluate the rolling-number readout: ship a `RollingNumber` only if it
   generalizes cleanly (source-of-truth + text formatting are game-specific);
   otherwise keep it game-local and say why.
-- [x] 5. Decision doc `docs/2026-07-05-13glide-ui-juice-harvest.md`: per-candidate
+- [x] 5. Decision doc `tasks/20260705-090557/NOTES.md`: per-candidate
   verdict (promote / keep local) with reasoning; update AGENTS.md module map.
 
 ## Close-out
@@ -53,5 +53,5 @@ Shipped `ui/animate` (the UI-node parallel to `feedback/flash`): opt-in markers
 `color_to_vec4`/`vec4_to_color`, and `node_flash`. Refactored 13_glide onto it
 (deleted its local appliers + `TileFace`). The rolling-number readout stayed
 game-local -- format + source are game-specific and the reusable core is a thin
-tween pattern (docs/2026-07-05-13glide-ui-juice-harvest.md). Reviewed APPROVE in
+tween pattern (tasks/20260705-090557/NOTES.md). Reviewed APPROVE in
 one round; no follow-up seeded.

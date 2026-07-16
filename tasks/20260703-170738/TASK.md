@@ -5,7 +5,7 @@
 - TAGS: feature,example,modding
 
 Low-priority pick from the 01-05 games spike (see
-`docs/2026-07-03-example-games-ideation.md`). An idle/incremental game where
+`tasks/20260703-165138/NOTES.md`). An idle/incremental game where
 the rules ARE the mod system: the `EventWorld` holds a few resources (energy,
 heat, credits), ticks and clicks `fire` events, and the player builds their
 machine by placing `EventHandler` entities (filter + action pairs, exactly as

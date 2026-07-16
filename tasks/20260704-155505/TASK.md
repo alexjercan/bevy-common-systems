@@ -37,7 +37,7 @@ material flash).
 
 - [x] Design the screen-flash API (one shape covering the spike-to-peak-then-decay
       and the spawn-and-fade variants). See
-      docs/2026-07-04-feedback-screen-flash-module.md: a `ScreenFlash { peak_alpha,
+      tasks/20260704-155505/NOTES.md: a `ScreenFlash { peak_alpha,
       decay, despawn_on_end }` component (color lives in `BackgroundColor`), plus
       `screen_flash()` (one-shot builder) and `screen_flash_node()` (shared node).
 - [x] Add `src/feedback/screen_flash.rs` (+ prelude wiring), with tests (4:

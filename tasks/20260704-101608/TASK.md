@@ -46,7 +46,7 @@ broken deploy still fails after the retries are exhausted.
 - [x] Validate the workflow YAML parses (actionlint, clean, exit 0) and re-read
       the file to confirm the retry logic and `if:` conditions are correct.
 - [x] Update `docs/` with a short note on the transient Pages failure and the
-      retry mitigation (docs/2026-07-04-pages-deploy-retry.md).
+      retry mitigation (tasks/20260704-101608/NOTES.md).
 
 ## Notes / Out of scope
 

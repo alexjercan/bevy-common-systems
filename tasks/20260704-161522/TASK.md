@@ -4,7 +4,7 @@
 - PRIORITY: 20
 - TAGS: spike,feature,physics
 
-> Spike: docs/spikes/20260704-161210-input-and-projection-harvest.md (read first). Wave B -- only 2 games; a documented recipe is an
+> Spike: tasks/20260704-161210/SPIKE.md (read first). Wave B -- only 2 games; a documented recipe is an
 > acceptable outcome.
 
 ## Goal

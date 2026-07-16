@@ -58,7 +58,7 @@ too_many_arguments = "allow"
 # rust-lld held many multi-GB binaries at once: peak ~38 GB on a 32 GB machine,
 # which thrashed swap ("uses the entire RAM").
 #
-# Two knobs, both measured on this repo (see docs/2026-07-03-test-memory.md):
+# Two knobs, both measured on this repo (see docs/retros/2026-07-03-test-memory.md):
 #   split-debuginfo = "unpacked"  -> DWARF stays in the .o files instead of being
 #     copied through the linker into the executable. Full debug info is retained;
 #     linked binary drops to ~350 MB; peak ~19.7 GB.

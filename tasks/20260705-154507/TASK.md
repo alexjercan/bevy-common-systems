@@ -32,7 +32,7 @@ up keeps the view level on lean, heading follows the ship). Covered by four unit
 tests: upright + tangent-heading invariant, degenerate forward-parallel-to-up,
 and the circling regression (arc twists >1 rad while `surface_frame` stays at 0).
 
-See `docs/2026-07-05-dropzone-orbit-rotation-fix.md`.
+See `tasks/20260705-154507/NOTES.md`.
 
 ## Steps
 

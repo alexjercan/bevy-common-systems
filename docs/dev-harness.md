@@ -2,7 +2,7 @@
 
 - DATE: 2026-07-04
 - TASK: `tasks/20260704-175421`
-- SPIKE: `docs/spikes/20260704-175058-dev-harness-and-app-scaffolding.md` (Wave 1)
+- SPIKE: `tasks/20260704-175058/SPIKE.md` (Wave 1)
 
 ## What this is
 

@@ -77,7 +77,7 @@ literally a 2-axis absolute controller and maps 1:1 onto the existing input.
 
 Implemented the spike's option-1 virtual pad on branch `feature/08-dropzone-touch`
 (`examples/08_dropzone.rs`), documented in
-`docs/2026-07-04-dropzone-touch-controls.md`:
+`tasks/20260704-103517/NOTES.md`:
 
 - Left 40% = thrust hold zone; right side = a floating steer stick
   (deflection-to-position via `touch_lean`, dead zone, slides at the radius).

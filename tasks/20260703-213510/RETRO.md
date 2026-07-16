@@ -1,0 +1,61 @@
+# Retro: play-test and tune 08_dropzone flight feel
+
+- TASK: 20260703-213510
+- BRANCH: polish/dropzone-tune (merged to master as fc6a9b8)
+- REVIEW ROUNDS: 2 (round 1 REQUEST_CHANGES -> 1 MAJOR + 1 NIT, round 2 APPROVE)
+
+See `tasks/20260703-213510/TASK.md`, its REVIEW.md, and the tuning section of
+`tasks/20260703-165432/NOTES.md`. This is about how the working went.
+
+## What went well
+
+- Turned a subjective "tune the flight feel" task into evidence. I added a
+  temporary env-gated autopilot (`DROPZONE_AUTOPILOT`) that flew the real systems
+  and logged telemetry (altitude / speed / vertical speed / tilt / fuel) each
+  tick, plus a free-fall crash mode. That measured the PD response (~1 s rise, no
+  overshoot), confirmed the descent is winnable with fuel to spare, and proved a
+  14 m/s impact is caught by the trimesh (no tunneling) - so most of the physics
+  constants were kept on data, not vibes.
+- Actually running the game (screenshots) caught two things no unit test would:
+  at altitude the chase camera looked into empty space with the planet out of
+  frame, and the thruster flame was hidden under the hull so the `camera/post`
+  bloom never showed. Both are pure-play observations; the fixes (reframe the
+  camera, lengthen the flame) are the most visible improvements in the diff.
+- The independent review caught a real correctness gap in my impact-speed fix
+  that I had reasoned was correct. Worth the round.
+
+## What went wrong
+
+- I ran a STALE binary and "verified" against it without noticing the build had
+  failed. Adding `ApproachSpeed` pushed the ship spawn tuple to 16 components,
+  past Bevy's bundle-arity limit ("not a Bundle"). My chained
+  `cargo build ...; echo "BUILD: $?" | tee ...; <run>` masked the failure because
+  the `echo | tee` exits 0, so the run used the previous good binary and looked
+  fine. This is the same pipe-hides-exit-code trap AGENTS.md already warns about,
+  in a new guise. Caught only because a monitor grepped the log and saw
+  `BUILD: 101`. Lesson: gate the run on the real build result (`cargo build && run`),
+  never `build; echo rc; run`.
+- My first `ApproachSpeed` capture (in `FixedUpdate`) was subtly wrong: I reasoned
+  about the one-substep-per-frame timeline and missed that a stuttering frame runs
+  several `[FixedUpdate, FixedPostUpdate]` substeps, so a later substep could
+  overwrite the value with the post-collision velocity - re-introducing the exact
+  crash-scored-as-landing bug. Fixed by capturing once per frame in `PreUpdate`,
+  before the whole fixed loop. Root cause: reasoning about Bevy's fixed timestep
+  without considering the multi-substep catch-up case.
+
+## What to improve next time
+
+- For "tune feel" / behavioral tasks, a scripted-autopilot + telemetry harness is
+  the right tool - it makes the invisible measurable. Keep reaching for it.
+- When a shell command builds then runs an artifact, chain with `&&` so a failed
+  build cannot fall through to running a stale binary. Do not read `$?` of a
+  later `echo`.
+- When reasoning about avian/Bevy fixed-timestep ordering, explicitly consider
+  the >1-substep-per-render-frame case; the single-substep timeline hides bugs.
+
+## Action items
+
+- [x] Fixed the impact-speed bug and its multi-substep variant (`ApproachSpeed`
+  captured in `PreUpdate`).
+- [x] Camera/flame reframed so the planet and the bloom thruster are visible.
+- No new follow-up tasks; the example plays and is documented as tuned.

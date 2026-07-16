@@ -20,7 +20,7 @@ swarm threat rather than passive kiting.
 
 ## Notes
 
-- Spike: docs/spikes/20260705-132024-breach-fun-pass.md
+- Spike: tasks/20260705-132024/SPIKE.md
 - Reuse `scoring/streak` (do NOT re-implement decay; it owns count+decay only,
   the game owns the value rule) and `ui/popup`. Model the wiring on
   `06_fruitninja` (`Combo`, `tick_combo`, "+N"/"COMBO xN" popups).

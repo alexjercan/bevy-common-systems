@@ -5,7 +5,7 @@
 - TAGS: feature,example
 
 Lowest-priority pick from the 01-05 games spike (see
-`docs/2026-07-03-example-games-ideation.md`). 3D asteroids: a ship fires at
+`tasks/20260703-165138/NOTES.md`). 3D asteroids: a ship fires at
 drifting octahedron asteroids; a hit inserts `ExplodeMesh` and the asteroid
 slices into fragments that keep drifting as real avian3d bodies (new smaller
 hazards), unlike 06 where fragments just despawn. Clear the field without
@@ -23,7 +23,7 @@ shape (states, sounds, wasm gallery build). Grows out of `examples/05_explode`.
 ## Implementation notes
 
 Built `examples/10_asteroids.rs` (~1050 LoC). Full design rationale in
-`docs/2026-07-04-asteroids-example.md`; summary:
+`tasks/20260703-170744/NOTES.md`; summary:
 
 - Top-down bounded arena on the XY plane in zero gravity (`Gravity(Vec3::ZERO)`).
   Asteroids are `RigidBody::Dynamic` avian bodies that drift, bounce off four

@@ -15,7 +15,7 @@ source; the keyboard path stays byte-for-byte unchanged.
 
 ## Steps
 
-- [x] Read `docs/2026-07-04-dropzone-touch-controls.md` and the touch code in
+- [x] Read `tasks/20260704-103517/NOTES.md` and the touch code in
       `examples/08_dropzone.rs` (TouchControl/TouchSeen resources, HUD reveal,
       `update_touch_control`) to reuse the established shape.
 - [x] Add a `TouchSeen` resource (bool) flipped true the first frame
@@ -60,7 +60,7 @@ source; the keyboard path stays byte-for-byte unchanged.
 - [x] Rebuild the web showcase via `npm run build` (run `npm ci` first in the
       fresh worktree's `web/`; node_modules is git-ignored) to confirm the wasm
       build still succeeds.
-- [x] Write a short `docs/2026-07-04-overload-touch-controls.md` documenting the
+- [x] Write a short `tasks/20260704-130314/NOTES.md` documenting the
       scheme and decisions, and extend the `11_overload` entry in AGENTS.md if
       controls changed.
 
@@ -69,7 +69,7 @@ source; the keyboard path stays byte-for-byte unchanged.
 - Relevant files: `examples/11_overload.rs` (setup ~391, gauge_item ~373,
   vent_input ~672, apply_vent ~665, menu_start ~561, gameover_dismiss ~827,
   GAUGES table ~96), `web/games/11_overload/index.html`,
-  `examples/08_dropzone.rs` (reference), `docs/2026-07-04-dropzone-touch-controls.md`.
+  `examples/08_dropzone.rs` (reference), `tasks/20260704-103517/NOTES.md`.
 - The whole game is a `status_bar` on a `Camera2d`; the vent pad is additional
   2D UI, spawned once in Startup and reused across states (like the status bar).
 - Additive-writer rule: `vent_input` (keyboard) is untouched. Touch vents are a
@@ -99,7 +99,7 @@ pad for `11_overload` mirroring the `08_dropzone` pattern:
 
 Chose the window-fraction hit-test over Bevy UI `Interaction` to avoid first-use
 `ComputedNode`/DPI risk and to keep the mapping unit-testable; see
-`docs/2026-07-04-overload-touch-controls.md`.
+`tasks/20260704-130314/NOTES.md`.
 
 Verified: `cargo fmt --check`, `cargo clippy --example 11_overload`,
 `cargo test --example 11_overload` (10 passed), `scripts/check-ascii.sh` clean;

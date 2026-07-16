@@ -100,14 +100,14 @@ that is the follow-up.
   `09_reactor`'s, retitle, keep the `#game-canvas` + audio-unlock + `copy-dir` sounds
   links); add a `13_glide` entry to `GAMES` in `web/src/games.ts`. Run `npm ci` then
   `npm run build` in `web/` if the devshell allows (fresh worktree has no node_modules).
-- [x] **Docs.** Add `docs/2026-07-05-glide-example.md` (design decisions: tween-on-UI-
+- [x] **Docs.** Add `tasks/20260705-090624/NOTES.md` (design decisions: tween-on-UI-
   node pattern, the static-grid-underlay + absolute-tween-layer split, the UI-pop
   resolution, move/merge animation coordination). Update the `AGENTS.md` example list
   and module-map coverage to mention `13_glide` as the `tween` / `persist` headline.
 
 ## Notes
 
-Spike: docs/spikes/20260705-090421-ui-forward-slide-merge-puzzle.md
+Spike: tasks/20260705-090421/SPIKE.md
 
 Kept as ONE task (single cohesive example file); the UI-pattern harvest is the
 separate follow-up 20260705-090557.
@@ -178,7 +178,7 @@ separate follow-up 20260705-090557.
 - Chose a fixed 346px centered board with absolute cell/tile layers over
   `Display::Grid` (unverified API; tiles must animate between cells anyway) and
   animate `Node`/`BackgroundColor` fields rather than `Transform` scale (UI owns
-  the transform). Both documented in `docs/2026-07-05-glide-example.md`.
+  the transform). Both documented in `tasks/20260705-090624/NOTES.md`.
 - Bug fixed: tween-completion vs despawn race (merged-away tiles despawn exactly
   when their slide tween completes). Fix: order `tick_move_anim`
   `.before(TweenSystems::Advance)` + `TweenOnComplete::Keep` on all tweens.

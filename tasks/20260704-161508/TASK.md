@@ -4,7 +4,7 @@
 - PRIORITY: 30
 - TAGS: spike,feature,input
 
-> Spike: docs/spikes/20260704-161210-input-and-projection-harvest.md (read first). Wave A -- three independent copies exist.
+> Spike: tasks/20260704-161210/SPIKE.md (read first). Wave A -- three independent copies exist.
 
 ## Goal
 

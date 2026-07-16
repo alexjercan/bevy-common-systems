@@ -23,8 +23,8 @@ Steps:
   collider; add `SweptCcd` to the ship if they do.
 - [ ] Confirm the menu/result screens frame the planet nicely (the chase camera
   now falls back to `ship_start_pos()`), and the crash fragments read well.
-- [ ] Update the constants and, if needed, `docs/2026-07-03-dropzone-example.md`
+- [ ] Update the constants and, if needed, `tasks/20260703-165432/NOTES.md`
   with the play-tested values.
 
-See `docs/2026-07-03-dropzone-example.md` (Physics tuning notes / risk) and
-`docs/retros/20260703-165432-dropzone-example.md`.
+See `tasks/20260703-165432/NOTES.md` (Physics tuning notes / risk) and
+`tasks/20260703-165432/RETRO.md`.

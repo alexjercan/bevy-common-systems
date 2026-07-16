@@ -16,7 +16,7 @@ kick, damage vignette, hit-flash, tracers and gibs -- this fills the gaps.
 
 ## Notes
 
-- Spike: docs/spikes/20260705-132024-breach-fun-pass.md
+- Spike: tasks/20260705-132024/SPIKE.md
 - Reuse: `ui/popup`, `camera/post`, `camera/shake`, `feedback/flash`,
   `feedback/screen_flash`, `helpers/temp`. No new crate code expected.
 - Watch the tracer/flash-vs-despawn race the example already hit: insert

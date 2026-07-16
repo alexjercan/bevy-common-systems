@@ -5,7 +5,7 @@
 - TAGS: feature,example
 
 Second pick from the 01-05 games spike (see
-`docs/2026-07-03-example-games-ideation.md`). Hover a ship over the
+`tasks/20260703-165138/NOTES.md`). Hover a ship over the
 noise-displaced planet; rotate it toward a target orientation with
 `PDControllerPlugin` (avian3d torque); touch down softly on flat terrain for
 points, crash too fast and break apart via `mesh/explode`. Add a `SkyboxPlugin`

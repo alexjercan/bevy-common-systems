@@ -24,7 +24,7 @@ deliverable is a design doc under `docs/` that, for each example:
 
 ## Deliverable
 
-- `docs/2026-07-03-example-games-ideation.md` with one section per example
+- `tasks/20260703-165138/NOTES.md` with one section per example
   (01-05), a coverage matrix, and a recommendation of the 1-2 strongest
   candidates to turn into real games.
 - Any strong follow-up game ideas filed as `feature`/`example` tatr tasks so

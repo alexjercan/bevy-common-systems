@@ -4,7 +4,7 @@
 - PRIORITY: 18
 - TAGS: spike,feature,meth
 
-> Spike: docs/spikes/20260704-161210-input-and-projection-harvest.md (read first). Wave B, LOWEST priority -- do AFTER the juice-kit
+> Spike: tasks/20260704-161210/SPIKE.md (read first). Wave B, LOWEST priority -- do AFTER the juice-kit
 > Wave 2 `tween` task (tasks/20260704-134630); may downgrade to a doc.
 
 ## Goal

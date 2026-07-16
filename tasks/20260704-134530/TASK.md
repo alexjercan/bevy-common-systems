@@ -4,7 +4,7 @@
 - PRIORITY: 38
 - TAGS: spike,feature,ui
 
-> Spike: docs/spikes/20260704-134035-game-juice-and-scaffolding-kit.md (read
+> Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 1 -- promote recurring example juice into the library.
 
 ## Goal

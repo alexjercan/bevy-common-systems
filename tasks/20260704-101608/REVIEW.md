@@ -47,7 +47,7 @@ Considered and explicitly NOT blocking:
 - VERDICT: APPROVE
 
 R1.1 resolved: `timeout-minutes` is now 25 (pages.yml:57), comfortably above
-two 600s attempts; the job comment and docs/2026-07-04-pages-deploy-retry.md
+two 600s attempts; the job comment and tasks/20260704-101608/NOTES.md
 were updated to state the 2 x 10 min reasoning. actionlint clean. No new issues
 introduced by the change. The branch delivers the task Goal - a single
 transient "try again later" Pages error no longer reds the workflow, while a

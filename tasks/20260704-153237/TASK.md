@@ -6,8 +6,8 @@
 
 
 > Follow-up from tasks/20260704-134530 (ui/popup module). See
-> docs/2026-07-04-ui-popup-module.md and
-> docs/retros/20260704-134530-ui-popup-module.md.
+> tasks/20260704-134530/NOTES.md and
+> tasks/20260704-134530/RETRO.md.
 
 ## Goal
 

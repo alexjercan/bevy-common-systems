@@ -100,8 +100,8 @@ the harvest doc.
   confirm Menu->Playing->GameOver, "cycle complete, no panic", no runtime errors, and a
   positive kill count (the controller still aims/moves/shoots). `BCS_SHOT` grab to
   confirm it still renders.
-- [x] **Docs**: add `docs/2026-07-05-fps-controller-harvest.md` (mirror
-  `docs/2026-07-05-13glide-ui-juice-harvest.md`: what shipped, the `DoomController`
+- [x] **Docs**: add `tasks/20260705-103238/NOTES.md` (mirror
+  `tasks/20260705-090557/NOTES.md`: what shipped, the `DoomController`
   naming rationale, output-only/no-avian-dep decision, the eye-child + axis-locked-body
   requirements, what stayed game-local, and the verdict per candidate incl. why
   `camera/wasd`/`point_rotation` were not extended). Update `AGENTS.md`: add
@@ -110,7 +110,7 @@ the harvest doc.
 
 ## Notes
 
-Spike: docs/spikes/20260705-103116-grounded-fps-example.md
+Spike: tasks/20260705-103116/SPIKE.md
 
 ### API facts (verified, so the implementer does not re-search)
 

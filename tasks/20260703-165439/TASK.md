@@ -5,7 +5,7 @@
 - TAGS: feature,modding
 
 Surfaced by the 01-05 games spike (see
-`docs/2026-07-03-example-games-ideation.md`). The `modding/events` module can
+`tasks/20260703-165138/NOTES.md`). The `modding/events` module can
 already carry event payloads as `serde_json::Value` across a scripting
 boundary, but there is no way to build an `EventHandler` (its filter + action
 trait objects) from data -- the constructors are all Rust. Add a registry that
@@ -40,5 +40,5 @@ gotcha: the `EventKind` derive's default `event_info` path is stale
       it -- boots to the render loop and the filter gates the action correctly.
 - [x] `cargo fmt`, `cargo clippy --all-targets` (+`--features debug`),
       `cargo test` (+`--features debug`), ASCII check all green; decision noted
-      in `docs/2026-07-04-modding-json-registry.md`.
+      in `tasks/20260703-165439/NOTES.md`.
 

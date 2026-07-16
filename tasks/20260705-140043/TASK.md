@@ -35,6 +35,6 @@ actual code so it is a trustworthy orientation doc again.
 ## Notes
 
 - Surfaced by the README expansion retro
-  (docs/retros/20260705-134942-readme-expansion.md). The README already routes
+  (tasks/20260705-134942/RETRO.md). The README already routes
   around the stale facts; this task fixes the source.
 - Docs-only; do not touch code.

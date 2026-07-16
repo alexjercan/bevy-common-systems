@@ -4,7 +4,7 @@
 - PRIORITY: 1
 - TAGS: spike,examples,modding
 
-> Spike: docs/spikes/20260704-220530-new-prototype-game-ideas.md (read first).
+> Spike: tasks/20260704-220530/SPIKE.md (read first).
 > Follow-up to the tower-defense game; DEPENDS ON 12_bastion shipping first
 > (tasks/20260704-220736).
 
@@ -66,7 +66,7 @@ Swarm enemy were added purely in JSON (now shipped as the living proof).
 No-recompile proven by running one binary against 2/3/4-tower JSON with an
 unchanged mtime.
 
-Spike verdict (`docs/2026-07-05-bastion-data-catalog.md`): keep the catalog
+Spike verdict (`tasks/20260704-220719/NOTES.md`): keep the catalog
 game-local -- it shares nothing with `modding/registry` (data vs behavior), the
 only reusable part is the ~25-line fs-or-embedded JSON loader, and there is no
 second concrete user yet. No `SpecCatalog<T>` module and no speculative

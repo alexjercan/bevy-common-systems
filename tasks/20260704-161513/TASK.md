@@ -4,7 +4,7 @@
 - PRIORITY: 28
 - TAGS: spike,feature,ui,input
 
-> Spike: docs/spikes/20260704-161210-input-and-projection-harvest.md (read first). Wave A -- the most-documented duplication in the
+> Spike: tasks/20260704-161210/SPIKE.md (read first). Wave A -- the most-documented duplication in the
 > repo (4 touch docs, 3 touch retros). Ship PRIMITIVES, not a fixed pad.
 
 ## Goal

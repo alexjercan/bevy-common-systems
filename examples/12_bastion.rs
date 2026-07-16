@@ -45,7 +45,7 @@
 //! the stats or adding a new tower/enemy needs no recompile; wasm uses a
 //! compiled-in copy), and both the build key bindings and the enemy spawn mix
 //! iterate the catalog so new JSON entries participate automatically. See
-//! `docs/2026-07-05-bastion-data-catalog.md`.
+//! `tasks/20260704-220719/NOTES.md`.
 //!
 //! Controls: drag the pointer (or A/D / left-right arrow keys) to spin the yaw
 //! orbit around the Core (the tilt never changes). To pick a tower to build, tap

@@ -130,14 +130,14 @@ follow-up 20260705-103238).
   retitle, keep `#game-canvas` + audio-unlock + `copy-dir` sounds); add a `14_breach` entry
   to `GAMES` in `web/src/games.ts` (blurb should note desktop-first controls). Build via
   `trunk build --example 14_breach` to confirm the wasm compile.
-- [x] **Docs.** Add `docs/2026-07-05-breach-example.md` (design: dynamic-capsule +
+- [x] **Docs.** Add `tasks/20260705-103236/NOTES.md` (design: dynamic-capsule +
   lock_rotation controller and why not kinematic; the SpatialQuery hitscan; cursor grab;
   the touch compromise). Update `AGENTS.md` example list + module map: first FPS, first
   `SpatialQuery` use, game-local FP controller; note the harvest follow-up 20260705-103238.
 
 ## Notes
 
-Spike: docs/spikes/20260705-103116-grounded-fps-example.md
+Spike: tasks/20260705-103116/SPIKE.md
 
 Stepless direction-level task -- run `/plan` before `/work`. Key facts from the
 spike survey (so the implementer does not re-derive):
@@ -239,7 +239,7 @@ spike survey (so the implementer does not re-derive):
   `mesh/explode` gibs, HUD/crosshair/damage-vignette, menu/game-over, dual-stick
   touch, 9 pure-logic unit tests.
 - Controller decision: dynamic + `LockedAxes::ROTATION_LOCKED` (kinematic does not
-  auto-resolve vs statics). Documented in `docs/2026-07-05-breach-example.md`.
+  auto-resolve vs statics). Documented in `tasks/20260705-103236/NOTES.md`.
 - Bugs fixed: (1) tracer/flash-vs-despawn race -- insert `Flash` BEFORE the damage
   trigger, since a lethal hit despawns the enemy in the same flush; (2) headless FPS
   verification -- the autopilot input closure AIMS at the nearest enemy (sets

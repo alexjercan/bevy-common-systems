@@ -63,7 +63,7 @@ here (that is `tasks/20260704-103553`); no touch controls here (that is
       AGENTS.md gotcha) and confirm it reaches the render loop and each new
       mechanic works (pad scores, pickup adds fuel, land sticks, crash
       explodes). Rebuild the web/wasm showcase (`npm run build`) so the demo
-      stays current. Update `docs/2026-07-03-dropzone-example.md` (or a new doc)
+      stays current. Update `tasks/20260703-165432/NOTES.md` (or a new doc)
       with what changed and why.
 
 ## Added scope (user, 2026-07-04, during review)
@@ -99,7 +99,7 @@ branch (tracked as REVIEW.md R1.1-R1.3):
 
 Implemented all four Tier-A items on branch `feature/08-dropzone-fun`
 (`examples/08_dropzone.rs`), documented in
-`docs/2026-07-04-dropzone-tier-a-fun.md`:
+`tasks/20260704-103544/NOTES.md`:
 
 - A1 landing pad: emissive ring+beacon placed flush on the real terrain
   (evaluates the same noise the mesh uses); `proximity_bonus` in `landing_score`

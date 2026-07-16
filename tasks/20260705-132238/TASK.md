@@ -23,7 +23,7 @@ module as an explicit follow-up if a second example wants it.
 
 ## Notes
 
-- Spike: docs/spikes/20260705-132024-breach-fun-pass.md
+- Spike: tasks/20260705-132024/SPIKE.md
 - Reuse: `health` (heal path), `time/cooldown` (fire-rate the buff shortens),
   `helpers/temp` (despawn un-grabbed ground pickups), `ui/popup`/`ui/status`
   (buff feedback), `audio` (pickup SFX -- see the sound-pass task).

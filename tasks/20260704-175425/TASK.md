@@ -4,7 +4,7 @@
 - PRIORITY: 40
 - TAGS: spike,feature
 
-> Spike: docs/spikes/20260704-175058-dev-harness-and-app-scaffolding.md (read
+> Spike: tasks/20260704-175058/SPIKE.md (read
 > first). Wave 2 -- tiny extensions to already-shipped modules + leaf one-liners.
 
 ## Goal

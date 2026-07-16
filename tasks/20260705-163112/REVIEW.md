@@ -53,7 +53,7 @@ discretion:
 - [x] R1.2 (NIT) tasks/20260705-163112/TASK.md:50 - the verification step's
   "screenshot the Result state after a crash" is ticked, but the live visual
   grab was abandoned (transparently noted in
-  `docs/2026-07-05-dropzone-crash-camera.md`). The box slightly overstates what
+  `tasks/20260705-163112/NOTES.md`). The box slightly overstates what
   was done; the step is conditional ("if a display is available") and the core
   verification (the pure test) is complete, so this is cosmetic.
   - Response: Fixed. Reworded the TASK.md verification line to state the

@@ -40,7 +40,7 @@ docs to reflect the new module and the example's new behavior.
 
 ## Outcome
 
-Added `docs/2026-07-03-audio-and-fruitninja-sounds.md` (kept the repo's
+Added `tasks/20260703-152544/NOTES.md` (kept the repo's
 date-prefixed doc-file convention instead of the plan's literal `docs/audio.md`
 name) covering the reusable-module rationale, the `PlaySfx`/`SfxMasterVolume`
 design and its scope limits, the WAV + dev-only-decoder mock decision, and the

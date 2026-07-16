@@ -12,7 +12,7 @@
 //! write the jitter as `transform.translation += offset` on a camera whose base
 //! position is not rewritten every frame, the offsets pile up and the camera
 //! drifts off-center (see
-//! `docs/retros/20260703-170744-asteroids-example.md`). This module never
+//! `tasks/20260703-170744/RETRO.md`). This module never
 //! accumulates. It applies the offset in two phases:
 //!
 //! - [`CameraShakeSystems::Restore`] runs *before* any base-writing driver and

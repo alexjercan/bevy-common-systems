@@ -24,7 +24,7 @@
 - wasm coverage confirmed: `web/games/14_breach/index.html` copies the whole
   `assets/sounds` dir, so the new files ship without a web change.
 - Docs updated: `assets/sounds/README.md` (breach section + required-files rows),
-  `docs/2026-07-05-breach-fun-pass.md`, and the AGENTS note.
+  `tasks/20260705-132200/NOTES.md`, and the AGENTS note.
 
 ## Nits (non-blocking)
 

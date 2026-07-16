@@ -80,7 +80,7 @@ but a single inline `<script>` in this game's index.html is acceptable for now
 - The iframe already carries `allow="autoplay"`; necessary but not sufficient
   on WebKit -- the explicit resume is the missing piece.
 - Related: retro 20260703-163329 (the Chrome/Firefox no-code decision this
-  task extends), docs/2026-07-03-audio-and-fruitninja-sounds.md.
+  task extends), tasks/20260703-152544/NOTES.md.
 
 ## Outcome (CLOSED)
 

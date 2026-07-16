@@ -70,7 +70,7 @@ Scope = the hazard/obstacle family only:
       shatter, obstacle impact kill, integrity drain, wind pushes the ship) with
       no panic. No tunneling observed (asteroids use proximity; rocks are static),
       so no CCD added. Web showcase rebuilt (`npm run build` exit 0, webpack ok).
-      Decisions in `docs/2026-07-04-dropzone-hazards.md`.
+      Decisions in `tasks/20260704-103553/NOTES.md`.
 
 ## Close-out
 
@@ -83,7 +83,7 @@ old "any contact = touchdown". Nine in-module unit tests (added `impact_damage`)
 Review (REVIEW.md): round 1 APPROVE -- an independent skeptical pass found no
 CRITICAL/MAJOR issues, only three MINOR cosmetic/theoretical edges (one
 documented with an inline comment). See
-`docs/2026-07-04-dropzone-hazards.md` for the decisions and trade-offs.
+`tasks/20260704-103553/NOTES.md` for the decisions and trade-offs.
 
 Scope held: flight model (PD/gravity/thrust) and the Menu/Playing/Result shape
 untouched; no out-of-scope mechanics added.

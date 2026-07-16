@@ -16,7 +16,7 @@ candidly desktop-first).
 
 ## Notes
 
-- Spike: docs/spikes/20260705-132024-breach-fun-pass.md
+- Spike: tasks/20260705-132024/SPIKE.md
 - Reuse `ui/menu`, `ui/touchpad`, `input/state`; do not rebuild the state machine.
 - Copy Bevy 0.19 UI idioms from an existing example (font_size/TextLayout/
   border_radius/AmbientLight); improvising the visual layer bites repeatedly.

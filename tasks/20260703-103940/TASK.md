@@ -36,7 +36,7 @@ guard, on push and pull_request.
 ## Notes
 
 - Discovered during 20260703-101712; see
-  docs/retros/20260703-101712-chase-ascii.md.
+  tasks/20260703-101712/RETRO.md.
 - Maintainer chose full GitHub Actions CI over an ASCII-only workflow or a
   local hook (AskUserQuestion, this session). That widened the task from a
   single grep to standing up CI; scope updated accordingly.

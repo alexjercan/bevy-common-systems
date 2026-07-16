@@ -4,7 +4,7 @@
 - PRIORITY: 2
 - TAGS: spike,examples,game
 
-> Spike: docs/spikes/20260704-220530-new-prototype-game-ideas.md (read first,
+> Spike: tasks/20260704-220530/SPIKE.md (read first,
 > the revised Recommendation). This merges the original 12_warden + 13_turret
 > ideas into one game per the user's steer.
 
@@ -166,7 +166,7 @@ Everything below is one file, `examples/12_bastion.rs`, unless noted.
   border-spawn point on the arena circle, nearest-enemy-in-range selection, the
   yaw-to-target angle, upgrade cost/stat math). Mirror the in-example test style
   of `10_asteroids`.
-- [x] **Docs + module map.** Write `docs/2026-07-04-bastion-example.md`
+- [x] **Docs + module map.** Write `tasks/20260704-220736/NOTES.md`
   (concept, which modules it demos and why, decisions: camera angle,
   auto-target rule, pitch clamp, the game-local spec catalog and its relation to
   the modding follow-up). Add the `12_bastion` bullet to the example list in

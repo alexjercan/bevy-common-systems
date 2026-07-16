@@ -5,7 +5,7 @@
 - TAGS: feature,example
 
 Low-priority pick from the 01-05 games spike (see
-`docs/2026-07-03-example-games-ideation.md`). A reaction game whose entire
+`tasks/20260703-165138/NOTES.md`). A reaction game whose entire
 display is the status bar: you run a failing machine (reactor / ship / life
 support -- pick a skin) with several gauges that climb and drift on their own,
 each a `status_bar_item` whose `color_fn` goes green -> amber -> red at
@@ -67,7 +67,7 @@ Follows the 06_fruitninja state/sounds/wasm shape.
   debug`), `cargo test --example 11_overload` (7 tests), `scripts/check-ascii.sh`,
   and ran the example (`$DISPLAY=:0`) -- boots to the render loop, no panics.
   Scoped `trunk build --release --example 11_overload` for the web page.
-- [x] Doc note `docs/2026-07-04-overload-example.md` describing the example and
+- [x] Doc note `tasks/20260704-165400/NOTES.md` describing the example and
   design decisions.
 
 ## Implementation notes
@@ -75,7 +75,7 @@ Follows the 06_fruitninja state/sounds/wasm shape.
 Built `examples/11_overload.rs` (918 lines incl. tests): four coupled gauges on
 the `status_bar`, vented with 1/2/3/4, draining a `Health` entity while red,
 ending at a meltdown screen; difficulty ramps the climb over time. Design write-up
-lives in `docs/2026-07-04-overload-example.md`; AGENTS.md's examples list gained an
+lives in `tasks/20260704-165400/NOTES.md`; AGENTS.md's examples list gained an
 `11_overload` entry.
 
 Decisions / alternatives: shipped standalone rather than folding the gauges into

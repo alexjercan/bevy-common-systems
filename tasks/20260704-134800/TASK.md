@@ -4,7 +4,7 @@
 - PRIORITY: 15
 - TAGS: spike,suggestion,ui
 
-> Spike: docs/spikes/20260704-134035-game-juice-and-scaffolding-kit.md (read
+> Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 3 -- DEFERRED, needs a user decision before any code.
 
 ## Goal

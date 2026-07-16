@@ -22,7 +22,7 @@ had) is explicitly OUT of scope for this task -- note it as a possible follow-up
 
 ## Notes
 
-- Spike: docs/spikes/20260705-132024-breach-fun-pass.md
+- Spike: tasks/20260705-132024/SPIKE.md
 - Reuse `mesh/builder` (octahedron variants at different scales), `health`,
   existing wave ramp (`wave_size`/`enemy_speed`); extend `spawn_wave` to pick an
   archetype per spawn by weighted roll.

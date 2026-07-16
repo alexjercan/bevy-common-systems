@@ -46,7 +46,7 @@ it so both agent ecosystems read the same document.
       system, F11 toggles for debug plugins, modding handler wording.
 - [x] Write docs/ note per global guidelines: decision record for why
       CLAUDE.md imports AGENTS.md instead of duplicating content
-      (docs/2026-07-03-agents-md-and-claude-md.md).
+      (tasks/20260703-094842/NOTES.md).
 
 ## Notes
 
@@ -105,7 +105,7 @@ What changed and why:
   examples, workflow, gotchas.
 - Added CLAUDE.md containing only `@AGENTS.md`. Alternative (symlink,
   duplicated content) rejected; see
-  docs/2026-07-03-agents-md-and-claude-md.md for the decision record.
+  tasks/20260703-094842/NOTES.md for the decision record.
 - Filed follow-up tasks instead of widening the diff: 20260703-095339
   (10 failing doctests + 1 clippy warning under --features debug),
   20260703-095509 (stale default event_info path in EventKind derive).

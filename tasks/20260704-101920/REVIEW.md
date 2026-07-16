@@ -45,7 +45,7 @@ What I checked and confirmed:
 
 Findings:
 
-- [x] R1.1 (NIT) docs/retros/20260703-200005-safari-audio-unlock.md:56 - that
+- [x] R1.1 (NIT) tasks/20260703-200005/RETRO.md:56 - that
   retro's open action item ("Future: when a second web game gains sound, lift
   the inline shim into a shared snippet ... web/games/_shared/audio-unlock.js")
   is exactly what this task did. Optional bookkeeping: tick it and note it was

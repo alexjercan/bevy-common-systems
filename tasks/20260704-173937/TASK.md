@@ -5,7 +5,7 @@
 - TAGS: feature,input,helpers
 
 > Follow-up from tatr 20260704-161508 (input/pointer), review NIT R1.2.
-> Spike: docs/spikes/20260704-161210-input-and-projection-harvest.md.
+> Spike: tasks/20260704-161210/SPIKE.md.
 
 ## Goal
 

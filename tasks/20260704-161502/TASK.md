@@ -4,7 +4,7 @@
 - PRIORITY: 32
 - TAGS: spike,feature,camera
 
-> Spike: docs/spikes/20260704-161210-input-and-projection-harvest.md (read first). Wave A -- smallest, unblocks the others; start here.
+> Spike: tasks/20260704-161210/SPIKE.md (read first). Wave A -- smallest, unblocks the others; start here.
 
 ## Goal
 

@@ -56,7 +56,7 @@ gun query -> `With<DoomEye>` and autopilot -> `DoomControllerState` updated corr
 
 Confirmed correct (not findings): `ChildOf::parent()` is the right 0.19 API; `#[require]`
 correctly replaces the observer; prelude/mod wiring correct; `input/cursor` 0.19 usage;
-docs (`docs/2026-07-05-fps-controller-harvest.md`, AGENTS.md) match the code without
+docs (`tasks/20260705-103238/NOTES.md`, AGENTS.md) match the code without
 overclaiming.
 
 ## Round 2

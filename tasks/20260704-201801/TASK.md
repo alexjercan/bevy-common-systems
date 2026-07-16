@@ -5,7 +5,7 @@
 - TAGS: feature,tween,ui,feedback
 
 > Follow-up from tatr 20260704-134630 (tween), review MINOR R1.1.
-> Spike: docs/spikes/20260704-134035-game-juice-and-scaffolding-kit.md.
+> Spike: tasks/20260704-134035/SPIKE.md.
 
 ## Goal
 

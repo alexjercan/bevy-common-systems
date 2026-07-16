@@ -37,7 +37,7 @@ Design is consistent with the example's existing structure: the solver produces 
 `Direction` and feeds the same `apply_move`/`start_move` path a human move does,
 so animation/scoring/sound/win-lose bookkeeping is shared. Kept game-local, which
 matches the crate's "wait for a second user before harvesting" rule; the decision
-note (`docs/2026-07-05-glide-solver.md`) records this.
+note (`tasks/20260705-143000/NOTES.md`) records this.
 
 Non-blocking observations (implementer's discretion):
 

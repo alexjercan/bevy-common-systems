@@ -4,7 +4,7 @@
 - PRIORITY: 40
 - TAGS: spike,feature,camera
 
-> Spike: docs/spikes/20260704-134035-game-juice-and-scaffolding-kit.md (read
+> Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 1 -- promote recurring example juice into the library.
 
 ## Goal
@@ -12,7 +12,7 @@
 Add a `camera/shake` module beside `camera/chase` and `camera/post` that owns
 the camera-shake code four example games (06, 07, 08, 10) currently hand-roll,
 including the accumulate-vs-absolute drift bug the asteroids retro recorded
-(`docs/retros/20260703-170744-asteroids-example.md`).
+(`tasks/20260703-170744/RETRO.md`).
 
 Follow the crate convention: a `CameraShake` config component (trauma decay
 rate, max offset/kick), a way to add trauma each frame (an `*Input` component

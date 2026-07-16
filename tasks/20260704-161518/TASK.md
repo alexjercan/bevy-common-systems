@@ -4,7 +4,7 @@
 - PRIORITY: 22
 - TAGS: spike,feature,scoring
 
-> Spike: docs/spikes/20260704-161210-input-and-projection-harvest.md (read first). Wave B -- sketch-then-commit; a thin-wrapper
+> Spike: tasks/20260704-161210/SPIKE.md (read first). Wave B -- sketch-then-commit; a thin-wrapper
 > negative result is acceptable.
 
 ## Goal

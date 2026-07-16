@@ -4,7 +4,7 @@
 - PRIORITY: 24
 - TAGS: spike,feature
 
-> Spike: docs/spikes/20260704-134035-game-juice-and-scaffolding-kit.md (read
+> Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 2 -- only if each earns its keep over a raw Timer.
 
 ## Goal

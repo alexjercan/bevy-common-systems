@@ -180,7 +180,7 @@ both devices. Menu/game-over copy is "Tap or click ..."; module and CLI docs
 mention touch.
 
 Design decisions (full write-up in
-`docs/2026-07-03-fruitninja-touch-input.md`):
+`tasks/20260703-173128/NOTES.md`):
 
 - enhanced_input 0.26 has NO native touch binding, so touch is fed through its
   documented `Binding::Custom` + `CustomInputs` extension point (same mechanism
