@@ -806,7 +806,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_common_systems"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "avian3d",
  "bevy",
@@ -826,7 +826,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_common_systems_macros"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "proc-macro2",
  "quote",
