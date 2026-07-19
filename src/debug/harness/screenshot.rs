@@ -44,7 +44,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-use super::{super::inspector::DebugEnabled, AUTOPILOT_ENV, SCREENSHOT_ENV};
+use super::{super::inspector::DebugEnabled, completion, AUTOPILOT_ENV, SCREENSHOT_ENV};
 
 /// Safety bound: if the target state is not reached within this many frames the
 /// harness exits with an error instead of hanging forever (for example if the
@@ -160,6 +160,7 @@ impl<S: States + FreelyMutableState> Plugin for ScreenshotPlugin<S> {
         // inspector/diagnostics overlay if InspectorDebugPlugin is present.
         app.add_systems(Startup, hide_debug_overlay);
         app.add_systems(Update, screenshot_drive::<S>);
+        completion::register(app, completion::SCREENSHOT);
     }
 }
 
@@ -240,14 +241,15 @@ fn screenshot_drive<S: States + FreelyMutableState>(
     );
 
     // save_to_disk writes the PNG synchronously in its observer; a second
-    // observer on the same capture exits once the frame is on disk.
+    // observer on the same capture reports completion once the frame is on
+    // disk (the app exits when every registered collector is done).
     commands
         .spawn(Screenshot::primary_window())
         .observe(save_to_disk(path))
         .observe(
-            |_: On<ScreenshotCaptured>, mut exit: MessageWriter<AppExit>| {
-                info!("screenshot: capture complete, exiting");
-                exit.write(AppExit::Success);
+            |_: On<ScreenshotCaptured>, mut completion: ResMut<completion::HarnessCompletion>| {
+                info!("screenshot: capture complete");
+                completion.done(completion::SCREENSHOT);
             },
         );
 

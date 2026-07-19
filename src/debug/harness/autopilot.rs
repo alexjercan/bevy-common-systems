@@ -42,7 +42,7 @@ use std::sync::Arc;
 
 use bevy::{input::InputSystems, prelude::*, state::state::FreelyMutableState};
 
-use super::AUTOPILOT_ENV;
+use super::{completion, AUTOPILOT_ENV};
 
 /// Per-frame input hook: full world access plus total elapsed seconds since the
 /// autopilot started driving.
@@ -55,11 +55,14 @@ type InputFn = dyn Fn(&mut World, f32) + Send + Sync;
 /// per-frame input closure with [`input`](Self::input). When the
 /// `BCS_AUTOPILOT` env var is set the plugin sets the first state, holds each
 /// step for its duration while advancing `NextState`, logs every transition,
-/// and writes [`AppExit::Success`] after the last step. When the env var is
-/// unset it adds nothing.
+/// and reports completion to the harness [`completion`] protocol after the
+/// last step (the app exits when EVERY registered collector - a frame
+/// capture, a screenshot - is done, not when the first one finishes). When
+/// the env var is unset it adds nothing.
 pub struct AutopilotPlugin<S: States + FreelyMutableState> {
     schedule: Vec<(S, f32)>,
     input: Option<Arc<InputFn>>,
+    self_completing: bool,
 }
 
 impl<S: States + FreelyMutableState> Default for AutopilotPlugin<S> {
@@ -67,6 +70,7 @@ impl<S: States + FreelyMutableState> Default for AutopilotPlugin<S> {
         Self {
             schedule: Vec::new(),
             input: None,
+            self_completing: false,
         }
     }
 }
@@ -100,6 +104,18 @@ impl<S: States + FreelyMutableState> AutopilotPlugin<S> {
         self.input = Some(Arc::new(f));
         self
     }
+
+    /// Mark completion as SCRIPT-OWNED: the timeline is a runway, not the
+    /// finish line. The input closure's staged script reports done itself
+    /// (`world.resource_mut::<HarnessCompletion>().done(completion::AUTOPILOT)`)
+    /// when its final stage lands; if the TIMELINE expires first the script
+    /// stalled, and the run exits [`AppExit::error`] naming it - an abort,
+    /// not a completion, so a stalled script can never pass as a finished
+    /// cycle.
+    pub fn self_completing(mut self) -> Self {
+        self.self_completing = true;
+        self
+    }
 }
 
 /// Internal driver state; kept out of the prelude per the crate conventions.
@@ -112,6 +128,7 @@ struct AutopilotState<S: States + FreelyMutableState> {
     state_elapsed: f32,
     started: bool,
     done: bool,
+    self_completing: bool,
 }
 
 impl<S: States + FreelyMutableState> Plugin for AutopilotPlugin<S> {
@@ -137,7 +154,9 @@ impl<S: States + FreelyMutableState> Plugin for AutopilotPlugin<S> {
             state_elapsed: 0.0,
             started: false,
             done: false,
+            self_completing: self.self_completing,
         });
+        completion::register(app, completion::AUTOPILOT);
         // Runs in PreUpdate after input collection so the input closure can set
         // a fresh `just_pressed` that survives into the game's Update systems
         // (Bevy clears `just_pressed` in `InputSystems` every frame).
@@ -155,9 +174,15 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
         .remove_resource::<AutopilotState<S>>()
         .expect("AutopilotState is inserted by AutopilotPlugin::build");
 
-    // The timeline is finished; AppExit is already queued. Stay inert (do not
-    // index past the end of the schedule) in case another frame still runs.
-    if st.done {
+    // The timeline is finished (or the script reported done first); stay
+    // inert (do not index past the end of the schedule) while the
+    // completion watcher waits for any other collectors.
+    if st.done
+        || (st.self_completing
+            && !world
+                .resource::<completion::HarnessCompletion>()
+                .is_pending(completion::AUTOPILOT))
+    {
         world.insert_resource(st);
         return;
     }
@@ -188,8 +213,21 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
     if st.state_elapsed >= hold {
         st.index += 1;
         if st.index >= st.schedule.len() {
-            info!("autopilot: cycle complete, no panic (t={:.1}s)", st.elapsed);
-            world.write_message(AppExit::Success);
+            if st.self_completing {
+                // The runway expired with the script still pending: an
+                // ABORT, not a completion (error exits do not negotiate).
+                error!(
+                    "autopilot: timeline expired but the self-completing \
+                     script never reported done (t={:.1}s)",
+                    st.elapsed
+                );
+                world.write_message(AppExit::error());
+            } else {
+                info!("autopilot: cycle complete, no panic (t={:.1}s)", st.elapsed);
+                world
+                    .resource_mut::<completion::HarnessCompletion>()
+                    .done(completion::AUTOPILOT);
+            }
             st.done = true;
             world.insert_resource(st);
             return;

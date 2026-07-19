@@ -9,6 +9,13 @@ straight off the crate version.
 
 ## [Unreleased]
 
+## [0.19.3] - 2026-07-20
+
+### Changed
+
+- Harness completion protocol (`debug::harness::completion`): armed harness collectors now REGISTER and report DONE instead of writing `AppExit` themselves - the app exits `Success` only when every registered collector (autopilot, screenshot, an external frame capture) has finished, so a wall-clock timeline can no longer end the app under a frame-count capture mid-window. A deadline backstop (`BCS_HARNESS_DEADLINE`, default 120s) error-exits NAMING the still-pending collectors. Success exits negotiate; failures still abort immediately. Single-collector behavior is identical to before.
+- `AutopilotPlugin::self_completing()`: for staged scripts that end their own run - the timeline becomes a runway, the script reports done via `HarnessCompletion` when its final stage lands, and a timeline expiry with the script still pending is an error exit (a stalled script can never pass as a finished cycle).
+
 ## [0.19.2] - 2026-07-19
 
 ### Added

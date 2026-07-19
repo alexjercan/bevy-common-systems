@@ -11,9 +11,11 @@
 //!   [`States`](bevy::prelude::States) machine along a scripted timeline
 //!   (Menu -> Playing -> ... -> GameOver), runs an optional per-frame input
 //!   closure, logs every transition and a final "cycle complete, no panic"
-//!   line, then exits cleanly with
-//!   [`AppExit::Success`](bevy::prelude::AppExit) (never `std::process::exit`,
-//!   which AGENTS.md notes segfaults on wgpu teardown).
+//!   line, then reports done to the [`completion`] protocol - the app exits
+//!   [`AppExit::Success`](bevy::prelude::AppExit) when EVERY registered
+//!   collector (autopilot, screenshot, an external frame capture) is done,
+//!   never via `std::process::exit` (AGENTS.md: segfaults on wgpu teardown)
+//!   and never unilaterally (success negotiates; only failures abort).
 //! - [`ScreenshotPlugin`](screenshot::ScreenshotPlugin) overrides the window
 //!   resolution, advances to a named state, waits N settled frames, writes a
 //!   PNG, and exits.
@@ -53,6 +55,11 @@
 pub mod autopilot;
 pub mod screenshot;
 
+/// The completion protocol lives ungated at the crate root (feature-less
+/// consumers register external collectors); re-exported here because the
+/// harness plugins are its primary registrants.
+pub use crate::completion;
+
 /// Environment variable that activates
 /// [`AutopilotPlugin`](autopilot::AutopilotPlugin). Any value (even empty)
 /// enables it; when unset the plugin adds nothing.
@@ -70,5 +77,7 @@ pub const SCREENSHOT_ENV: &str = "BCS_SHOT";
 /// use bevy_common_systems::debug::harness::prelude::*;
 /// ```
 pub mod prelude {
-    pub use super::{autopilot::AutopilotPlugin, screenshot::ScreenshotPlugin};
+    pub use super::{
+        autopilot::AutopilotPlugin, completion::HarnessCompletion, screenshot::ScreenshotPlugin,
+    };
 }
