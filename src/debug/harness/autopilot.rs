@@ -247,6 +247,27 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
         input(world, st.elapsed);
     }
 
+    // In the LOOPING regime, finish the moment the other collectors are
+    // done instead of waiting for the current cycle's end - a slow cycle
+    // otherwise wastes up to its full length after a capture completes,
+    // and can straddle the completion deadline into a false laggard.
+    if st.loops > 0
+        && !world
+            .resource::<completion::HarnessCompletion>()
+            .others_pending(completion::AUTOPILOT)
+    {
+        info!(
+            "autopilot: collectors done after {} loop(s); cycle complete, no panic (t={:.1}s)",
+            st.loops, st.elapsed
+        );
+        world
+            .resource_mut::<completion::HarnessCompletion>()
+            .done(completion::AUTOPILOT);
+        st.done = true;
+        world.insert_resource(st);
+        return;
+    }
+
     let hold = st.schedule[st.index].1;
     if st.state_elapsed >= hold {
         st.index += 1;

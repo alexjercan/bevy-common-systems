@@ -1,6 +1,6 @@
 [package]
 name = "bevy_common_systems_macros"
-version = "0.19.4"
+version = "0.19.5"
 edition = "2021"
 description = "Procedural macros for Bevy common systems"
 license = "MIT"

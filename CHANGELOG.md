@@ -9,6 +9,12 @@ straight off the crate version.
 
 ## [Unreleased]
 
+## [0.19.5] - 2026-07-20
+
+### Fixed
+
+- A looping autopilot (`loop_while_pending`) now reports done the MOMENT the other collectors finish, mid-cycle, instead of waiting for the current cycle's end - a slow cycle otherwise wasted up to its full length after a capture completed, and could straddle the completion deadline into a false "autopilot" laggard.
+
 ## [0.19.4] - 2026-07-20
 
 ### Added
