@@ -87,6 +87,13 @@ impl HarnessCompletion {
     pub fn is_pending(&self, name: &str) -> bool {
         self.pending.iter().any(|p| *p == name)
     }
+
+    /// Whether any collector OTHER than `name` is still pending - the loop
+    /// condition for a collector that can repeat its work (an autopilot
+    /// cycling its scene) while slower collectors (a frame capture) finish.
+    pub fn others_pending(&self, name: &str) -> bool {
+        self.pending.iter().any(|p| *p != name)
+    }
 }
 
 /// Register `name` as a pending collector and make sure the watcher runs.

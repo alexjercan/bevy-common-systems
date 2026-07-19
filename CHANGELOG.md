@@ -9,6 +9,13 @@ straight off the crate version.
 
 ## [Unreleased]
 
+## [0.19.4] - 2026-07-20
+
+### Added
+
+- `AutopilotPlugin::loop_while_pending()`: at the timeline's end, while OTHER completion collectors are still pending (a frame capture mid-window), the autopilot writes an `AutopilotLoop` message (the game observes it to reset its scene/script), zeros the cycle clock, and keeps driving - so a capture measures repeated ACTIVITY instead of an idle tail. Reports done normally once nothing else is pending; ignored (with a warning) combined with `self_completing()`.
+- `HarnessCompletion::others_pending(name)`: the loop condition - whether any collector other than `name` is still pending.
+
 ## [0.19.3] - 2026-07-20
 
 ### Changed

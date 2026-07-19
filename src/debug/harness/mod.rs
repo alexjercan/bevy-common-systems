@@ -78,6 +78,8 @@ pub const SCREENSHOT_ENV: &str = "BCS_SHOT";
 /// ```
 pub mod prelude {
     pub use super::{
-        autopilot::AutopilotPlugin, completion::HarnessCompletion, screenshot::ScreenshotPlugin,
+        autopilot::{AutopilotLoop, AutopilotPlugin},
+        completion::HarnessCompletion,
+        screenshot::ScreenshotPlugin,
     };
 }

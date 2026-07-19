@@ -48,6 +48,15 @@ use super::{completion, AUTOPILOT_ENV};
 /// autopilot started driving.
 type InputFn = dyn Fn(&mut World, f32) + Send + Sync;
 
+/// Message written each time a [`loop_while_pending`]
+/// (`AutopilotPlugin::loop_while_pending`) autopilot restarts its cycle
+/// because other completion collectors are still pending. The game observes
+/// it to reset its scene/script state (re-trigger a scenario load, zero its
+/// script resource) so the repeated cycle measures ACTIVITY, not an idle
+/// tail.
+#[derive(Message)]
+pub struct AutopilotLoop;
+
 /// Env-gated plugin that force-drives a [`States`] machine along a scripted
 /// timeline for headless verification.
 ///
@@ -63,6 +72,7 @@ pub struct AutopilotPlugin<S: States + FreelyMutableState> {
     schedule: Vec<(S, f32)>,
     input: Option<Arc<InputFn>>,
     self_completing: bool,
+    loop_while_pending: bool,
 }
 
 impl<S: States + FreelyMutableState> Default for AutopilotPlugin<S> {
@@ -71,6 +81,7 @@ impl<S: States + FreelyMutableState> Default for AutopilotPlugin<S> {
             schedule: Vec::new(),
             input: None,
             self_completing: false,
+            loop_while_pending: false,
         }
     }
 }
@@ -116,6 +127,19 @@ impl<S: States + FreelyMutableState> AutopilotPlugin<S> {
         self.self_completing = true;
         self
     }
+
+    /// Repeat the cycle while OTHER completion collectors are still
+    /// pending: at the timeline's end, instead of reporting done, write an
+    /// [`AutopilotLoop`] message (the game resets its scene/script on it),
+    /// zero the cycle clock, and keep driving - a frame capture then
+    /// measures repeated ACTIVITY instead of an idle tail. Reports done
+    /// normally once nothing else is pending. Ignored (with a warning) when
+    /// combined with [`self_completing`](Self::self_completing) - a
+    /// script-owned run decides its own repetition.
+    pub fn loop_while_pending(mut self) -> Self {
+        self.loop_while_pending = true;
+        self
+    }
 }
 
 /// Internal driver state; kept out of the prelude per the crate conventions.
@@ -129,6 +153,8 @@ struct AutopilotState<S: States + FreelyMutableState> {
     started: bool,
     done: bool,
     self_completing: bool,
+    loop_while_pending: bool,
+    loops: u32,
 }
 
 impl<S: States + FreelyMutableState> Plugin for AutopilotPlugin<S> {
@@ -146,6 +172,15 @@ impl<S: States + FreelyMutableState> Plugin for AutopilotPlugin<S> {
             self.schedule.len()
         );
 
+        let loop_while_pending = if self.loop_while_pending && self.self_completing {
+            warn!(
+                "AutopilotPlugin: loop_while_pending is ignored with self_completing \
+                 (a script-owned run decides its own repetition)"
+            );
+            false
+        } else {
+            self.loop_while_pending
+        };
         app.insert_resource(AutopilotState::<S> {
             schedule: self.schedule.clone(),
             input: self.input.clone(),
@@ -155,7 +190,10 @@ impl<S: States + FreelyMutableState> Plugin for AutopilotPlugin<S> {
             started: false,
             done: false,
             self_completing: self.self_completing,
+            loop_while_pending,
+            loops: 0,
         });
+        app.add_message::<AutopilotLoop>();
         completion::register(app, completion::AUTOPILOT);
         // Runs in PreUpdate after input collection so the input closure can set
         // a fresh `just_pressed` that survives into the game's Update systems
@@ -213,6 +251,25 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
     if st.state_elapsed >= hold {
         st.index += 1;
         if st.index >= st.schedule.len() {
+            if st.loop_while_pending
+                && world
+                    .resource::<completion::HarnessCompletion>()
+                    .others_pending(completion::AUTOPILOT)
+            {
+                st.loops += 1;
+                info!(
+                    "autopilot: cycle {} restarting - other collectors still pending",
+                    st.loops
+                );
+                world.write_message(AutopilotLoop);
+                // Stay on the final step (no state transitions); zero the
+                // clocks so the input script sees a fresh cycle.
+                st.index = st.schedule.len() - 1;
+                st.elapsed = 0.0;
+                st.state_elapsed = 0.0;
+                world.insert_resource(st);
+                return;
+            }
             if st.self_completing {
                 // The runway expired with the script still pending: an
                 // ABORT, not a completion (error exits do not negotiate).
