@@ -183,6 +183,31 @@ impl GameEvent {
     pub fn new(name: &'static str, info: GameEventInfo) -> Self {
         Self { name, info }
     }
+
+    /// The event's kind name (the `EventKind::name()` it was fired as).
+    ///
+    /// Public so an external observer on `On<GameEvent>` - a run recorder, a
+    /// debug overlay - can SEE which event passed by without being able to
+    /// forge or mutate it; construction stays [`GameEvent::new`]-only.
+    ///
+    /// ```
+    /// use bevy_common_systems::modding::events::{GameEvent, GameEventInfo};
+    ///
+    /// let event = GameEvent::new("ondestroyed", GameEventInfo::default());
+    /// assert_eq!(event.name(), "ondestroyed");
+    /// assert!(event.info().data.is_none());
+    /// ```
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
+
+    /// The event's payload wrapper (its optional serialized `data`).
+    ///
+    /// Same contract as [`name`](Self::name): read access for observers,
+    /// no mutation.
+    pub fn info(&self) -> &GameEventInfo {
+        &self.info
+    }
 }
 
 /// Extension trait for `Commands` to fire game events easily.
@@ -477,5 +502,42 @@ mod tests {
         fire(&mut app, "alpha");
         assert_eq!(count(&app, "a1"), 1, "despawned handler must not run");
         assert_eq!(count(&app, "a2"), 2);
+    }
+
+    #[test]
+    fn observers_read_a_fired_events_name_and_payload() {
+        // The read-accessor contract: a plain observer on `On<GameEvent>` (a
+        // run recorder, a debug overlay) sees each event's kind name and
+        // payload as it passes by, without draining the dispatch queue.
+        #[derive(Resource, Default)]
+        struct Seen(Vec<(String, Option<serde_json::Value>)>);
+
+        let mut app = app();
+        app.init_resource::<Seen>();
+        app.add_observer(|event: On<GameEvent>, mut seen: ResMut<Seen>| {
+            seen.0
+                .push((event.name().to_string(), event.info().data.clone()));
+        });
+
+        app.world_mut().trigger(GameEvent::new(
+            "ondestroyed",
+            GameEventInfo::from_data(serde_json::json!({ "id": "prey" })),
+        ));
+        app.world_mut()
+            .trigger(GameEvent::new("onstart", GameEventInfo::default()));
+
+        let seen = app.world().resource::<Seen>();
+        assert_eq!(seen.0.len(), 2);
+        assert_eq!(seen.0[0].0, "ondestroyed");
+        assert_eq!(
+            seen.0[0].1.as_ref().and_then(|d| d["id"].as_str()),
+            Some("prey")
+        );
+        assert_eq!(seen.0[1], ("onstart".to_string(), None));
+
+        // Observing must not have starved the real dispatch path: the queue
+        // observer also ran, so both events sit in the queue for handlers.
+        let queue = app.world().resource::<GameEventQueue<Counts>>();
+        assert_eq!(queue.events.len(), 2);
     }
 }

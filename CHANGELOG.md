@@ -9,6 +9,12 @@ straight off the crate version.
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-07-19
+
+### Added
+
+- `modding::events::GameEvent` gained public read accessors `name()` and `info()`, so an external observer on `On<GameEvent>` (a run recorder, a debug overlay) can see which event passed by and read its payload. Construction is unchanged (`GameEvent::new`); the fields stay module-private.
+
 ## [0.19.1] - 2026-07-17
 
 ### Fixed
