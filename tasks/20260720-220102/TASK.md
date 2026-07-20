@@ -1,6 +1,6 @@
 # retro-completeness: audit CLOSED tasks lacking RETRO
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 30
 - TAGS: chore
 

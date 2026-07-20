@@ -27,7 +27,10 @@ Overall: `tatr check`, `tatr check --ledger LESSONS.md`, and `tatr check -S` all
       landed 28660c2; 1 review round (APPROVE, no findings). 24 lessons promoted
       (not 14); 5 domain lessons folded into AGENTS.md; Pending promotions empty.
       Discovered 3 pre-existing closed-unchecked findings -> folded into 220102.
-- [ ] 20260720-220102 (p30) retro-completeness: audit CLOSED tasks lacking RETRO
+- [x] 20260720-220102 (p30) retro-completeness: audit CLOSED tasks lacking RETRO
+      landed 74081af; 1 review round (APPROVE, 1 NIT: incidental TAGS whitespace).
+      73 pre-flow tasks tagged historical; no fabricated retros; closed-missing = 0.
+      3 closed-unchecked left verbatim, deferred to tatr 20260720-233308.
 
 ## Manual acceptance (batched for the user at Finish)
 
