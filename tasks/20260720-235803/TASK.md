@@ -1,6 +1,6 @@
 # tick 094942's dropped steps so tatr check is clean
 
-- STATUS: OPEN
+- STATUS: IN_PROGRESS
 - PRIORITY: 40
 - TAGS: chore
 
@@ -15,8 +15,8 @@ dropped boxes, not tag it historical.
 
 ## Steps
 
-- [ ] Flip the 3 `- [ ]` dropped steps in tasks/20260711-094942/TASK.md to `- [x]`, keeping the inline "(dropped, ...)" reasons verbatim.
-- [ ] Confirm `tatr check` is clean.
+- [x] Flip the 3 `- [ ]` dropped steps in tasks/20260711-094942/TASK.md to `- [x]`, keeping the inline "(dropped, ...)" reasons verbatim.
+- [x] Confirm `tatr check` is clean.
 
 ## Definition of Done
 

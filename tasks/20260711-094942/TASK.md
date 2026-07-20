@@ -28,7 +28,7 @@ is stable for any frequency / damping_ratio / timestep combination.
       0.1 rad/s within 30 s of sim. OUTCOME: it PASSES on current code -
       the premise below is falsified; the test is kept as saturation
       coverage.
-- [ ] (dropped, premise falsified) Make `compute_pd_torque` dt-aware and condition the gains with the
+- [x] (dropped, premise falsified) Make `compute_pd_torque` dt-aware and condition the gains with the
       backward-Euler (implicit) form used for stable rigid-body PDs:
       `g = 1 / (1 + kd * dt + kp * dt * dt)`, `kp' = kp * g`,
       `kd' = (kd + kp * dt) * g`, then `raw = axis * (kp' * angle) -
@@ -36,12 +36,12 @@ is stable for any frequency / damping_ratio / timestep combination.
       via `Res<Time>` (the system runs in FixedUpdate, so this is the fixed
       timestep). Document the conditioning and why (discrete stability for
       any gains) in the comment block.
-- [ ] (dropped, premise falsified) Update the closed-form pure-damper oracles to the conditioned gain:
+- [x] (dropped, premise falsified) Update the closed-form pure-damper oracles to the conditioned gain:
       expected torque is `-(kd + kp * dt) * g * I_world * omega`.
 - [x] Run the full bcs check suite (fmt --check, clippy --all-targets with
       and without --features debug, cargo test, cargo test --features
       debug, cargo test --examples, scripts/check-ascii.sh).
-- [ ] (dropped, no behavior change shipped) Behavior of the only in-crate consumer: boot 08_dropzone headless
+- [x] (dropped, no behavior change shipped) Behavior of the only in-crate consumer: boot 08_dropzone headless
       under the autopilot harness (BCS_AUTOPILOT=1 cargo run --example
       08_dropzone --features debug, under timeout) and confirm the cycle
       completes without panic - the conditioned gains soften the response
