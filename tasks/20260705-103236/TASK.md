@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: spike,feature,example,fps
+- TAGS: spike,feature,example,fps,historical
 
 ## Goal
 

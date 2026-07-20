@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 60
-- TAGS: spike,docs,example
+- TAGS: spike,docs,example,historical
 
 ## Goal
 

@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 65
-- TAGS: spike,breach,example
+- TAGS: spike,breach,example,historical
 
 ## Goal
 

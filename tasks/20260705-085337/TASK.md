@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: feature,example,bastion
+- TAGS: feature,example,bastion,historical
 
 > Part of the 12_bastion polish goal. Building a tower is currently keyboard-only
 > (number keys arm a tower, U upgrades), which is unusable on a touchscreen and

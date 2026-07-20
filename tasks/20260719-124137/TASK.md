@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 50
-- TAGS: modding, api
+- TAGS: modding,api,historical
 
 ## Record
 

@@ -2,8 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: harness,testing
-
+- TAGS: harness,testing,historical
 
 ## Close-out (2026-07-20)
 

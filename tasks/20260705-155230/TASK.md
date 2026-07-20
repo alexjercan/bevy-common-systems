@@ -2,8 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: bug,crash,tween
-
+- TAGS: bug,crash,tween,historical
 
 ## Goal
 

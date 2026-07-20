@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 90
-- TAGS: feature,example
+- TAGS: feature,example,historical
 
 Polish pass on `examples/07_orbit.rs`. The base SFX are already wired
 (menu/pickup/hurt/level_up/game_over); this task adds the "juice" layer that

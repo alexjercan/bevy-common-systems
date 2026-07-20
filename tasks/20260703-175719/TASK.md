@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 30
-- TAGS: docs
+- TAGS: docs,historical
 
 ## Goal
 

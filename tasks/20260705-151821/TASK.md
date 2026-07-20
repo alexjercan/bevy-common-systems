@@ -2,8 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 60
-- TAGS: feature,breach,example,ui
-
+- TAGS: feature,breach,example,ui,historical
 
 ## Goal
 

@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: spike,devtools,feature
+- TAGS: spike,devtools,feature,historical
 
 > Spike: tasks/20260704-175058/SPIKE.md (read
 > first). Wave 1 headline -- highest evidence, lowest charter risk.

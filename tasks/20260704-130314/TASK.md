@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: feature,example,mobile
+- TAGS: feature,example,mobile,historical
 
 ## Goal
 

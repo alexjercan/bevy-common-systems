@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 40
-- TAGS: spike,feature,harvest,fps
+- TAGS: spike,feature,harvest,fps,historical
 
 ## Goal
 

@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 90
-- TAGS: feature,example,bastion
+- TAGS: feature,example,bastion,historical
 
 > Part of the 12_bastion polish goal. Right now the orbit camera in
 > `examples/12_bastion.rs` lets A/D yaw and pointer drag change BOTH yaw and

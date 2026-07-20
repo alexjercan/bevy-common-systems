@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 3
-- TAGS: feature,dropzone
+- TAGS: feature,dropzone,historical
 
 > SUPERSEDED: this combined follow-up was split, per user direction, into three
 > focused tasks. Do not implement this one; use these instead:

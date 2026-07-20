@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: bug,14_breach,crash
+- TAGS: bug,14_breach,crash,historical
 
 Description: I was on wave 3 I was shooting enemies and all of a sudden the
 game crashed without any notice or anything.

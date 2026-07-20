@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: spike,feature,example,ui
+- TAGS: spike,feature,example,ui,historical
 
 ## Goal
 

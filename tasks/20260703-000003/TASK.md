@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 0
-- TAGS: archive
+- TAGS: archive,historical
 
 Archive stub: this design/fix note was a task-less record with no surviving
 task folder. During the 2026-07-16 docs restructure it was given this stub so

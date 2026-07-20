@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 20
-- TAGS: feature,example,modding
+- TAGS: feature,example,modding,historical
 
 Low-priority pick from the 01-05 games spike (see
 `tasks/20260703-165138/NOTES.md`). An idle/incremental game where

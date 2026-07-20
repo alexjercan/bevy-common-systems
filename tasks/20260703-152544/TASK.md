@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: docs,audio
+- TAGS: docs,audio,historical
 
 ## Goal
 

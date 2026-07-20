@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 70
-- TAGS: crates, feature, integrity
+- TAGS: crates,feature,integrity,historical
 
 Promote the Tier A + Tier B promotion candidates from the nova-protocol spike
 (`nova-protocol/docs/spikes/20260708-110317-promotion-eligible-systems.md`) into this

@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 70
-- TAGS: feature,example,glide,solver
+- TAGS: feature,example,glide,solver,historical
 
 ## Goal
 

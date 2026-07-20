@@ -2,7 +2,7 @@
 
 - STATUS: CLOSED
 - PRIORITY: 85
-- TAGS: bug,bevy-migration,example
+- TAGS: bug,bevy-migration,example,historical
 
 ## Goal
 
