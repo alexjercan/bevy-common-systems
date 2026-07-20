@@ -336,6 +336,30 @@ changing code; consistency is the crate's main defense against bloat.
   No em dashes, smart quotes, ellipsis characters or arrows; use `-`,
   `--`, `...`, `->`.
 
+### Promoted ledger lessons (folded 2026-07-20, task 20260720-220050)
+
+These recurred x3+ across retros and are conventions now, not just history:
+
+- Reset shared state in the same commit: when you add an accumulator, timer, or
+  per-run resource, grep the reset / `start_run` path and add its reset in the
+  same commit; extract a helper once more than three need resetting. A run that
+  does not reset its accumulators leaks state across runs.
+- Input driver runs in every state: a system that writes an `*Input` a plugin
+  integrates every frame must run in EVERY state, or zero the Input on state
+  exit - a state-gated writer leaves a stale last value the plugin keeps
+  integrating.
+- Read a plugin's `build()` for self-added deps before wiring it into an
+  example: e.g. `PopupPlugin` adds `TweenPlugin`, so adding both panics at
+  runtime on a duplicate plugin. Check `build()` for the plugins a plugin brings.
+- Harvest by reading evidence: when lifting a pattern from an example into the
+  crate, survey the precedent and its homes first, reproduce bodies
+  byte-for-byte, refactor the call sites as the test, and delete the now-dead
+  markers from the consumer - let the concrete reference draw the harvest line.
+- Split verifiable from manual: separate "assets load / logic runs"
+  (headless-verifiable) from "asset is audible/visible / transition fires"
+  (needs manual play-test), and state which real paths a shortcut harness does
+  NOT exercise.
+
 ## Features and Dependencies
 
 Features (default: none):
