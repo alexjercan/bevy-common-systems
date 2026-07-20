@@ -34,4 +34,19 @@ Overall: `tatr check`, `tatr check --ledger LESSONS.md`, and `tatr check -S` all
 
 ## Manual acceptance (batched for the user at Finish)
 
-Accumulates `manual:` DoD items as tasks land; presented at Finish.
+- (pending) 20260720-220050: skim the AGENTS.md "Promoted ledger lessons" block
+  and the LESSONS.md PROMOTED annotations - confirm the promotions land where you
+  want them.
+- (pending) 20260720-000752: a recent task marked historical for lack of a
+  captured retro - decide whether to backfill a real retro if you recall the
+  context, or leave it historical.
+
+## Done-definition status
+
+All 3 criteria met. `cargo clippy --all-targets` exits 0 (no Rust touched);
+`tatr check --ledger` has 0 promotion-stalled; `tatr check -S` has 0
+closed-missing-review/retro. Residue: 3 pre-existing `closed-unchecked` findings
+(20260704-102342 superseded, 20260705-140043, 20260711-094942 dropped steps) are
+left VERBATIM per the history-immutability policy and deferred to tatr task
+20260720-233308 (extend the historical exemption to closed-unchecked). This
+umbrella (goal-tagged) is exempt from -S's own record rules.
