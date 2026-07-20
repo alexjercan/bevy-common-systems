@@ -1,6 +1,6 @@
 # tick 094942's dropped steps so tatr check is clean
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: chore
 
