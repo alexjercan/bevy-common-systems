@@ -11,21 +11,21 @@ destructible physics bodies can reuse.
 
 ## Steps
 
-- [ ] New `integrity` module (Tier B core): `components` (IntegrityRoot, ConnectedTo,
+- [x] New `integrity` module (Tier B core): `components` (IntegrityRoot, ConnectedTo,
       leaf/disabled/destroy markers), `blast` (radial blast sensor + falloff), `plugin`
       (IntegrityPlugin: impact + blast collision damage, health-depletion -> disabled ->
       destroy, leaf derivation, chain reaction). `IntegrityDestroyMarker` is the generic
       "destroyed" seam games observe. Nova's section `glue` and `explode` stay in nova.
-- [ ] Physics helpers (Tier A): `rigid_body_point_velocity` (pure formula) and
+- [x] Physics helpers (Tier A): `rigid_body_point_velocity` (pure formula) and
       `destructible_body` bundle in `physics/rigid_body`.
-- [ ] UI (Tier A): `ui/health_display` (text % HUD over Health) and `ui/objectives`
+- [x] UI (Tier A): `ui/health_display` (text % HUD over Health) and `ui/objectives`
       (generic id+message list).
-- [ ] Port the full existing test suites (avian-free core unit tests + real-avian
+- [x] Port the full existing test suites (avian-free core unit tests + real-avian
       physics tests) and keep them green.
-- [ ] Integration example `examples/NN_integrity.rs` that wires the whole thing:
+- [x] Integration example `examples/NN_integrity.rs` that wires the whole thing:
       damage/blast -> destruction -> chain reaction, with the destroy seam hooked to the
       existing `ExplodeMeshPlugin`, plus health display + objectives.
-- [ ] Verify: cargo fmt, clippy (both configs), test (both configs), test --examples,
+- [x] Verify: cargo fmt, clippy (both configs), test (both configs), test --examples,
       check-ascii. Do not merge - leave for review.
 
 ## Notes

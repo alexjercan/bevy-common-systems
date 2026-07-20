@@ -23,14 +23,14 @@ actual code so it is a trustworthy orientation doc again.
 
 ## Steps
 
-- [ ] Diff the "Module Map" section against `find src -name '*.rs'` and add
+- [x] Diff the "Module Map" section against `find src -name '*.rs'` and add
       every missing module with a one-line description sourced from its `//!`
       doc.
-- [ ] Update the "Features and Dependencies" versions to match Cargo.toml
+- [x] Update the "Features and Dependencies" versions to match Cargo.toml
       (bevy 0.19, avian3d 0.7, bevy_enhanced_input 0.26, inspector 0.37);
       double-check each against the manifest, do not assume.
 - [ ] Re-read the Examples section for any other drift while in there.
-- [ ] Run scripts/check-ascii.sh; keep plain ASCII.
+- [x] Run scripts/check-ascii.sh; keep plain ASCII.
 
 ## Notes
 

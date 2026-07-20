@@ -19,7 +19,7 @@ screenshot (TitlePulse title + FPS item + centered layout).
 Verified the coverage matrix against the four task parts and spot-checked the
 judgement calls. Findings are all informational.
 
-- [x] R1.1 (verified, not a finding) The one real runtime regression the
+- [x] R1.1 (NIT) Verified, not a finding: The one real runtime regression the
   SoundBank harvest introduced is `get()` panicking on a key absent from the load
   list (where the old struct was a compile error). Statically diffed each game's
   `get(Sfx::X)` keys against its `SoundBank::load` list: every used key is loaded

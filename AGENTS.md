@@ -27,9 +27,11 @@ game-agnostic building blocks with obvious APIs, not framework machinery.
 - `tasks/` - tatr task tracker files (`tasks/<id>/TASK.md`), versioned with
   the code. Every record tied to a task lives in that task's folder - see
   "Where records go" below. Check here for planned and in-progress work.
+- `LESSONS.md` - the lessons ledger; read it before starting any task
+  (see "Development flow" below).
 - `docs/` - reference documentation only (`dev-harness.md`,
-  `wasm-web-builds.md`), the `docs/LESSONS.md` ledger, and `docs/plans/`
-  (multi-task plans). Per-task records do NOT go here.
+  `wasm-web-builds.md`) and `docs/plans/` (multi-task plans). Per-task
+  records do NOT go here.
 - `web/` - a static TypeScript + webpack showcase site that serves the example
   games as WebAssembly builds (trunk). See `web/README.md` and
   `docs/wasm-web-builds.md`.
@@ -49,11 +51,12 @@ under `docs/`:
 - `tasks/<id>/NOTES.md` - the design/fix record for the shipped change
   (what changed and why, alternatives, difficulties).
 
-`docs/` keeps only the reference docs, `docs/plans/` (multi-task plans), and
-the `docs/LESSONS.md` ledger (read it before starting work; /compound appends
-to it). When a task is pruned but its record is worth keeping, recreate the
-folder as a CLOSED archive-stub `TASK.md` (a folder without `TASK.md` breaks
-`tatr ls`) and put the record beside it.
+`docs/` keeps only the reference docs and `docs/plans/` (multi-task plans);
+the lessons ledger lives at the repo root as `LESSONS.md` (read it before
+starting work; /compound appends to it). When a task is pruned but its
+record is worth keeping, recreate the folder as a CLOSED archive-stub
+`TASK.md` (a folder without `TASK.md` breaks `tatr ls`) and put the record
+beside it.
 
 ## Module Map
 
@@ -641,6 +644,20 @@ Examples:
   disables a whole patch, so the cascade is the visible headline. See
   `tasks/20260708-112713/NOTES.md`.
 
+## Development flow
+
+- /flow drives development here: /plan breaks a goal into tatr tasks, /work
+  implements each task in a sprout worktree, /review runs out-of-context
+  round-1 reviews until APPROVE, and /compound writes the retro - repeating
+  until the goal is done.
+- Definition of Done criteria carry machine-checkable proofs in
+  test:/cmd:/manual: notation; a task closes only when its proofs pass.
+- `LESSONS.md` at the repo root is the lessons ledger: read it before
+  starting any task. /compound appends to it; /lessons compiles loose
+  scratch into it.
+- `tatr check` (plus `tatr check --ledger LESSONS.md`) is the conformance
+  gate for task artifacts and the ledger; keep it clean.
+
 ## Workflow
 
 - Work is tracked with the tatr CLI in `tasks/`; read `tasks/<id>/TASK.md`
@@ -650,7 +667,7 @@ Examples:
   after review. Do not push without being asked.
 - Record the design/fix in the task's `tasks/<id>/NOTES.md` and the
   retrospective in `tasks/<id>/RETRO.md` (see "Where records go"); reference
-  docs and the `docs/LESSONS.md` ledger live under `docs/`.
+  docs live under `docs/`, and the `LESSONS.md` ledger at the repo root.
 
 ## Gotchas
 

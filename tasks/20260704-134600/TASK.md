@@ -61,20 +61,20 @@ full-screen overlay) is split out to a separate follow-up task.
 
 ## Steps
 
-- [ ] Add `src/feedback/` (`mod.rs` + `flash.rs`): module docs, `Flash` config,
+- [x] Add `src/feedback/` (`mod.rs` + `flash.rs`): module docs, `Flash` config,
       `FlashChannel`, private `FlashState`, `FlashSystems`, `FlashPlugin`, the
       `On<Add,Flash>` clone observer, the `On<Remove,FlashState>` free observer,
       and the `animate_flash` system. Factor the color ease into a pure
       `flash_mix(original, flash, k)` fn.
-- [ ] Tests: pure `flash_mix` test + an ECS test that shares one material across
+- [x] Tests: pure `flash_mix` test + an ECS test that shares one material across
       two entities, flashes one, and asserts (a) the flashed entity gets a
       distinct clone whose emissive moved toward the flash color, (b) the other
       entity's material is untouched, (c) after the duration the original handle
       is restored and the clone asset is freed (no leak).
-- [ ] Wire preludes: `pub mod feedback;` + `feedback::prelude::*` in `src/lib.rs`.
-- [ ] Demo in `10_asteroids`: on a ship hit, insert `Flash` on the `ShipModel`
+- [x] Wire preludes: `pub mod feedback;` + `feedback::prelude::*` in `src/lib.rs`.
+- [x] Demo in `10_asteroids`: on a ship hit, insert `Flash` on the `ShipModel`
       so the hull flashes red and eases back. Keep the existing blink/overlay.
-- [ ] Add a follow-up task: promote the full-screen damage OVERLAY that 06/07/10
+- [x] Add a follow-up task: promote the full-screen damage OVERLAY that 06/07/10
       actually duplicate into `feedback` (screen flash), deleting the 3 copies.
-- [ ] Verify: fmt, clippy (both configs), test, test --examples, check-ascii,
+- [x] Verify: fmt, clippy (both configs), test, test --examples, check-ascii,
       boot 10_asteroids.

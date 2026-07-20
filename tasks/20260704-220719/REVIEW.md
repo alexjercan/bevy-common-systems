@@ -22,12 +22,12 @@ The two task halves are both delivered: (1) the stats are genuinely data-driven
 and (2) the spike question is answered with a clear negative result and a
 smaller reusable nugget identified. Notes are informational.
 
-- [x] R1.1 (verified) The "no recompile" claim is real and was proven, not
+- [x] R1.1 (NIT) Verified: The "no recompile" claim is real and was proven, not
   asserted: the same binary (unchanged mtime) logged `2 -> 3 -> 4 towers` across
   three runs as only the on-disk JSON changed. On wasm the embedded copy is used
   (no filesystem), and `cargo check --target wasm32-unknown-unknown` confirms the
   cfg gating compiles. Honest and correct.
-- [x] R1.2 (verified) Behaviour is preserved for the existing roster: Gun /
+- [x] R1.2 (NIT) Verified: Behaviour is preserved for the existing roster: Gun /
   Cannon / Runner / Brute stats and colors are copied verbatim from the old
   arrays. The one deliberate change is the enemy spawn mix -- a weighted pick
   (`weighted_enemy_index`) replaces the old hard-coded `brute_chance` flip -- which
@@ -38,13 +38,13 @@ smaller reusable nugget identified. Notes are informational.
   data-driven -- and the stats are plausibly balanced (Sniper: long-range,
   high-damage, slow; Swarm: fast, fragile, cheap). Called out as a content change,
   not a defect.
-- [x] R1.4 (verified) The spike evaluation (`docs/2026-07-05-...`) answers the
+- [x] R1.4 (NIT) Verified: The spike evaluation (`docs/2026-07-05-...`) answers the
   actual question: it reuses nothing from `modding/registry` (data vs behavior),
   the reusable nugget is the ~25-line loader not a `SpecCatalog<T>` type, and
   there is no second concrete user (09 uses the event registry). Keeping it
   game-local and seeding no speculative follow-up honours the task's explicit
   two-user rule.
-- [x] R1.5 (verified) Test quality: `weighted_enemy_index` is tested including
+- [x] R1.5 (NIT) Verified: Test quality: `weighted_enemy_index` is tested including
   that an appended, otherwise-zero-weight enemy is always selected (proving
   selection is not hard-coded), and the embedded catalog parse + level-scaled
   upgrade cost are covered. Meaningful assertions, not execution-only.

@@ -28,7 +28,7 @@ AGENTS.md updated.
   - Response: Left as-is - the climbing x2/x3/x4 banners are the "cool looking
     text" the request asked for; revisit only if it reads as clutter in play.
 
-- [ ] R1.2 (OBSERVATION, not a defect) - by design a combo spans one continuous
+- [ ] R1.2 (NIT) Observation, not a defect - by design a combo spans one continuous
   LMB hold, so a player who holds and keeps sweeping can chain a long combo
   without releasing. This matches the fruit-ninja feel and is documented in the
   code and TASK.md; noting it so it is a known choice, not an oversight. A

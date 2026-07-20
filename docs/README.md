@@ -12,8 +12,8 @@ retros, design notes) live next to their task under `tasks/<id>/` - see
   WebAssembly and the `web/` showcase site (trunk, audio unlock, deploy).
 - [plans/](plans/README.md) - long-form plans spanning multiple tasks
   (release scopes, roadmaps, process proposals).
-- [LESSONS.md](LESSONS.md) - the distilled lessons ledger.
-  Read it before starting work; /compound appends to it.
+- [../LESSONS.md](../LESSONS.md) - the distilled lessons ledger, at the repo
+  root. Read it before starting work; /compound appends to it.
 
 The crate's own orientation (module map, conventions, build commands) is in
 the repo-root [AGENTS.md](../AGENTS.md).
@@ -30,9 +30,10 @@ Everything tied to one task lives in that task's folder, so an `ls` of
 - `tasks/<id>/NOTES.md` - the design/fix record for the shipped change.
 
 Do not create per-task record files under `docs/`. `docs/` keeps only the
-reference docs, `docs/plans/` (multi-task plans), and `LESSONS.md` (the
-distilled lessons ledger). Records whose task folder was pruned are kept by
-recreating the folder as a CLOSED archive-stub `TASK.md` beside the record.
+reference docs and `docs/plans/` (multi-task plans); the distilled lessons
+ledger is `LESSONS.md` at the repo root. Records whose task folder was pruned
+are kept by recreating the folder as a CLOSED archive-stub `TASK.md` beside
+the record.
 
 ## After a meaningful change
 

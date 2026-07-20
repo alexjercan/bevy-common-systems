@@ -64,7 +64,7 @@ honesty/quality wins worth taking now.
     once at startup so the idle bar shows a plausibly-scattered console instead of
     all-zero gauges.
 
-- [ ] R1.5 (NIT, informational) `examples/11_overload.rs` `spawn_game_over` --
+- [ ] R1.5 (NIT) Informational: `examples/11_overload.rs` `spawn_game_over` --
   `new_best` is evaluated after `record_high_score` has already raised `high.0`, so
   any tie (including the first run) prints "New best!". Harmless and arguably
   correct (ties count as bests); flagged only in case exact-tie wording matters.
