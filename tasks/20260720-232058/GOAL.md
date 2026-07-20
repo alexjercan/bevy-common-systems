@@ -23,7 +23,10 @@ Overall: `tatr check`, `tatr check --ledger LESSONS.md`, and `tatr check -S` all
 
 ## Tasks
 
-- [ ] 20260720-220050 (p70) lessons: promote or retire the pending x3+ lessons
+- [x] 20260720-220050 (p70) lessons: promote or retire the pending x3+ lessons
+      landed 28660c2; 1 review round (APPROVE, no findings). 24 lessons promoted
+      (not 14); 5 domain lessons folded into AGENTS.md; Pending promotions empty.
+      Discovered 3 pre-existing closed-unchecked findings -> folded into 220102.
 - [ ] 20260720-220102 (p30) retro-completeness: audit CLOSED tasks lacking RETRO
 
 ## Manual acceptance (batched for the user at Finish)

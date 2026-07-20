@@ -1,6 +1,6 @@
 # lessons: promote or retire 14 pending x3+ lessons
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 70
 - TAGS: chore
 
