@@ -2,6 +2,9 @@
 //!
 //! - [`pd_controller`] - a PD attitude controller that torques a rigid body
 //!   toward a target rotation.
+//! - [`doom_controller`] - an arena-shooter first-person controller: mouse-look
+//!   with a pitch clamp plus a planar velocity output.
+//! - [`rigid_body`] - the point-velocity relation and a destructible-body bundle.
 //!
 //! The `prelude` re-exports the commonly used types:
 //!

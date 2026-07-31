@@ -85,7 +85,7 @@ impl HarnessCompletion {
 
     /// Whether `name` has registered and not yet reported done.
     pub fn is_pending(&self, name: &str) -> bool {
-        self.pending.iter().any(|p| *p == name)
+        self.pending.contains(&name)
     }
 
     /// Whether any collector OTHER than `name` is still pending - the loop

@@ -3,7 +3,7 @@
 //!
 //! Model a destructible object as a graph: each node is a health-bearing collider carrying
 //! [`ConnectedTo`](components::ConnectedTo) (its structural neighbours), all under one body
-//! marked [`IntegrityRoot`](components::IntegrityRoot). [`IntegrityPlugin`](plugin::IntegrityPlugin)
+//! marked [`IntegrityRoot`](components::IntegrityRoot). [`IntegrityPlugin`]
 //! then turns collisions and [`blast`] volumes into damage, disables nodes at zero health,
 //! destroys disabled leaves, and cascades the destruction as nodes are pruned from the graph.
 //!
@@ -14,6 +14,8 @@
 
 #[cfg(test)]
 mod test_support;
+
+mod damage;
 
 pub mod blast;
 pub mod components;

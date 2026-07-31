@@ -190,6 +190,13 @@ cargo run --example 01_sphere --features debug
 
 Only expected warning: a future-incompat note from transitive `proc-macro-error2`.
 
+**Agents: do NOT run `cargo clippy`.** It is far too slow on this tree (a full
+recheck of the bevy/avian graph per invocation) and blocks the session. Leave
+every `cargo clippy` line above to the user, who runs the suite at the end.
+Keep clippy in `Definition of Done` proofs and say it is unrun -- do not tick a
+clippy proof yourself, and do not substitute `cargo build --examples` for it and
+call it lints-clean.
+
 Testing convention:
 
 - Pure math/geometry gets `#[cfg(test)]` next to the code (`meth/sphere`, `mesh/builder`, `physics/pd_controller`, `transform/point_rotation`).
