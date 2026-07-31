@@ -22,7 +22,13 @@
 
 use bevy::prelude::*;
 
-use super::{components::*, damage::*};
+use super::{
+    components::*,
+    damage::{
+        on_blast_collision_deal_damage, on_collider_of_spawn_insert_collision_events,
+        on_impact_collision_deal_damage,
+    },
+};
 use crate::health::prelude::*;
 
 pub mod prelude {

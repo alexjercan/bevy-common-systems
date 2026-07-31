@@ -14,7 +14,7 @@ Keep = kept as-is (already tagged / already earning its keep). Compact =
 survives as one tagged block, shorter. Drop = deleted, restatement or
 narration. Line numbers are the BASE (master) positions.
 
-### src/integrity/blast.rs (2 blocks)
+### src/integrity/blast.rs (2 triaged, 1 untagged)
 
 | Base | Call | Why |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ No comments. Fixed one rustdoc redundant explicit link target
 (`[`IntegrityPlugin`](plugin::IntegrityPlugin)` -> `[`IntegrityPlugin`]`) and
 added `mod damage;` for the split.
 
-### src/integrity/plugin.rs (26 blocks - the bulk)
+### src/integrity/plugin.rs (24 triaged, 22 untagged - the bulk)
 
 | Base | Call | Why |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ added `mod damage;` for the split.
 | 362 `Dropping the hub to one neighbor makes it a leaf.` | drop | restates the assertion. |
 | 383 `A disabled interior node is deactivated, not destroyed` | drop | the test name already says this. |
 | 408 `The whole body dies when its root is disabled` | drop | ditto. |
-| 422 `The headline sequence: damage -> health zero -> disabled -> destroyed.` | drop | test name is `damage_to_zero_destroys_a_lone_node`. |
+| 422 `The headline sequence: damage -> health zero -> disabled -> destroyed.` | drop | test name is `damage_drives_a_leaf_from_full_health_to_destruction`. |
 | 429 `Derive the leaf marker (no neighbors -> leaf).` | drop | restates `app.update()`. |
 | 434 `Fatal damage.` | drop | restates `trigger(HealthApplyDamage(...))`. |
 | 449-451 `A line A-B-C, all disabled...` | compact | the ONLY test comment kept: it explains the cascade shape the asserts cannot show (why B dies second). One tagged `NOTE:`. |
@@ -60,7 +60,7 @@ added `mod damage;` for the split.
 | 668-669 `A body beyond the sensor's reach never overlaps` | drop | test name says it. |
 | 672 `Blast radius 5 centred 8 away; target ~7 out` | compact | -> end-of-line geometry label. |
 
-### src/physics/doom_controller.rs (5 blocks)
+### src/physics/doom_controller.rs (5 triaged, 5 untagged)
 
 | Base | Call | Why |
 | --- | --- | --- |
@@ -79,7 +79,7 @@ No comments, but the **module doc was stale**: it listed only
 `pd_controller` while the module also ships `doom_controller` and
 `rigid_body`. Added both entries.
 
-### src/physics/pd_controller.rs (10 blocks)
+### src/physics/pd_controller.rs (14 untagged in 10 rows)
 
 | Base | Call | Why |
 | --- | --- | --- |
@@ -94,13 +94,15 @@ No comments, but the **module doc was stale**: it listed only
 | 419-420 `Let avian link colliders and finalize mass properties` | compact | ordering hazard; tagged. |
 | 445, 465, 527, 551, 570 `10 s / 30 s of sim at 60 Hz` | drop | five copies labelling five magic loop counts. Replaced by a `simulate_seconds(app, secs)` helper, which deletes the comment AND the magic number (see below). |
 
-### src/physics/rigid_body.rs (3 blocks)
+### src/physics/rigid_body.rs (3 triaged, 3 untagged)
 
 | Base | Call | Why |
 | --- | --- | --- |
 | 70 `No rotation: every point moves at the body's linear velocity` | drop | test name says it. |
 | 82 `omega x 0 = 0, so a muzzle on the COM...` | drop | ditto. |
 | 94-95 `Spin about +Y ... omega x r = (0,2,0) x (3,0,0) = (0,0,-6)` | compact | the hand-computed oracle IS the value of the test. One tagged `NOTE:`. |
+
+Per-file untagged blocks sum to the DoD's 45: 1 + 22 + 5 + 14 + 3.
 
 **Result: 45 -> 0 untagged blocks, 1 -> 0 bare HUIDs.**
 
