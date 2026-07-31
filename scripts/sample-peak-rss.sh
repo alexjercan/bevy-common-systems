@@ -72,7 +72,10 @@ sample() {
         read -r peak_total peak_lld < "$peak_file"
         [ "$total" -gt "$peak_total" ] && peak_total=$total
         [ "$largest" -gt "$peak_lld" ] && peak_lld=$largest
-        echo "$peak_total $peak_lld" > "$peak_file"
+        # NOTE: write atomically. A plain `>` truncates before it writes, so the
+        # kill below can land in that window and leave the file empty -- which
+        # would print a confident "0.0 GB" instead of the measurement.
+        echo "$peak_total $peak_lld" > "$peak_file.tmp" && mv -f "$peak_file.tmp" "$peak_file"
         sleep "$interval"
     done
 }
@@ -84,6 +87,13 @@ sampler_pid=$!
 trap 'kill "$sampler_pid" 2>/dev/null; rm -f "$peak_file"' EXIT
 
 if [ -n "$memmax" ]; then
+    # NOTE: preflight. Without this, a missing systemd-run means the wrapped
+    # command never runs and the output reads `command exit 127`, which is
+    # indistinguishable from the build itself failing.
+    if ! command -v systemd-run > /dev/null 2>&1; then
+        echo "$0: -m needs systemd-run, which is not on PATH" >&2
+        exit 2
+    fi
     systemd-run --user --scope -q -p "MemoryMax=$memmax" -- "$@"
 else
     "$@"
@@ -94,6 +104,13 @@ kill "$sampler_pid" 2>/dev/null
 wait "$sampler_pid" 2>/dev/null
 
 read -r peak_total peak_lld < "$peak_file"
+
+# NOTE: refuse to report a number we cannot vouch for. Silence beats a
+# plausible-looking 0.0 GB when the peak file did not survive.
+case "$peak_total$peak_lld" in
+    *[!0-9]* | "") echo "peak-rss: measurement lost, no peak recorded (command exit $status)" >&2
+                   exit "$status" ;;
+esac
 
 awk -v t="$peak_total" -v l="$peak_lld" -v s="$status" -v cap="${memmax:-none}" 'BEGIN {
     printf "peak-rss: toolchain total %.1f GB, largest rust-lld %.1f GB (MemoryMax=%s, command exit %d)\n", \

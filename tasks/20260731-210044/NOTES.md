@@ -125,16 +125,44 @@ runs below were taken with the box otherwise idle (zero foreign
 cargo/rustc/rust-lld processes), on 31 GB RAM / 24 cores, from a clean target
 directory in the sprout worktree.
 
-Full `cargo test`, clean target, caps in force:
+Every run below forced a relink with `touch src/lib.rs` against a warm target,
+so all 16 binaries and all 60 doctests actually re-link while the ~400
+dependency crates stay cached. A cached-binary run measures nothing. Each was
+serialized against the other session on this box with
+`flock /home/alex/.claude/shared/heavy-build.lock`, and `--no-fail-fast` keeps
+the run alive through the whole link storm.
 
-    $ ./scripts/sample-peak-rss.sh -m 24G -- nix develop --command cargo test
-    test result: ok. 147 passed; 0 failed; 0 ignored
-    test result: ok. 59 passed; 0 failed; 1 ignored
-    peak-rss: toolchain total 13.1 GB, largest rust-lld 2.8 GB (MemoryMax=24G, command exit 0)
+### The divisor: 4 was wrong, 6 is the measured value
 
-13.1 GB peak on a 31 GB box, no swap thrash, exit 0. Largest single rust-lld was
-2.8 GB, which is where the `MemTotalGB / 4` divisor in the shellHook comes from:
-roughly 4 GB of headroom per concurrent link, with margin.
+The first cut of this fix used `min(nproc, MemTotalGB / 4)` = 7 here. Measured
+at that cap, three of the four configurations bust the 16 GB target:
+
+| Run | cap 7 (`/4`) | cap 5 (`/6`) | largest rust-lld at cap 5 |
+| --- | --- | --- | --- |
+| `cargo test` | -- | **11.6 GB** | 2.7 GB |
+| `cargo test --doc` | 16.4 GB | **10.6 GB** | 2.2 GB |
+| `cargo test --features debug` | 18.4 GB | **13.5 GB** | 3.0 GB |
+| `cargo test --examples` | 17.2 GB | **9.9 GB** | 2.2 GB |
+
+All four at cap 5 exit 0: 147 lib tests (154 with `debug`), 59 passed + 1
+ignored doctests, 117 example tests.
+
+Two things the cap-7 column corrects in the earlier record:
+
+- The original headline was a single `cargo test` run reported as 13.1 GB with
+  the cap at 7. That figure cannot be right as a bound on the suite: `--doc`
+  alone, a strict subset of `cargo test`, costs 16.4 GB at the same cap. It has
+  been dropped rather than reconciled -- it was one unrepeated sample and the
+  runs above supersede it.
+- The divisor was sized against the DEFAULT feature set. `--features debug`
+  links `bevy-inspector-egui` and egui into every binary and is the heaviest
+  configuration; at 18.4 GB it was the one over the line, and it was the one
+  never measured.
+
+`MemTotalGB / 6` budgets ~6 GB per concurrent link against a measured ~2.7 GB
+per job (whole-run peak / cap) and a 3.0 GB largest single `rust-lld`. The ~2x
+margin is deliberate: overshooting the peak costs swap, while over-reserving
+only costs parallelism.
 
 Linked binary sizes under the new profile, for comparison with the 2026-07-03
 figures (~300 MB lib test binary at 6 examples):
@@ -148,20 +176,28 @@ The `.dwo` count in `target/debug/deps` (512 files) confirms
 `split-debuginfo = "unpacked"` is still doing its job -- the DWARF is beside the
 objects, not inside the linked images.
 
+### What the caps cost, beyond linking
+
+Both knobs are overloaded; neither is scoped to linking, because cargo has no
+link-jobs setting.
+
+| Knob | Intended effect | Also does | Cost here |
+| --- | --- | --- | --- |
+| `RUST_TEST_THREADS` | caps concurrent doctest LINKS, the only lever that reaches rustdoc's harness | caps test EXECUTION for every libtest harness in the devshell | negligible; these tests are pure math and finish in seconds |
+| `CARGO_BUILD_JOBS` | caps concurrent lib/example links | caps the cold ~400-crate dependency compile, where rustc rather than rust-lld is the memory profile | a slower cold build; `CARGO_BUILD_JOBS=24 cargo build` takes the cores back |
+
 ### Not measured
 
 The uncapped baseline (`CARGO_BUILD_JOBS=24 RUST_TEST_THREADS=24`) was NOT
-re-measured for this record. Two honest reasons: reproducing it is exactly the
-failure being fixed, so it thrashes the box it runs on; and the machine was busy
-with unrelated work for the whole window, which would have polluted a
-system-wide sample anyway. The 13.1 GB figure above therefore stands on its own
-as an absolute "fits comfortably", not as a measured ratio against a before.
+measured. Reproducing it is exactly the failure being fixed, so it thrashes the
+box it runs on -- and this box is shared with another Claude session whose own
+builds would pollute a system-wide sample.
 
-If someone wants the ratio, the clean way is a warm target plus
-`touch src/lib.rs` (relinks all 16 binaries and rebuilds the 60 doctests without
-recompiling the ~400 dependency crates), run twice with the two settings, on an
-idle box, under `-m` so the bad case gets OOM-killed in its own scope instead of
-taking the desktop with it.
+The cap-7 column above serves the purpose a true baseline would have: it is a
+measured before/after on the same commit, same method, same idle box, and it is
+what actually justifies the divisor. If someone does want the uncapped number,
+run it under `-m 24G` so the bad case is OOM-killed inside its own systemd
+scope instead of taking the desktop with it.
 
 ## Why `[profile.dev.package."*"] debug = false` is safe here
 
@@ -178,7 +214,20 @@ Shown rather than assumed. A `#[test] fn ... { panic!() }` was appended to
                  at ./src/lib.rs:50:9
 
 File and line intact for first-party frames with the dependency override in
-place. Note that checking the linked binary's `.debug_line` section instead
+place. The probe was reverted rather than kept, so nothing in the tree
+reproduces it on demand -- a deliberately panicking test in a copy-pastable
+utility crate is worse than the recipe. To re-run it, append to `src/lib.rs`:
+
+    #[cfg(test)]
+    mod backtrace_probe {
+        #[test]
+        fn deliberate_panic_for_backtrace_check() {
+            panic!("probe");
+        }
+    }
+
+then `RUST_BACKTRACE=1 cargo test backtrace_probe`, read the frame, and revert.
+A first-party frame carrying `at ./src/...` is the pass condition. Note that checking the linked binary's `.debug_line` section instead
 would have proved nothing either way -- `split-debuginfo = "unpacked"` keeps
 DWARF in the `.dwo` files, so the section is empty by design and an absence
 there is not an absence of line info. The runtime backtrace is the honest probe.

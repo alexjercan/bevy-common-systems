@@ -56,13 +56,20 @@ Both knobs attack the same 1.4 GB of DWARF per binary:
 
 ## Measured impact (same machine, same sampling method)
 
+SUPERSEDED as a current figure by `tasks/20260731-210044/NOTES.md`. The numbers
+below are still the correct record of what the profile knobs bought, but they
+were measured at **6 examples / 12 doctests** and at cargo's default job count.
+The workload is now 15 examples / 60 doctests, and concurrency -- not
+per-binary size -- is the dominant term. Do not quote these as today's peak.
+
 | Config                                          | Peak toolchain RAM | Linked binary |
 | ----------------------------------------------- | ------------------ | ------------- |
 | baseline (`debug = true`, embedded)             | ~38.3 GB (swaps)   | 1.5 GB        |
 | `split-debuginfo = "unpacked"`                  | ~19.7 GB           | 347 MB        |
 | `+ debug = "line-tables-only"` (committed)      | ~16.5 GB           | 300 MB        |
 
-The committed config keeps the peak comfortably under half of physical RAM.
+At 6 examples / 12 doctests the committed config kept the peak comfortably
+under half of physical RAM. It no longer does at 15 / 60 without a job cap.
 
 ## Alternatives considered
 
@@ -81,4 +88,6 @@ The committed config keeps the peak comfortably under half of physical RAM.
 ## To restore full local-variable debugging
 
 Set `debug = true` in `[profile.dev]` (keep `split-debuginfo = "unpacked"`).
-That lands around ~19.7 GB peak -- still under physical RAM, no swap.
+That landed around ~19.7 GB peak at 6 examples / 12 doctests -- under physical
+RAM, no swap. At today's 15 examples / 60 doctests it would not be; re-measure
+with `./scripts/sample-peak-rss.sh` before trusting it.
