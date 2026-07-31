@@ -91,10 +91,9 @@ impl<T: Resource + Serialize + DeserializeOwned + Default> Plugin for PersistPlu
     fn build(&self, app: &mut App) {
         debug!("PersistPlugin: build (key {})", self.key);
 
-        // Load synchronously here, not in a system: the resource must exist
-        // before any startup system or the initial state transition reads it
-        // (the game's menu, say, shows the stored high score). It is one small
-        // file read.
+        // NOTE: load synchronously here, not in a system -- the resource must exist
+        // before any startup system or the first state transition reads it (a menu
+        // showing the stored high score). It is one small file read.
         app.insert_resource(PersistKey::<T> {
             key: self.key.clone(),
             _marker: PhantomData,
@@ -142,10 +141,9 @@ fn save_persisted<T: Resource + Serialize>(value: Res<T>, key: Res<PersistKey<T>
     }
 }
 
-// The wasm backend needs a browser, so the end-to-end plugin test is native-only
-// (the pure serialize/deserialize path is shared). It points the storage at a
-// temp dir via `BCS_PERSIST_DIR`, so it is hermetic and does not touch the real
-// data directory.
+// NOTE: native-only because the wasm backend needs a browser; the shared
+// serialize/deserialize path is covered either way. `BCS_PERSIST_DIR` points storage
+// at a temp dir, so this is hermetic and never touches the real data directory.
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use serde::Deserialize;
@@ -166,13 +164,11 @@ mod tests {
     fn value_survives_across_two_app_runs() {
         let dir = std::env::temp_dir().join(format!("bcs_persist_plugin_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        // This is the ONLY test that sets `BCS_PERSIST_DIR` / drives the plugin's
-        // real storage; any new plugin-level storage test must share this fixture
-        // (or serialize), or it will race on the process-global env var.
+        // NOTE: the ONLY test that sets `BCS_PERSIST_DIR` and drives real storage. A
+        // new plugin-level storage test must reuse this fixture or serialize with it,
+        // or the two race on the process-global env var.
         std::env::set_var("BCS_PERSIST_DIR", &dir);
 
-        // First launch: loads the default (nothing stored yet), then a change is
-        // written back.
         {
             let mut app = run_once("best");
             assert_eq!(
@@ -184,7 +180,6 @@ mod tests {
             app.update();
         }
 
-        // Second launch: a fresh app loads the value the first one saved.
         {
             let app = run_once("best");
             assert_eq!(

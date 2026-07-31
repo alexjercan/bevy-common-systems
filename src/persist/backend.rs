@@ -96,7 +96,6 @@ mod native {
             save_in(&root, "score", "{\"value\":42}").unwrap();
             assert_eq!(load_in(&root, "score"), Some("{\"value\":42}".to_string()));
 
-            // Overwriting replaces the stored value.
             save_in(&root, "score", "{\"value\":99}").unwrap();
             assert_eq!(load_in(&root, "score"), Some("{\"value\":99}".to_string()));
 
@@ -110,10 +109,10 @@ mod native {
             assert_ne!(path_in(root, "a"), path_in(root, "b"));
         }
 
+        /// Kept pure - no env, no storage - so it never races the env-based two-app
+        /// test on `BCS_PERSIST_DIR`. `load` / `save` both gate on `is_safe_key`.
         #[test]
         fn unsafe_keys_are_rejected() {
-            // Kept pure (no env / storage) so it never races the env-based
-            // two-app test on `BCS_PERSIST_DIR`; `load`/`save` gate on this.
             assert!(is_safe_key("my_game.high_score"));
             assert!(is_safe_key("a-b_c.1"));
             assert!(!is_safe_key(""));
