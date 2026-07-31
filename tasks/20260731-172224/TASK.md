@@ -65,9 +65,9 @@ file that is total by construction -- every entry point must return a finite
 result for degenerate or parallel input, because `explode` runs it on
 arbitrary game meshes -- and that contract now has a module doc stating it.
 Public API is byte-identical: the new `slice` MODULE is private (the
-`TriangleMeshBuilder::slice` method is untouched), the moved items were private
-and are now `pub(super)`, and `mesh::prelude::TriangleMeshBuilder` is
-untouched.
+`TriangleMeshBuilder::slice` method is untouched); of the moved items the two
+`builder.rs` calls are `pub(super)` and `edge_plane_intersection` stays plain
+private, and `mesh::prelude::TriangleMeshBuilder` is untouched.
 
 **Alternatives.** Keeping `builder.rs` whole (rejected: measured size plus two
 concerns is exactly the epic's split criterion); splitting further into

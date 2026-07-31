@@ -74,7 +74,7 @@ Derive the working order with `tatr frontier <epic-id>`.
 | --- | --- | --- | --- | --- |
 | 20260731-172208 | 90 | bevy-common-systems | KISS pass: debug/ + lib.rs + completion.rs (sets the comment convention) | x |
 | 20260731-172223 | 80 | bevy-common-systems | KISS pass: integrity/ + physics/ | x |
-| 20260731-172224 | 70 | bevy-common-systems | KISS pass: mesh/ + meth/ + camera/ | |
+| 20260731-172224 | 70 | bevy-common-systems | KISS pass: mesh/ + meth/ + camera/ | x |
 | 20260731-172232 | 60 | bevy-common-systems | KISS pass: modding/ + persist/ + macros subcrate | |
 | 20260731-172233 | 50 | bevy-common-systems | KISS pass: feedback/ tween/ ui/ transform/ + small modules | |
 
