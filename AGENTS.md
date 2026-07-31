@@ -1,898 +1,253 @@
 # AGENTS.md
 
-Orientation for agent sessions working in this repository. Read this first:
-it covers what the crate is for, how the code is organized, the conventions
-every module follows, and the commands to build and verify changes.
+Orientation for agent sessions. Read first.
 
 ## What This Crate Is
 
-`bevy_common_systems` is a collection of Bevy utilities with one goal: build
-games faster. It collects the gameplay components, systems and plugins that
-almost every game needs (cameras, health, orbit motion, procedural meshes,
-status bar UI, a modding event system) so a new game project does not have
-to rewrite them. The crate doc calls it "fully copy-pastable": each module
-is self-contained enough to be lifted into a game on its own, and the crate
-as a whole works as a normal dependency.
+`bevy_common_systems`: Bevy utilities so a new game does not rewrite cameras,
+health, orbit motion, procedural meshes, status-bar UI, a modding event bus.
+"Fully copy-pastable" -- each module lifts out on its own, and the crate also
+works as a normal dependency.
 
-When you add or change code here, optimize for that goal: small, composable,
-game-agnostic building blocks with obvious APIs, not framework machinery.
+Optimize for that: small, composable, game-agnostic blocks with obvious APIs.
+No framework machinery.
+
+## Agent workflow
+
+- Tracker/epics: tatr tasks in `tasks/<id>/TASK.md`; multi-task plans in `docs/plans/`. See "Development flow".
+- Examples/retention: runnable examples in `examples/NN_name.rs` are the integration tests; keep them all. See "Examples".
+- Domain docs: `docs/dev-harness.md`, `docs/wasm-web-builds.md`, `web/README.md`. Reference only.
+- Research/network: `/spike` -> `tasks/<id>/SPIKE.md`. No network needed for build/test.
+- Checks/records: `tatr check` (+ `--ledger LESSONS.md`); records per task (see "Where records go"). See "Build, Verify, Run".
 
 ## Repository Layout
 
-- `src/` - the main library crate, one directory (or file) per concern.
-- `bevy_common_systems_macros/` - proc-macro subcrate, re-exported from the
-  main crate. Currently provides `#[derive(EventKind)]`.
-- `examples/` - runnable examples, numbered `NN_name.rs`. These double as
-  the integration tests and the quickstart documentation.
-- `tasks/` - tatr task tracker files (`tasks/<id>/TASK.md`), versioned with
-  the code. Every record tied to a task lives in that task's folder - see
-  "Where records go" below. Check here for planned and in-progress work.
-- `LESSONS.md` - the lessons ledger; read it before starting any task
-  (see "Development flow" below).
-- `docs/` - reference documentation only (`dev-harness.md`,
-  `wasm-web-builds.md`) and `docs/plans/` (multi-task plans). Per-task
-  records do NOT go here.
-- `web/` - a static TypeScript + webpack showcase site that serves the example
-  games as WebAssembly builds (trunk). See `web/README.md` and
-  `docs/wasm-web-builds.md`.
-- `flake.nix`, `rust-toolchain.toml`, `rustfmt.toml`, `.cargo/config.toml` -
-  toolchain setup, see Environment below.
+| Path | What |
+| --- | --- |
+| `src/` | library crate, one dir (or file) per concern |
+| `bevy_common_systems_macros/` | proc-macro subcrate; `#[derive(EventKind)]` |
+| `examples/` | runnable `NN_name.rs`; integration tests + quickstart |
+| `tasks/` | tatr tracker, versioned with the code |
+| `LESSONS.md` | lessons ledger; read before any task |
+| `docs/` | reference docs + `docs/plans/` only. No per-task records |
+| `web/` | TypeScript + webpack showcase serving examples as wasm (trunk) |
+| `flake.nix`, `rust-toolchain.toml`, `rustfmt.toml`, `.cargo/config.toml` | toolchain |
 
 ## Where records go (/plan, /spike, /work, /review, /compound, /flow)
 
-Everything tied to one task lives in that task's folder, so an `ls` of
-`tasks/<id>/` shows the whole story. Never write loose per-task `.md` files
-under `docs/`:
+Everything for one task in that task's folder; never loose per-task `.md` in `docs/`.
 
-- `tasks/<id>/TASK.md` - the task itself (tatr).
-- `tasks/<id>/SPIKE.md` - research that scoped the task (/spike).
-- `tasks/<id>/REVIEW.md` - review rounds and verdicts (/review).
-- `tasks/<id>/RETRO.md` - the retrospective (/compound).
-- `tasks/<id>/NOTES.md` - the design/fix record for the shipped change
-  (what changed and why, alternatives, difficulties).
+| File | Content |
+| --- | --- |
+| `tasks/<id>/TASK.md` | the task (tatr) |
+| `tasks/<id>/SPIKE.md` | research that scoped it |
+| `tasks/<id>/REVIEW.md` | review rounds + verdicts |
+| `tasks/<id>/RETRO.md` | retrospective |
+| `tasks/<id>/NOTES.md` | design/fix record: what changed, why, alternatives, difficulties |
 
-`docs/` keeps only the reference docs and `docs/plans/` (multi-task plans);
-the lessons ledger lives at the repo root as `LESSONS.md` (read it before
-starting work; /compound appends to it). When a task is pruned but its
-record is worth keeping, recreate the folder as a CLOSED archive-stub
-`TASK.md` (a folder without `TASK.md` breaks `tatr ls`) and put the record
-beside it.
+Pruned task worth keeping: recreate the folder as a CLOSED archive-stub
+`TASK.md` (a folder without `TASK.md` breaks `tatr ls`) plus the record.
 
 ## Module Map
 
 - `audio/`
-  - `SfxPlugin` (in `audio`) - fire-and-forget one-shot sound effects. Game
-    code triggers `PlaySfx` (or calls `commands.play_sfx(handle)`) with an
-    `AudioSource` handle and the plugin spawns a self-despawning `AudioPlayer`;
-    a global `SfxMasterVolume` resource scales every sound. One concern: SFX
-    only, not music or a mixer. Demoed by `examples/06_fruitninja`.
-  - `registry` - `SoundBank`: a named registry of loaded audio handles keyed
-    by a game-defined `Copy` enum. The game declares one key enum plus a list
-    of `(key, name)` pairs and the bank owns the loading (applying the
-    `sounds/<name>.wav` convention) and lookup (`SoundBank::get`), replacing
-    the flat hand-rolled struct of `Handle<AudioSource>` fields;
-    `SoundBank::all_loaded` / `sounds_loaded` drive a loading screen.
+  - `SfxPlugin` - one-shot SFX. Trigger `PlaySfx` / `commands.play_sfx(handle)`; spawns a self-despawning `AudioPlayer`. `SfxMasterVolume` scales all. SFX only, no music/mixer.
+  - `registry` - `SoundBank`: named handle registry keyed by a game `Copy` enum; owns loading (`sounds/<name>.wav`) + `get`. `all_loaded`/`sounds_loaded` drive loading screens.
 - `camera/`
-  - `chase` - `ChaseCameraPlugin`: third-person chase camera with offset,
-    smoothing and look-ahead. Game code writes `ChaseCameraInput`.
-  - `post` - `PostProcessingDefaultPlugin`: cameras marked with
-    `PostProcessingCamera` automatically get `Tonemapping::TonyMcMapface`
-    and `Bloom::NATURAL`.
-  - `project` - `pointer_on_plane` / `world_to_screen`: screen <-> world
-    projection helpers over a `Camera` + `GlobalTransform`. `pointer_on_plane`
-    casts a viewport pointer onto an infinite plane (turn a tap into a gameplay
-    position); `world_to_screen` projects a world point back to a pixel to
-    anchor UI (a "+N" popup), returning `None` when off-screen or behind.
-  - `shake` - `CameraShakePlugin`: trauma-driven camera shake. Game code adds
-    trauma (a `0..1` energy value) on impactful events, it decays to zero, and
-    while positive the camera is offset by a random jitter of magnitude
-    `trauma^exponent`. The offset is absolute from a fixed base
-    (`translation = BASE + offset`), never an accumulating `+=`.
-  - `skybox` - `SkyboxPlugin` + `SkyboxConfig`: turns a single vertically
-    stacked 6-face image into a cubemap and attaches Bevy's `Skybox`.
-  - `wasd` - `WASDCameraPlugin`: first-person free camera math (yaw, pitch,
-    movement smoothing). Input comes from `WASDCameraInput`; the actual
-    key/mouse bindings live in `helpers/wasd`.
-- `debug/` (only compiled with the `debug` feature)
-  - `wireframe` - `WireframeDebugPlugin`: global wireframe rendering,
-    toggled with F11, starts enabled.
-  - `inspector` - `InspectorDebugPlugin`: bevy-inspector-egui world
-    inspector plus avian physics gizmos and diagnostics UI, also toggled
-    with F11, starts enabled.
-  - `harness` - env-gated headless verification tooling: `AutopilotPlugin`
-    (force-drives a game's `States` machine on a `.hold(state, seconds)`
-    timeline with an optional per-frame input closure, then exits via
-    `AppExit`; activated by `BCS_AUTOPILOT`) and `ScreenshotPlugin` (forces a
-    window size, advances to a state, waits N frames, writes a PNG; activated by
-    `BCS_SHOT="WxH"`). Both are inert unless their env var is set, so a game
-    adds them permanently. Replaces the throwaway harness the Gotchas used to
-    prescribe; demoed by `08_dropzone` and `11_overload`.
-- `feedback/` - short-lived "juice" effects that give a hit or pickup a
-  visible kick:
-  - `flash` - `FlashPlugin`: insert `Flash` to briefly override an entity's
-    `StandardMaterial` emissive (or base color) with a flash color and ease it
-    back. Clones the material per-entity first, so flashing one entity does not
-    flash everything that shares the handle.
-  - `screen_flash` - `ScreenFlashPlugin`: spike a full-screen `ScreenFlash`
-    overlay's alpha to a peak and decay it back to transparent (the red hit /
-    game-over vignette); the caller picks the tint via `BackgroundColor`, the
-    plugin only animates the alpha.
-- `health` - `HealthPlugin`: `Health` component, `HealthApplyDamage` entity
-  event (propagates up the hierarchy), `HealthZeroMarker` inserted when
-  health hits zero. Trigger damage with `commands.trigger(...)`.
+  - `chase` - `ChaseCameraPlugin`: third-person offset/smoothing/look-ahead. Game writes `ChaseCameraInput`.
+  - `post` - `PostProcessingDefaultPlugin`: `PostProcessingCamera` gets `Tonemapping::TonyMcMapface` + `Bloom::NATURAL`.
+  - `project` - `pointer_on_plane` (viewport pointer -> infinite plane) / `world_to_screen` (world -> pixel, `None` when off-screen or behind).
+  - `shake` - `CameraShakePlugin`: trauma `0..1` decays to zero; jitter magnitude `trauma^exponent`. Absolute offset from a fixed base, never `+=`.
+  - `skybox` - `SkyboxPlugin` + `SkyboxConfig`: stacked 6-face image -> cubemap -> Bevy `Skybox`.
+  - `wasd` - `WASDCameraPlugin`: free-camera math from `WASDCameraInput`; bindings live in `helpers/wasd`.
+- `debug/` (feature `debug` only)
+  - `wireframe` - `WireframeDebugPlugin`: global wireframe, F11, starts enabled.
+  - `inspector` - `InspectorDebugPlugin`: inspector-egui + avian gizmos + diagnostics, F11, starts enabled.
+  - `harness` - env-gated headless tooling: `AutopilotPlugin` (`.hold(state, seconds)` timeline + optional input closure, exits via `AppExit`; `BCS_AUTOPILOT`) and `ScreenshotPlugin` (forces window size, advances to a state, settles N frames, writes PNG; `BCS_SHOT="WxH"`). Inert without the env var, so keep them in the example. Demoed by `08_dropzone`, `11_overload`.
+- `feedback/` - short-lived "juice":
+  - `flash` - `FlashPlugin`: `Flash` overrides a `StandardMaterial` emissive/base color and eases back. Clones the material per entity.
+  - `screen_flash` - `ScreenFlashPlugin`: spikes a full-screen `ScreenFlash` alpha and decays it. Caller picks the tint.
+- `health` - `HealthPlugin`: `Health`, `HealthApplyDamage` (entity event, propagates up), `HealthZeroMarker` at zero. Damage via `commands.trigger(...)`.
 - `helpers/`
-  - `despawn` - `DespawnEntityPlugin`: insert `DespawnEntity` to despawn an
-    entity immediately.
-  - `pointer` - `EnhancedInputPointerPlugin`: a `bevy_enhanced_input` bridge
-    that drives the crate's `UnifiedPointer` from an enhanced-input press
-    action, for games already routing input through enhanced-input (the pointer
-    analogue of `helpers/wasd`).
-  - `temp` - `TempEntityPlugin`: `TempEntity(seconds)` auto-despawns after
-    the duration.
-  - `wasd` - `WASDCameraControllerPlugin`: binds WASD/mouse/space/shift via
-    bevy_enhanced_input and writes `WASDCameraInput` for `camera/wasd`.
+  - `despawn` - `DespawnEntityPlugin`: `DespawnEntity` despawns immediately.
+  - `pointer` - `EnhancedInputPointerPlugin`: drives `UnifiedPointer` from a bevy_enhanced_input press action.
+  - `temp` - `TempEntityPlugin`: `TempEntity(seconds)` auto-despawns.
+  - `wasd` - `WASDCameraControllerPlugin`: binds WASD/mouse/space/shift, writes `WASDCameraInput`.
 - `input/`
-  - `pointer` - `UnifiedPointerPlugin` + `UnifiedPointer`: a per-frame resource
-    that collapses mouse, touch and cursor into one "where is the pointer, is
-    it down, did it just go down" abstraction (an active touch wins over the
-    mouse), maintained in `PreUpdate` with no input-framework dependency.
-  - `cursor` - `grab_cursor` / `release_cursor`: lock or release the mouse for
-    mouse-look over the Bevy 0.19 per-window `CursorOptions` component. The
-    policy (when to grab) stays with the game.
-  - `state` - `set_state_on_key`: a factory that returns a ready-to-add system
-    binding one key to a `States` transition ("press Escape to give up").
-- `integrity/` - `IntegrityPlugin`: a destruction pipeline over a graph of connected,
-  health-bearing nodes.
-  - `components` - the graph model: `IntegrityRoot` (the owning body), `ConnectedTo`
-    (each node's own neighbour list), and the `IntegrityLeafMarker` /
-    `IntegrityDisabledMarker` / `IntegrityDestroyMarker` lifecycle markers.
-  - `blast` - `blast_damage()`: a radial `BlastDamageConfig` sensor bundle that owns its
-    collision events and deals linear-falloff damage to everything it overlaps.
-  - `plugin` - `IntegrityPlugin`: turns impacts (impulse/energy from relative velocity and
-    mass) and blast overlaps into `HealthApplyDamage`, disables nodes at zero health,
-    destroys disabled *leaves* (or a disabled root), and prunes destroyed nodes from their
-    neighbours to cascade the collapse. The game owns both ends of the seam: it builds the
-    graph (`ConnectedTo`/`IntegrityRoot`) and reacts to `On<Add, IntegrityDestroyMarker>`
-    (the public "destroyed" signal) to explode/despawn. Demoed by `examples/15_integrity`.
-    Promoted from nova-protocol; the section-grid graph builder and mesh-slice reaction stay
-    game-side.
-- `material` - `glowing_material`: builds the emissive-that-actually-blooms
-  `StandardMaterial` games hand-write for glowing objects (bullets, thruster
-  flames, pickups), baking in the footgun that an emissive material must NOT be
-  `unlit` or it will not bloom under `camera/post`.
+  - `pointer` - `UnifiedPointerPlugin` + `UnifiedPointer`: per-frame resource collapsing mouse/touch/cursor into position + down + just-pressed (touch wins). `PreUpdate`, no input-framework dep.
+  - `cursor` - `grab_cursor` / `release_cursor` over the 0.19 per-window `CursorOptions`. Policy stays with the game.
+  - `state` - `set_state_on_key`: factory system binding one key to a `States` transition.
+- `integrity/` - `IntegrityPlugin`: destruction over a graph of connected health-bearing nodes.
+  - `components` - `IntegrityRoot`, `ConnectedTo` (own neighbour list), `IntegrityLeafMarker` / `IntegrityDisabledMarker` / `IntegrityDestroyMarker`.
+  - `blast` - `blast_damage()`: radial `BlastDamageConfig` sensor bundle, owns its collision events, linear-falloff damage.
+  - `plugin` - impacts (impulse from relative velocity + mass) and blast overlaps -> `HealthApplyDamage`; disable at zero; destroy disabled leaves (or a disabled root); prune from neighbours to cascade. Game owns both seams: builds the graph, reacts to `On<Add, IntegrityDestroyMarker>`. Demoed by `15_integrity`.
+- `material` - `glowing_material`: the emissive-that-blooms `StandardMaterial`; bakes in the "must NOT be `unlit`" footgun.
 - `mesh/`
-  - `builder` - `TriangleMeshBuilder`: procedural triangle meshes -
-    octahedron spheres, face subdivision, noise displacement, plane
-    slicing, normals/UVs, conversion to and from `Mesh`.
-  - `explode` - `ExplodeMeshPlugin`: insert `ExplodeMesh` to slice an
-    entity's mesh (and its children) into `ExplodeFragments` for
-    destruction effects (demoed by `examples/05_explode`).
-- `meth/` - math helpers (the name is an intentional pun, do not "fix" it)
-  - `lerp` - `LerpSnap` trait: exponential lerp with snap-to-target for
-    `f32` and `Vec3`; used by the chase camera and the sphere orbit
-    systems for smoothing.
-  - `sphere` - spherical coordinate conversions and `slerp`.
+  - `builder` - `TriangleMeshBuilder`: octahedron spheres, subdivision, noise displacement, plane slicing, normals/UVs, `Mesh` conversion.
+  - `explode` - `ExplodeMeshPlugin`: `ExplodeMesh` slices an entity's mesh (and children) into `ExplodeFragments`.
+- `meth/` - math helpers (pun is intentional, do not "fix" it)
+  - `lerp` - `LerpSnap`: exponential lerp with snap-to-target for `f32`/`Vec3`.
+  - `sphere` - spherical coordinate conversions + `slerp`.
 - `modding/`
-  - `events` - a generic, serde-friendly event bus aimed at modding and
-    scripting: `EventWorld` (sync game state to/from a resource),
-    `EventKind` (named event types), `EventHandler` entities holding
-    filters and actions, `GameEventsPlugin<W>`, and a `Commands::fire`
-    extension. Event payloads travel as `serde_json::Value`, so events can
-    cross a modding or scripting boundary; filters and actions themselves
-    are Rust trait objects.
-  - `registry` - `EventHandlerRegistry<W>`: maps event / filter / action name
-    strings to registered constructors so `EventHandler`s can be authored in
-    JSON (`HandlerSpec`) and built at runtime, the data-driven counterpart to
-    the Rust `EventHandler` builder. Demoed by `examples/03_modding`.
-- `persist/` - `PersistPlugin<T>`: loads a serializable `Resource` from durable
-  storage on startup and writes it back whenever it changes, on both native
-  (JSON under `dirs::data_dir()/bevy_common_systems/<key>.json`, or
-  `$BCS_PERSIST_DIR`) and wasm (`localStorage`). The `backend` submodule owns
-  the platform storage detail behind one `load`/`save` string pair. Composes
-  with `scoring/high_score` for a persisted high score.
+  - `events` - serde-friendly event bus: `EventWorld`, `EventKind`, `EventHandler` entities (filters + actions), `GameEventsPlugin<W>`, `Commands::fire`. Payloads are `serde_json::Value`; filters/actions are Rust trait objects.
+  - `registry` - `EventHandlerRegistry<W>`: name -> constructor, so handlers are authored in JSON (`HandlerSpec`) and built at runtime.
+- `persist/` - `PersistPlugin<T>`: load a serializable `Resource` at startup, save on change. Native JSON under `dirs::data_dir()/bevy_common_systems/<key>.json` (or `$BCS_PERSIST_DIR`); wasm `localStorage`. `backend` hides the platform behind `load`/`save`.
 - `physics/`
-  - `pd_controller` - `PDControllerPlugin`: computes the PD torque needed
-    to rotate an avian3d rigid body (the `PDControllerTarget` entity)
-    toward the `PDControllerInput` rotation; game code applies the
-    resulting `PDControllerOutput`.
-  - `doom_controller` - `DoomControllerPlugin`: a Doom-style (simple,
-    arena-shooter) first-person character controller. `DoomController` config +
-    `DoomControllerInput` (look delta + strafe/forward intent) + public
-    `DoomControllerState` (yaw/pitch, settable to aim) + `DoomControllerOutput`
-    (a planar velocity). It integrates the look (clamping pitch), orients a
-    `DoomEye`-marked camera child, and outputs a velocity the game writes into
-    the body's `LinearVelocity` (leaving `.y` to gravity, so avian does
-    collide-and-slide). Output-only, so it takes NO avian dependency despite
-    living here. Named `Doom` on purpose -- it reserves the premium
-    `FirstPersonController` name for a future, more capable controller. Requires
-    an axis-locked body (`LockedAxes::ROTATION_LOCKED`) + a `DoomEye` child.
-    Harvested from `14_breach` (`tasks/20260705-103238/NOTES.md`).
-  - `rigid_body` - two small helpers (no plugin): `rigid_body_point_velocity`
-    (`v = v_lin + omega x (p - com)`, the muzzle-velocity of a point on a spinning body)
-    and `destructible_body(health, density)` (the Health + density + Visibility bundle a
-    destructible body shares; pair with `integrity`). Promoted from nova-protocol.
-- `scoring/` - game-agnostic scoring building blocks (deliberately no `Score`
-  type -- a running score is a bare number the game owns):
-  - `streak` - `Streak`: a hit/combo counter that grows on each hit and decays
-    when the player goes quiet (bumps a count and refreshes a time window). Owns
-    only the count-and-decay bookkeeping, not what a hit is worth.
-  - `high_score` - `HighScore<T>`: a generic best-score resource holding the
-    best value and a per-run "new best" edge; `PartialOrd + Copy` value, derives
-    serde so it composes with `PersistPlugin` (the `new_best` flag is not
-    serialized).
+  - `pd_controller` - `PDControllerPlugin`: PD torque toward `PDControllerInput` rotation; game applies `PDControllerOutput`.
+  - `doom_controller` - `DoomControllerPlugin`: arena-shooter FPS controller. Config + `DoomControllerInput` (look delta, move intent) + `DoomControllerState` (yaw/pitch, settable) + `DoomControllerOutput` (planar velocity the game writes into `LinearVelocity`, leaving `.y` to gravity). Orients a `DoomEye` camera child. Output-only -- no avian dep. Requires `LockedAxes::ROTATION_LOCKED` + a `DoomEye` child. Name reserves `FirstPersonController` for a richer future one.
+  - `rigid_body` - `rigid_body_point_velocity` (`v = v_lin + omega x (p - com)`) and `destructible_body(health, density)` (pair with `integrity`).
+- `scoring/` - no `Score` type on purpose (a running score is the game's number):
+  - `streak` - `Streak`: hit/combo count that decays on a time window.
+  - `high_score` - `HighScore<T>`: best value + per-run "new best" edge; `PartialOrd + Copy`, serde (edge not serialized), composes with `PersistPlugin`.
 - `time/`
-  - `cooldown` - `Cooldown`: a countdown for fire gates and post-hit
-    invulnerability windows. A plain value (no plugin) `tick`ed each frame; a
-    fresh `Cooldown` is READY (unlike a fresh `Once` `Timer`, which reads
-    backwards).
-- `transform/` - motion driver components; each computes an Output that
-  your systems apply or read:
-  - `sphere_orbit` - orbit a sphere surface from explicit theta/phi input.
-  - `directional_sphere_orbit` - orbit toward a direction vector.
-  - `random_sphere_orbit` - wander randomly on a sphere surface.
-  - `point_rotation` - accumulate a rotation from input deltas (mouse).
-  - `smooth_look_rotation` - rotate around an axis toward a target angle
-    with speed and optional min/max limits.
-- `tween` - `TweenPlugin` + `Tween<T>`: a narrow, duration-based value tween
-  animating from a fixed `start` to a fixed `end` over a fixed `duration`,
-  shaped by a Bevy `EaseFunction` (the counterpart to `meth/lerp`'s open-ended
-  smoothing toward a moving target). Like `transform/*` it is an output: a
-  `Tween<T>` component your system reads, plus a completion marker -- NOT a
-  keyframe-timeline system. `ui/animate` copies its output into UI-node fields.
+  - `cooldown` - `Cooldown`: countdown for fire gates / i-frames. Plain value, `tick`ed each frame; a fresh one is READY (unlike a fresh `Once` `Timer`).
+- `transform/` - motion drivers; each writes an Output your systems apply:
+  `sphere_orbit` (theta/phi input), `directional_sphere_orbit` (toward a direction),
+  `random_sphere_orbit` (wander), `point_rotation` (accumulate mouse deltas),
+  `smooth_look_rotation` (toward a target angle, speed + optional limits).
+- `tween` - `TweenPlugin` + `Tween<T>`: fixed start -> end over a fixed duration, shaped by `EaseFunction`. An output component + completion marker, NOT a keyframe timeline. Counterpart to `meth/lerp`'s open-ended smoothing.
 - `ui/`
-  - `status` - `StatusBarPlugin` plus `status_bar()` / `status_bar_item()`
-    bundle builders: a screen-corner metrics overlay (FPS, version, custom
-    values) driven by `value_fn` / `color_fn` closures. The value closures
-    run inside an exclusive system every frame (they get `&World` and
-    block parallelism), so keep them cheap.
-  - `animate` - `UiAnimatePlugin` plus opt-in marker components that copy a
-    `Tween` into a plain UI field each frame (the UI-node counterpart to the
-    material-only `feedback/flash`): `TweenNodeOffset` (`Tween<Vec2>` ->
-    `Node.left/top` px), `TweenNodeScale` (`Tween<f32>` -> `Node.width/height`
-    percent), `TweenNodeBackground` (`Tween<Vec4>` -> `BackgroundColor`), with
-    `color_to_vec4`/`vec4_to_color` helpers and a `node_flash()` constructor.
-    Builds on `tween`; harvested from `13_glide` (see
-    `tasks/20260705-090557/NOTES.md`, which also records why the
-    rolling-number readout stayed game-local).
-  - `menu` - `MenuPlugin` plus `centered_screen()` / `screen_text()` builders
-    and a `TitlePulse` component: the full-screen centered-column overlay and
-    text lines every menu / game-over screen copies verbatim, plus the sine
-    "breathe" the title does. Opinion-light pieces, not a menu framework -- the
-    game owns the content and the state machine.
-  - `popup` - `PopupPlugin`: animate a screen-space `Popup` text label that
-    rises and fades over a lifetime, then despawns itself (the floating "+N"
-    score / "-10" damage text). Screen-space, so the caller decides where (use
-    `camera/project::world_to_screen` to anchor a world event).
-  - `touchpad` - `TouchpadPlugin`: reveal-on-first-touch gating plus pure
-    hit-test primitives for on-screen touch controls. Maintains a `TouchSeen`
-    resource and `RevealOnTouch` / `HideOnTouch` markers (so a desktop session
-    never sees the pad, with no `wasm32` sniffing), and offers `button_grid_at`
-    / `stick_deflection`. Owns the primitives, not an opinionated pad widget.
-  - `health_display` - `HealthDisplayPlugin` plus the `health_display()` bundle: a one-line
-    "Health: N%" readout that tracks a target entity's `Health` each frame. The turnkey
-    counterpart to hand-wiring a `status` item. Promoted from nova-protocol.
-  - `objectives` - `ObjectivesPlugin` plus the `objectives_panel()` bundle: a generic
-    on-screen objectives list rebuilt from the `GameObjectives` resource (opaque
-    id + message per line, so game code can address a specific line). Promoted from
-    nova-protocol.
+  - `status` - `StatusBarPlugin` + `status_bar()` / `status_bar_item()`: corner metrics overlay driven by `value_fn`/`color_fn`. Closures run in an exclusive system every frame (`&World`, blocks parallelism) -- keep them cheap.
+  - `animate` - `UiAnimatePlugin` + markers copying a `Tween` into plain UI fields: `TweenNodeOffset` (`Vec2` -> `Node.left/top` px), `TweenNodeScale` (`f32` -> width/height percent), `TweenNodeBackground` (`Vec4` -> `BackgroundColor`); `color_to_vec4`/`vec4_to_color`, `node_flash()`.
+  - `menu` - `MenuPlugin` + `centered_screen()` / `screen_text()` + `TitlePulse`. Pieces, not a menu framework; game owns content and states.
+  - `popup` - `PopupPlugin`: screen-space `Popup` label rises, fades, despawns. Anchor world events with `camera/project::world_to_screen`.
+  - `touchpad` - `TouchpadPlugin`: reveal-on-first-touch (`TouchSeen`, `RevealOnTouch`/`HideOnTouch`, no `wasm32` sniffing) + hit-test primitives `button_grid_at` / `stick_deflection`. Primitives, not a pad widget.
+  - `health_display` - `HealthDisplayPlugin` + `health_display()`: one-line "Health: N%" tracking a target entity.
+  - `objectives` - `ObjectivesPlugin` + `objectives_panel()`: list rebuilt from `GameObjectives` (opaque id + message per line).
 
 ## Conventions
 
-The modules are deliberately uniform. Follow these patterns when adding or
-changing code; consistency is the crate's main defense against bloat.
+Modules are deliberately uniform; consistency is the main defense against bloat.
 
-- One concern per module. Modules that add runtime behavior ship one
-  plugin per concern, named `*Plugin`; pure utility modules (meth,
-  mesh/builder) export plain types and functions instead. Systems that
-  need ordering hooks get a public `SystemSet` enum named `*Systems`
-  (a few use `*PluginSystems`).
-  - Ordering caveat: `.before(SetX)` / `.after(SetX)` orders a system only
-    relative to `SetX`'s *current members*. If `SetX` can be empty (e.g. it
-    belongs to a sibling plugin that may not be added), those edges vanish and
-    give no guarantee. When system A must run before system B regardless, pin
-    it with a direct edge -- `configure_sets(schedule, B.after(A))` or
-    `chain()` -- never by ordering both against a third set that might be
-    empty. This bit `camera/shake`: Restore/Apply were ordered only around
-    `ChaseCameraSystems::Sync`, which is empty for static-camera games, so the
-    two were unordered and could drift; the passing test masked it because the
-    executor resolved the ambiguity in insertion order
-    (`tasks/20260704-134500/RETRO.md`).
-- Config / Input / Output / State component split:
-  - a public config component named after the feature (`WASDCamera`,
-    `ChaseCamera`, `PDController`, `SphereOrbit`, ...);
-  - a public `*Input` component that game code writes each frame;
-  - a public `*Output` component (or direct `Transform` writes) that game
-    code reads;
-  - private `*State` components the plugin manages internally - keep them
-    out of the prelude.
-  - Ordering contract: a module whose `*Plugin` reads its `*Input` (or writes its
-    `*Output`) inside a named `*Systems` set MUST document, on that set's doc, the
-    contract for consumers -- write `*Input` `.before(TheSet)` and read `*Output`
-    `.after(TheSet)`. Without it every consumer races the set; `physics/doom_controller`
-    shipped its first consumer (`14_breach`) with the input feed *unordered* vs its
-    `Drive` set (a one-frame input lag) precisely because the write-before edge was
-    undocumented, and the autopilot could not catch it -- it force-writes the state,
-    bypassing the input path (`tasks/20260705-132542/RETRO.md`).
-- Modules expose their public API through preludes: most files define
-  `pub mod prelude`, parent modules aggregate child preludes (a few leaf
-  files are re-exported directly by their parent), and `crate::prelude`
-  aggregates everything. Users import
-  `use bevy_common_systems::prelude::*;`.
-- Reactive setup via observers: plugins register `add_observer` for
-  `On<Add, X>` / `On<Insert, X>` to attach internal components, instead of
-  startup systems. `#[require(...)]` is used where a component only makes
-  sense with companions.
-- Derive `Reflect` on components (plus `Deref`/`DerefMut` for newtypes).
-- Most files carry a module-level `//!` doc comment with a short usage
-  snippet, and public items carry doc comments; match that standard in
-  new code even though a few existing files fall short.
-- Logging: `debug!("XPlugin: build")` in `Plugin::build`, `trace!` in
-  systems and observers.
-- Formatting is enforced by rustfmt (`imports_granularity = "Crate"`,
-  `group_imports = "StdExternalCrate"`); run `cargo fmt` and let it manage
-  import blocks. Clippy runs with `type_complexity` and
-  `too_many_arguments` allowed crate-wide (see `Cargo.toml [lints.clippy]`).
-- Writing style everywhere (code, comments, docs, commits): plain ASCII.
-  No em dashes, smart quotes, ellipsis characters or arrows; use `-`,
-  `--`, `...`, `->`.
+- One concern per module. Runtime behavior ships one `*Plugin`; pure utility modules export plain types/functions. Ordering hooks get a public `SystemSet` named `*Systems` (a few `*PluginSystems`).
+  - `.before(SetX)`/`.after(SetX)` orders only against `SetX`'s *current members*. An empty set (sibling plugin not added) silently drops the edge. Pin real dependencies directly (`configure_sets(schedule, B.after(A))` or `chain()`), never via a third set that might be empty. Bit `camera/shake` (`tasks/20260704-134500/RETRO.md`).
+- Config / Input / Output / State split:
+  - config component named after the feature (`WASDCamera`, `ChaseCamera`, `PDController`, `SphereOrbit`, ...);
+  - public `*Input` the game writes each frame;
+  - public `*Output` (or direct `Transform` writes) the game reads;
+  - private `*State` the plugin manages -- keep out of the prelude.
+  - Ordering contract: any `*Systems` set that reads `*Input` or writes `*Output` MUST document it on the set's doc -- write Input `.before(TheSet)`, read Output `.after(TheSet)`. Undocumented = every consumer races it; cost `14_breach` a one-frame input lag the autopilot could not catch (`tasks/20260705-132542/RETRO.md`).
+- Preludes: most files define `pub mod prelude`, parents aggregate children, `crate::prelude` aggregates everything. Users import `bevy_common_systems::prelude::*`.
+- Reactive setup via observers (`add_observer` on `On<Add, X>` / `On<Insert, X>`), not startup systems. `#[require(...)]` where a component needs companions.
+- Derive `Reflect` on components (+ `Deref`/`DerefMut` for newtypes).
+- Module-level `//!` doc with a usage snippet; doc comments on public items.
+- Logging: `debug!("XPlugin: build")` in `Plugin::build`, `trace!` in systems/observers.
+- rustfmt owns imports (`imports_granularity = "Crate"`, `group_imports = "StdExternalCrate"`). Clippy allows `type_complexity` and `too_many_arguments` crate-wide.
+- Plain ASCII everywhere (code, comments, docs, commits): `-`, `--`, `...`, `->`.
 
 ### Promoted ledger lessons (folded 2026-07-20, task 20260720-220050)
 
-These recurred x3+ across retros and are conventions now, not just history:
+Recurred x3+; conventions now.
 
-- Reset shared state in the same commit: when you add an accumulator, timer, or
-  per-run resource, grep the reset / `start_run` path and add its reset in the
-  same commit; extract a helper once more than three need resetting. A run that
-  does not reset its accumulators leaks state across runs.
-- Input driver runs in every state: a system that writes an `*Input` a plugin
-  integrates every frame must run in EVERY state, or zero the Input on state
-  exit - a state-gated writer leaves a stale last value the plugin keeps
-  integrating.
-- Read a plugin's `build()` for self-added deps before wiring it into an
-  example: e.g. `PopupPlugin` adds `TweenPlugin`, so adding both panics at
-  runtime on a duplicate plugin. Check `build()` for the plugins a plugin brings.
-- Harvest by reading evidence: when lifting a pattern from an example into the
-  crate, survey the precedent and its homes first, reproduce bodies
-  byte-for-byte, refactor the call sites as the test, and delete the now-dead
-  markers from the consumer - let the concrete reference draw the harvest line.
-- Split verifiable from manual: separate "assets load / logic runs"
-  (headless-verifiable) from "asset is audible/visible / transition fires"
-  (needs manual play-test), and state which real paths a shortcut harness does
-  NOT exercise.
+- Reset shared state in the same commit as the new accumulator/timer/per-run resource. Grep the reset / `start_run` path; extract a helper past three resets.
+- An `*Input` writer runs in EVERY state, or zero the Input on state exit. A state-gated writer leaves a stale value the plugin keeps integrating.
+- Read a plugin's `build()` for self-added deps before wiring it in (e.g. `PopupPlugin` adds `TweenPlugin`; adding both panics).
+- Harvest by reading evidence: survey precedent + its homes, reproduce bodies byte-for-byte, refactor call sites as the test, delete now-dead markers from the consumer.
+- Split verifiable from manual: "assets load / logic runs" (headless) vs "audible/visible / transition fires" (play-test). State which real paths a shortcut harness does NOT exercise.
 
 ## Features and Dependencies
 
-Features (default: none):
+Features (default none): `debug` compiles the `debug` module and enables
+`avian3d/diagnostic_ui`, `bevy/track_location`, `bevy-inspector-egui`.
+`dev` is an alias for `debug`.
 
-- `debug` - compiles the `debug` module; enables `avian3d/diagnostic_ui`,
-  `bevy/track_location` and `bevy-inspector-egui`.
-- `dev` - alias that just enables `debug`.
-
-Key dependencies and why they are here:
-
-- `bevy` 0.19 - the engine; this crate tracks current Bevy APIs
-  (observers, `EntityEvent`, required components).
-- `avian3d` 0.7 - 3D physics; used by the PD controller, the debug
-  diagnostics and the examples.
-- `bevy_enhanced_input` 0.26 - input contexts/actions for the WASD
-  controller in `helpers/wasd`.
-- `bevy_asset_loader` 0.27 - loading-state asset collections; backs the
-  `audio/registry` `SoundBank` and the examples' loading screens.
-- `noise` 0.9 - noise functions consumed by `TriangleMeshBuilder`.
-- `rand` 0.9 - randomness for orbits and mesh explosion.
-- `serde` / `serde_json` - event payloads in `modding`, persisted resources
-  in `persist`.
-- `bevy-inspector-egui` 0.37 (optional) - the `debug` inspector.
-- dev-dependency `clap` 4.5 - every example is a small CLI.
+| Dep | Why |
+| --- | --- |
+| `bevy` 0.19 | engine; tracks current APIs (observers, `EntityEvent`, required components) |
+| `avian3d` 0.7 | 3D physics: PD controller, debug diagnostics, examples |
+| `bevy_enhanced_input` 0.26 | input contexts/actions for `helpers/wasd` |
+| `bevy_asset_loader` 0.27 | loading states; backs `SoundBank` + example loading screens |
+| `noise` 0.9 | noise for `TriangleMeshBuilder` |
+| `rand` 0.9 | orbits, mesh explosion |
+| `serde` / `serde_json` | `modding` payloads, `persist` resources |
+| `bevy-inspector-egui` 0.37 (optional) | `debug` inspector |
+| `clap` 4.5 (dev) | every example is a small CLI |
 
 ## Environment and Toolchain
 
-- Rust nightly, pinned by `rust-toolchain.toml` (with rustfmt and clippy).
-- Nix flake dev shell: `nix develop` provides the nightly toolchain, wasm
-  tooling (trunk, wasm-pack, wasm32-unknown-unknown target) and the native
-  libraries Bevy needs on Linux (vulkan, wayland/x11, alsa, udev). On
-  NixOS, graphical examples generally only run inside this shell because
-  it sets `LD_LIBRARY_PATH`.
-- `.cargo/config.toml` sets `--cfg=web_sys_unstable_apis` for wasm builds.
-- Edition 2021. License: MIT.
+- Rust nightly, pinned by `rust-toolchain.toml` (rustfmt + clippy). Edition 2021. MIT.
+- `nix develop`: nightly toolchain, wasm tooling (trunk, wasm-pack, wasm32 target), Linux libs Bevy needs (vulkan, wayland/x11, alsa, udev). On NixOS graphical examples generally only run in this shell (`LD_LIBRARY_PATH`).
+- `.cargo/config.toml` sets `--cfg=web_sys_unstable_apis` for wasm.
 
 ## Build, Verify, Run
 
-Verified working as of 2026-07-03:
+Verified 2026-07-03. CI (`.github/workflows/ci.yml`) runs this whole suite on
+every push and PR -- keep it green, run it locally first.
 
 ```
 cargo build                                  # library + macros subcrate
 cargo fmt --check                            # formatting
-cargo clippy --all-targets                   # lints; currently clean, keep it clean
-cargo clippy --all-targets --features debug  # lints with the debug module
+cargo clippy --all-targets                   # lints; keep clean
+cargo clippy --all-targets --features debug
 cargo test                                   # unit tests + doctests
-cargo test --features debug                  # same, plus the debug module
-cargo test --examples                        # the #[cfg(test)] tests inside examples/
-./scripts/check-ascii.sh                     # enforce the plain-ASCII rule
+cargo test --features debug
+cargo test --examples                        # the #[cfg(test)] tests in examples/
+./scripts/check-ascii.sh                     # plain-ASCII rule
 cargo run --example 01_sphere                # opens a window
-cargo run --example 01_sphere --features debug   # same, with inspector UI
+cargo run --example 01_sphere --features debug
 ```
 
-(The only warning surfaced by clippy is a future-incompat note from the
-transitive `proc-macro-error2` dependency, not from this crate's code.)
+Only expected warning: a future-incompat note from transitive `proc-macro-error2`.
 
-CI (`.github/workflows/ci.yml`) runs this whole suite - fmt, both clippy
-configs, both test configs, `cargo test --examples` (the in-example unit
-tests, which plain `cargo test` compiles but never runs), and
-`scripts/check-ascii.sh` - on every push and pull request. Keep it green; run
-the commands above locally before pushing.
+Testing convention:
 
-Testing convention: pure math and geometry functions get `#[cfg(test)]`
-unit tests next to the code (13 today, in `meth/sphere`, `mesh/builder`,
-`physics/pd_controller` and `transform/point_rotation`); ECS behavior is
-exercised by the examples, which are the de facto integration tests. If
-you add a feature, test its pure logic in-module and wire the ECS side
-into an existing example or a new numbered one (`examples/NN_name.rs`,
-clap CLI header, `DefaultPlugins`, setup system), and make sure everything
-compiles via `cargo clippy --all-targets`. If a test comment (or a TASK.md
-note) claims the test exercises some behaviour, back that claim with an
-assertion in the same edit -- do not write the aspirational comment and test
-only the easy half. Reaching a `pub(super)` field or adding a small helper to
-actually drive the behaviour is cheaper than the review round that catches the
-gap (bit two consecutive cycles: `tasks/20260704-165400/RETRO.md`
-and `tasks/20260703-165439/RETRO.md`).
+- Pure math/geometry gets `#[cfg(test)]` next to the code (`meth/sphere`, `mesh/builder`, `physics/pd_controller`, `transform/point_rotation`).
+- ECS behavior is exercised by the examples (the de facto integration tests). New feature -> unit-test the pure logic, wire the ECS side into an existing or new `examples/NN_name.rs` (clap CLI header, `DefaultPlugins`, setup system), compile via `cargo clippy --all-targets`.
+- Back every claim a test comment or TASK.md note makes with an assertion in the same edit. Reaching a `pub(super)` field is cheaper than the review round that catches the gap (`tasks/20260704-165400/RETRO.md`, `tasks/20260703-165439/RETRO.md`).
 
-Examples:
+## Examples
 
-- `01_sphere` - octahedron sphere from `TriangleMeshBuilder` + WASD camera.
-- `02_planet` - the same mesh displaced with Fbm/Perlin noise: a planet.
-- `03_modding` - the `modding` event bus end to end, including
-  `#[derive(EventKind)]`; its handlers are authored as an inlined JSON string
-  and built through the `EventHandlerRegistry`, and the event logic prints to
-  the console.
-- `04_status_item` - status bar UI with FPS and custom shell-command items.
-- `05_explode` - the mesh slicer end to end: press Space to slice a mesh
-  into `ExplodeFragments` that fly apart and auto-despawn.
-- `06_fruitninja` - a fruit-ninja style game from plain shapes: boot into a
-  main menu, then octahedron fruit arc up from below; hold Left Mouse Button
-  and swipe to slice them into exploding fragments for score. A blade trail
-  follows the swipe, each slice pops a rising "+N", and slicing several fruit
-  in one swipe builds an escalating combo with a "COMBO xN" banner. Dark bombs
-  are mixed in -- slicing one deals lethal damage via `HealthPlugin` and ends
-  the run at a game-over screen. Uses Bevy states for menu/playing/game-over.
-  Every gameplay event plays a one-shot sound via `SfxPlugin`; the files in
-  `assets/sounds/` are generated placeholders (`scripts/gen-placeholder-sounds.py`),
-  see `assets/sounds/README.md` and
-  `tasks/20260703-152544/NOTES.md`.
-- `07_orbit` - "Orbit Runner": a surface-dodge game on a sphere. Ride a glowing
-  marker around a planet steering with `DirectionalSphereOrbit` (A/D, arrow
-  keys, or drag), sweep up wandering orbs and dodge wandering red hazards, both
-  driven by `RandomSphereOrbit`. A `ChaseCamera` follows with `LerpSnap`
-  smoothing; a hazard deals damage through `HealthPlugin` and zero health ends
-  the run. The planet gets more crowded and faster as difficulty levels climb.
-  Same shape as `06_fruitninja`: menu/playing/game-over states, `SfxPlugin`
-  one-shots (`pickup`/`hurt`/`level_up`, sharing `menu_select`/`game_over`), and
-  a wasm/trunk showcase build. Exercises the whole `transform/*` orbit family,
-  `camera/chase` and `meth` under gameplay; grows out of `01_sphere`. See
-  `tasks/20260703-165427/NOTES.md`.
-- `08_dropzone` - a lunar-lander game and the headline demo of
-  `PDControllerPlugin`. A noise-displaced planet (the `02_planet` recipe) sits
-  at the origin with radial gravity; you fly a lander down onto it. Space/Up
-  thrusts along the ship's local up, W/S and A/D lean the target attitude, and
-  the PD controller torques the avian3d rigid body toward that attitude (this
-  is the crate's first real physics sim, not just the debug renderer). Touch
-  down slow and upright to score; hit too hard or too tilted and the hull
+Every game example follows the `06_fruitninja` shape: menu/playing/game-over
+states, `SfxPlugin` one-shots, wasm/trunk showcase build.
 
-  breaks apart via `mesh/explode`. The descent is also hazardous: rock monoliths
-  ring the pad (static colliders forming a gap to thread), asteroids drift the
-  corridor on `RandomSphereOrbit`, and a time-varying wind shoves the ship
-  sideways; grazing a rock or asteroid drains a ship-integrity `Health` pool
-  (`HealthPlugin`) scaled by impact speed, and zero integrity ends the run --
-  terrain contact stays instant-crash. All hazards scale off one
-  `HAZARD_DIFFICULTY` knob. Pulls in `camera/skybox` (a procedurally generated
-  starfield, no asset file), `camera/post` bloom on the thruster flame,
-  `camera/chase`, `transform/random_sphere_orbit`, `health`, `ui/status` gauges
-  (altitude/speed/fuel/hull/wind) and `audio`. The planet's avian trimesh
-  collider is built inline from `TriangleMeshBuilder::vertices_and_indices()`.
-  Follows the `06_fruitninja` shape (states, sounds, wasm). See
-  `tasks/20260703-165432/NOTES.md`, `tasks/20260704-103544/NOTES.md`
-  and `tasks/20260704-103553/NOTES.md`; the flight constants were
-  play-tested and tuned in `tasks/20260703-213510`.
-- `09_reactor` - "Reactor": a rules-as-machine incremental and the headline demo
-  of `modding`. The whole simulation runs on the `03_modding` event bus, but the
-  player builds the machine at runtime: a `ReactorWorld` (an `EventWorld`) holds
-  ENERGY / HEAT / CREDITS, the engine `fire`s a `tick` every half second plus
-  `click`/`sell` on the controls, and every rule that reacts is a JSON-authored
-  `EventHandler` entity built through the `EventHandlerRegistry`. Built-in Manual
-  Tap and Sell handlers ship with the reactor; every shop part you buy spawns
-  another handler (fuel rods add energy AND heat, sinks/pumps/turbines shed heat,
-  market uplinks sell energy for credits). Compose them into an escalating loop,
-  but the grid heats up as you climb credit tiers, so HEAT hitting 100 is a
-  meltdown (game over); score is total credits earned. The shop palette is a
-  `HandlerSpec` list and buying is a `build_handler` call, so the gameplay and
-  the modding data are the same thing. Also exercises `ui/status` (a compact
-  telemetry HUD reading the `EventWorld`) and `SfxPlugin` one-shots (reuses
-  `pickup`/`golden`/`alarm`/`level_up` plus shared `menu_select`/`game_over`,
-  no new sound files). No 3D scene -- renders with a plain `Camera2d`. Follows
-  the `06_fruitninja` shape (states, sounds, wasm). Grows out of `03_modding`.
-  See `tasks/20260704-170738/NOTES.md`.
-
-- `10_asteroids` - a top-down "asteroids" shooter and the crate's physics-
-  fragments showcase, the counterpoint to `06_fruitninja`. You fly a ship around
-  a bounded, zero-gravity arena and shoot drifting octahedron rocks; a hit
-  inserts `ExplodeMesh` and the `on_fragments_spawned` observer respawns every
-  sliced shard as a real `RigidBody::Dynamic` avian body that keeps drifting,
-  bounces off the arena walls, and is a new smaller hazard -- unlike `06`, where
-  fragments are hand-integrated throwaways. Rocks split large -> medium -> small
-  (a `generation` cap keeps the field clearable); clear a wave to face a busier
-  one. Bumping a rock costs a hull point via `HealthPlugin` (with i-frames);
-  `camera/post` blooms the glowing bullets and thruster flame. Exercises a broad
-  slice of avian3d not seen elsewhere (kinematic ship, sensor bullets,
-  `CollisionLayers`, `Restitution`, `LockedAxes`, `CollisionStart` messages,
-  `Gravity::ZERO`). Controls are unified keyboard + pointer (A/D rotate, W
-  thrust, Space fire, or hold the mouse / a finger to fly toward it and
-  auto-fire) so the wasm build is touch-playable. Follows the `06_fruitninja`
-  shape (states, sounds, wasm). See `tasks/20260703-170744/NOTES.md`.
-- `11_overload` - "Overload": a dashboard-survival game and the headline demo of
-  `ui/status` as a game surface. The whole game lives on the `status_bar`: four
-  gauges (HEAT/PRES/FLUX/CHRG) climb and random-walk on their own, each a
-  `status_bar_item` whose `color_fn` goes green -> amber -> red; press 1/2/3/4 to
-  vent one back down, but each vent pushes a coupled neighbour up, so it is a
-  juggling act. While any gauge sits red the reactor's `Health` drains
-  (`HealthApplyDamage` -> `HealthZeroMarker` ends the run) and an alarm beeps;
-  difficulty ramps the climb rates over time. No 3D scene -- renders with a plain
-  `Camera2d`. Touch-playable like `08_dropzone`: an on-screen vent pad (a bottom
-  strip of four buttons, revealed on first touch) lets a phone tap-vent, and the
-  menu/meltdown screens take a tap; touch is an additive writer of the same
-  `apply_vent` path, keyboard unchanged. Grows out of `04_status_item`, follows
-  the `06_fruitninja` shape (states, sounds, wasm). See
-  `tasks/20260704-165400/NOTES.md` and
-  `tasks/20260704-130314/NOTES.md`.
-- `12_bastion` - "Bastion": a defend-the-core tower defense and the headline demo
-  of `camera/project` plus the two aim/track halves of the `transform` family
-  that no other example showed. A glowing `Core` (a `Health` pool) sits at the
-  arena center; enemies spawn on the border and converge inward from every
-  bearing, and one that reaches the Core damages it (zero health ends the run).
-  Kills earn credits, spent to place and upgrade towers as waves ramp.
-  `camera/project`'s `pointer_on_plane` maps the tap/pointer to the ground point
-  where a tower is placed (ghost + range ring) and `world_to_screen` anchors the
-  "+N" credit popups; `transform/point_rotation` drives an orbit camera (a pivot
-  at the Core the player yaws/pitches by dragging, pitch clamped in-game);
-  `transform/smooth_look_rotation` drives each tower turret, rate-limited so a
-  fast enemy can out-slew a cheap turret until upgraded. Tower/enemy stats are
-  data-driven: loaded from `assets/bastion/catalog.json` at startup (native reads
-  the file so stats/new types need no recompile, wasm uses a compiled-in copy),
-  with the build key bindings and weighted enemy spawn iterating the catalog so a
-  new tower/enemy is added purely in JSON (`tasks/20260704-220719`,
-  `tasks/20260704-220719/NOTES.md`; the spike concluded the loader -- not
-  a `SpecCatalog<T>` type -- is the only reusable nugget and should wait for a
-  second user). Reuses `mesh/explode` (own `On<Insert,
-  ExplodeFragments>` observer -- the crate has no fragment observer), `ui/popup`,
-  `ui/status`, `camera/shake`, `feedback`, `scoring/streak`, `time/cooldown`,
-  `helpers/temp`, `input/pointer` and `audio`. One pointer does double duty (drag
-  = orbit, tap = place/select, disambiguated by a move threshold); Space is a
-  keyboard/autopilot placement path. Follows the `06_fruitninja` shape (states,
-  sounds, wasm). See `tasks/20260704-220736/NOTES.md`.
-- `13_glide` - "Glide": a slide-merge (2048-style) number puzzle rendered
-  entirely in Bevy UI, and the headline demo of `tween` plus `persist` +
-  `scoring/high_score` (the first example for any of the three, and the gallery's
-  first puzzle). Swipe or arrow-key input slides a 4x4 board; equal tiles merge
-  into their sum, a new tile spawns each move, and a full board with no legal
-  move ends the run. The best score is saved across launches via
-  `PersistPlugin::<HighScore<u32>>`. The whole board is UI, so every animation
-  drives a plain `Node`/`BackgroundColor` field from a `Tween` output (never
-  `Transform` scale, which UI layout owns): a tile slide is a `Tween<Vec2>` into
-  `Node { left, top }`, a spawn/merge pop a `Tween<f32>` into a `Node`'s
-  size-percent, a merge flash a `Tween<Vec4>` into `BackgroundColor`, and the
-  score readout rolls on another `Tween<f32>`. Each tile is a positioning wrapper
-  (moved by the slide tween) around a face (sized/coloured by the pop and flash
-  tweens), so the three animate independently and the pop grows from centre. The
-  pure move logic (`resolve_line` / `apply_move` / `is_game_over`) is unit-tested
-  off the ECS. The slide/pop/flash appliers are now the crate's `ui/animate`
-  markers (`TweenNodeOffset`/`TweenNodeScale`/`TweenNodeBackground` + `node_flash`,
-  harvested by `tasks/20260705-090557`); the rolling score readout stayed
-  game-local (see `tasks/20260705-090557/NOTES.md`). Also reuses
-  `ui/popup`, `ui/menu`, `input/pointer`, `input/state` and `audio`; renders with
-  a plain `Camera2d`. Follows the `06_fruitninja` shape (states, sounds, wasm).
-  Press Space during a run to hand control to a built-in auto-solver: a shallow
-  expectimax (`best_move`/`score_grid`, pure and unit-tested off the ECS, with a
-  headless test that plays a full game to the 2048 tile) that plays toward 2048
-  on its own, paced at one move / 0.32s so each slide is watchable, driving the
-  same `start_move` path a human move does. See `tasks/20260705-090624/NOTES.md`
-  and `tasks/20260705-143000/NOTES.md`.
-- `14_breach` - "Breach": a grounded, Doom-like first-person arena shooter, and the
-  gallery's first first-person game. It headlines three things no prior example
-  showed: the first-person viewpoint as a real game (`camera/wasd` only ever
-  appeared in the free-fly tech demos), the crate's first avian `SpatialQuery`
-  raycast (the hitscan gun), and (now harvested) the first-person controller.
-  Because `camera/wasd` is a free-fly spectator camera (no gravity/ground/collision/
-  cursor-grab), the player uses the crate's `physics/doom_controller`: a
-  `RigidBody::Dynamic` capsule with `LockedAxes::ROTATION_LOCKED` whose
-  `DoomControllerOutput` velocity the game writes into `LinearVelocity`, so avian's
-  solver does collide-and-slide against the static level for free (a kinematic body
-  is NOT pushed back by statics -- that was the key call). The body stays
-  axis-aligned; yaw lives in `DoomControllerState` and a `DoomEye` `Camera3d` child
-  at eye height carries the view rotation, with the move intent rotated by the same
-  yaw. Look is always-on from `AccumulatedMouseMotion` fed into
-  `DoomControllerInput`, with the cursor grabbed via `input/cursor` over the 0.19
-  `CursorOptions` component (a per-window component, not `window.cursor`) and a pitch
-  clamp. Left-click (a `time/cooldown` gate) fires
-  `SpatialQuery::cast_ray` masked to `[Enemy, World]` and excluding the player; the
-  first enemy hit takes `HealthApplyDamage` + `feedback/flash` and on death bursts
-  into `mesh/explode` physics gibs. Waves of octahedron enemies (`mesh/builder`) in
-  three archetypes -- baseline Grunts, fast/weak/small Rushers and slow/tanky/big Brutes,
-  each an in-file `EnemyKind::stats` entry (per-enemy health/speed/dps/scale/colour),
-  mixed by a wave-weighted spawn roll (`archetype_weights`/`pick_archetype`) -- path
-  toward you (straight-line, so the arena is open -- no interior cover to snag
-  the AI) and melee via continuous per-enemy-dps proximity damage (spikes a
-  `feedback/screen_flash` vignette + `camera/shake`); zero health ends the run. Juice:
-  a confirmed hit blips a crosshair hit marker, each shot pops an emissive muzzle flash,
-  enemies telegraph with a brief spawn beacon, and near death (`is_low_health`) the
-  vignette throbs red (a re-spiked `ScreenFlash` with `despawn_on_end: false`, since the
-  vignette is persistent). Kills chained inside a short
-  window build a combo (`scoring/streak`) that multiplies the points each kill is
-  worth, floats a "+N" and flashes a "COMBO xN +P" tally (`ui/popup`); the points
-  score (not the raw kill count) is the persisted `HighScore`. Slain enemies have a
-  chance to drop a glowing pickup (emissive-for-bloom sphere) that the player grabs by
-  walking over it: an instant heal (`HealthPlugin`, capped at max) or a timed speed /
-  fire-rate buff (the speed buff scales `DoomController.move_speed`, the fire-rate buff
-  ticks the `Gun` cooldown faster). Reuses `camera/post`
-  (bloom on tracers/enemies/pickups), `helpers/temp`, `ui/status` HUD + crosshair,
-  `ui/menu`, `audio`, `persist`+`HighScore`, `ui/touchpad` (dual-stick touch, with a
-  firing aim-assist that nudges the view toward the nearest enemy in front, since an
-  FPS is the hardest genre for touch),
-  `input/state`. The pure logic (`wave_size`/`ring_positions`, the streak-scaled
-  scoring, `apply_pickup`/`decay_buffs`/buff multipliers, `archetype_weights`/
-  `pick_archetype`, and the controller's
-  `doom_move_dir`/pitch clamp now in `physics/doom_controller`) is
-  unit-tested off the ECS (chained kills multiply, the streak lapses, heal caps at max,
-  buffs decay, early waves are all grunts and later waves mix in rushers/brutes); the
-  headless autopilot AIMS at the nearest enemy (an FPS gun can't be verified by
-  fire-forward). Follows the `06_fruitninja` shape (states, sounds, wasm); touch is a
-  compromise, desktop is primary. Has its own `breach_*` combat SFX (noise pops /
-  sweeps from `scripts/gen-placeholder-sounds.py`, not the borrowed fruit blips),
-  keeping the shared `menu_select`/`game_over`. The main menu is navigable (PLAY /
-  OPTIONS buttons via Bevy UI `Button`+`Interaction`, mouse/touch + keyboard) with an
-  Options panel whose look-sensitivity stepper is persisted (`PersistPlugin`) and
-  applied to the `DoomController.look_sensitivity` at spawn (covering mouse + touch);
-  the menu spawns its own `Camera2d` (the Playing `Camera3d` is a child of the player,
-  so menu/game-over states otherwise have NO camera and Bevy UI never renders -- a
-  latent gap the force-transition autopilot + black headless captures had hidden).
-  See `tasks/20260705-103236/NOTES.md`,
-  the harvest note `tasks/20260705-103238/NOTES.md` (`tasks/20260705-103238`)
-  and `tasks/20260705-132200/NOTES.md` (combos/pickups/enemies/juice/sounds).
-- `15_integrity` - a destructible-structure demo for the `integrity` module. A grid of
-  connected blocks floats in zero-g; click a block (cursor picked onto the z = 0 plane via
-  `camera/project::pointer_on_plane`) to detonate a `blast_damage` sensor there. Blocks tint
-  from blue-grey to red as they take falloff damage, and a fully-disabled patch cascades
-  apart from its edges inward - disabled leaves are destroyed and pruned from their
-  neighbours, which makes *them* leaves. The destroy seam (`On<Add, IntegrityDestroyMarker>`)
-  is hooked to `ExplodeMeshPlugin` so each destroyed block slices into flying fragments (real
-  avian motion, no fake integrator); `ui/health_display` tracks the structure's aggregate
-  health and `ui/objectives` flips its goal to done once it is gone. Tuned so one blast
-  disables a whole patch, so the cascade is the visible headline. See
-  `tasks/20260708-112713/NOTES.md`.
+| Example | What it is | Headlines |
+| --- | --- | --- |
+| `01_sphere` | octahedron sphere + WASD camera | `mesh/builder`, `camera/wasd` |
+| `02_planet` | `01` displaced with Fbm/Perlin noise | noise displacement |
+| `03_modding` | event bus end to end, `#[derive(EventKind)]`, JSON handlers via `EventHandlerRegistry` | `modding` |
+| `04_status_item` | status bar with FPS + shell-command items | `ui/status` |
+| `05_explode` | Space slices a mesh into flying `ExplodeFragments` | `mesh/explode` |
+| `06_fruitninja` | swipe-slice fruit for score; combos, "+N" popups, blade trail, lethal bombs | `SfxPlugin`, states shape. `tasks/20260703-152544/NOTES.md` |
+| `07_orbit` | "Orbit Runner": ride a planet surface, sweep orbs, dodge hazards, difficulty ramps | whole `transform/*` orbit family, `camera/chase`, `meth`. `tasks/20260703-165427/NOTES.md` |
+| `08_dropzone` | lunar lander onto a noise planet with radial gravity; thrust + lean, hazards (monoliths, asteroids, wind) drain hull, crash explodes | `PDControllerPlugin`, `camera/skybox`+`post`+`chase`, `ui/status`. `tasks/20260703-165432`, `20260704-103544`, `20260704-103553` NOTES; tuned in `20260703-213510` |
+| `09_reactor` | rules-as-machine incremental: shop parts spawn JSON `EventHandler`s, HEAT 100 = meltdown. `Camera2d` | `modding` as gameplay. `tasks/20260704-170738/NOTES.md` |
+| `10_asteroids` | top-down shooter; each sliced shard respawns as a real dynamic avian body and splits large -> medium -> small | physics fragments, broad avian slice (sensors, `CollisionLayers`, `Gravity::ZERO`). `tasks/20260703-170744/NOTES.md` |
+| `11_overload` | dashboard survival: four coupled gauges, 1/2/3/4 vents, red gauges drain `Health`. `Camera2d`, touch vent pad | `ui/status` as a game surface. `tasks/20260704-165400`, `20260704-130314` NOTES |
+| `12_bastion` | tower defense; tap places towers, waves ramp, stats loaded from `assets/bastion/catalog.json` (wasm uses a compiled-in copy) | `camera/project`, `point_rotation` orbit cam, `smooth_look_rotation` turrets. `tasks/20260704-220736/NOTES.md` |
+| `13_glide` | 2048-style slide-merge, entirely Bevy UI; every animation drives `Node`/`BackgroundColor` from a `Tween` (never `Transform` scale). Space hands off to a unit-tested expectimax solver | `tween`, `persist` + `HighScore`, `ui/animate` source. `tasks/20260705-090624`, `20260705-143000` NOTES |
+| `14_breach` | Doom-like FPS arena: hitscan `SpatialQuery` gun, three enemy archetypes, combos, pickups/buffs, navigable menu with persisted look sensitivity | `physics/doom_controller`, `ui/touchpad`, `feedback/*`. `tasks/20260705-103236`, `20260705-103238`, `20260705-132200` NOTES |
+| `15_integrity` | grid of connected blocks in zero-g; click detonates a blast, disabled patches cascade apart from the edges in | `integrity`, `ui/health_display`, `ui/objectives`. `tasks/20260708-112713/NOTES.md` |
 
 ## Development flow
 
-- /flow drives development here: /plan breaks a goal into tatr tasks, /work
-  implements each task in a sprout worktree, /review runs out-of-context
-  round-1 reviews until APPROVE, and /compound writes the retro - repeating
-  until the goal is done.
-- Definition of Done criteria carry machine-checkable proofs in
-  test:/cmd:/manual: notation; a task closes only when its proofs pass.
-- `LESSONS.md` at the repo root is the lessons ledger: read it before
-  starting any task. /compound appends to it; /lessons compiles loose
-  scratch into it.
-- `tatr check` (plus `tatr check --ledger LESSONS.md`) is the conformance
-  gate for task artifacts and the ledger; keep it clean.
-
-## Workflow
-
-- Work is tracked with the tatr CLI in `tasks/`; read `tasks/<id>/TASK.md`
-  before picking something up, and check open tasks before planning new
-  work.
-- Feature branches per task, merged into `master` (the default branch)
-  after review. Do not push without being asked.
-- Record the design/fix in the task's `tasks/<id>/NOTES.md` and the
-  retrospective in `tasks/<id>/RETRO.md` (see "Where records go"); reference
-  docs live under `docs/`, and the `LESSONS.md` ledger at the repo root.
+- /flow drives it: /plan -> tatr tasks, /work implements each in a sprout worktree, /review runs out-of-context round-1 reviews until APPROVE, /compound writes the retro. Repeat until done.
+- Done criteria carry machine-checkable proofs in `test:` / `cmd:` / `manual:` notation; a task closes only when its proofs pass.
+- `LESSONS.md` is the ledger: read before any task. /compound appends; /lessons folds loose scratch in.
+- `tatr check` (+ `--ledger LESSONS.md`) gates task artifacts and the ledger. Keep clean.
+- Feature branch per task, merged into `master` after review. Do not push unless asked.
 
 ## Gotchas
 
-- `meth` is the module's real name (math pun). Leave it.
-- `README.md` is a three-line stub and slightly stale; this file is the
-  real orientation document.
-- The `EventKind` derive's default `Info` path does not resolve (stale
-  module path, `tasks/20260703-095509`); always pass `#[event_info(...)]`
-  explicitly, as `examples/03_modding.rs` does.
-- `helpers/wasd` and `camera/wasd` are two halves of one feature: the
-  camera math is input-agnostic on purpose, so games can swap the binding
-  layer without touching camera behavior.
-- Bevy 0.19 UI/light API when writing a new example: copy the idioms from an
-  existing example rather than from memory. `TextFont.font_size` is
-  `FontSize::Px(..)` (not a bare `f32`), `TextLayout` is built as a struct
-  literal (`TextLayout { justify: Justify::Center, ..default() }`, no
-  `new_with_justify`), and `AmbientLight` is a per-camera component, not a
-  global resource. Rounded UI corners are a `Node` field, not a component:
-  `Node { border_radius: BorderRadius::MAX, .. }` (whereas `BorderColor` *is* a
-  component) - spawning `BorderRadius` in the bundle fails the `Bundle` bound.
-  Grepping `06_fruitninja`/`08_dropzone` for `font_size:`, `TextLayout`,
-  `AmbientLight` and `border_radius:` up front avoids a batch of compile errors
-  (this has bitten three cycles now: `tasks/20260703-150200/RETRO.md`,
-  `tasks/20260703-165432/RETRO.md` and
-  `tasks/20260704-103517/RETRO.md`). The same "copy /
-  verify, do not improvise the visual layer" rule extends past compile errors to
-  things that render wrong silently (a background run cannot see the screen, so
-  they are not panics): a `StandardMaterial` with an HDR `emissive` must NOT set
-  `unlit: true` or it will not bloom -- `unlit` makes Bevy skip the lighting pass
-  where emissive is applied (`bevy_pbr` `render/pbr.wgsl`); an entity that
-  carries mesh children but no mesh of its own needs an explicit `Visibility` for
-  the children to render (else `B0004`); and camera shake is an absolute offset
-  from a fixed base (`translation = BASE + offset`, per `06_fruitninja`), never
-  an accumulating `+=`, or the camera drifts. All three slipped past
-  implementation and were caught in review in `10_asteroids`
-  (`tasks/20260703-170744/RETRO.md`).
-- Running examples: the examples open a window and are the de facto integration
-  tests, so a new or changed example is not "done" until it has actually been
-  run once - `cargo build` only proves it compiles, not that it boots. Even a
-  headless/background session often has a display (`echo $DISPLAY`); if so, run
-  `cargo run --example NN_name` under a `timeout` and confirm it reaches the
-  render loop (a `bevy_render::view::window` swap-chain log line means startup
-  finished). Not doing this shipped a startup hang in 08_dropzone
-  (`tasks/20260703-165432/RETRO.md`). Booting only reaches the
-  menu, though; to exercise a stateful example's actual gameplay
-  (menu -> playing -> result) headlessly when no input-injection tool
-  (`xdotool`) is around, do NOT hand-roll a throwaway autopilot any more (it was
-  re-invented and deleted 7 times). Add the reusable `AutopilotPlugin`
-  (`debug/harness`, behind `#[cfg(feature = "debug")]` like `InspectorDebugPlugin`):
-  give it a `.hold(state, seconds)` timeline and an optional `.input(|world,
-  elapsed| ...)` closure that pokes the game's input, then run
-  `BCS_AUTOPILOT=1 cargo run --example NN_name --features debug` under `timeout`
-  and confirm the log shows each `autopilot: -> State` transition and the final
-  `autopilot: cycle complete, no panic` line. It is inert unless `BCS_AUTOPILOT`
-  is set, so it stays in the example permanently -- no add/remove churn. It exits
-  via `AppExit::Success`, not `std::process::exit` (the latter segfaults on wgpu
-  teardown -- harmless, but do not mistake it for a game crash). See
-  `docs/dev-harness.md`; 08_dropzone and 11_overload are wired up as the
-  reference. The two harness plugins are mutually exclusive in a single
-  run: `AutopilotPlugin` and `ScreenshotPlugin` both drive `NextState`, so
-  running with both `BCS_AUTOPILOT` and `BCS_SHOT` set makes the screenshot never
-  fire (its settle-frame count never accumulates). To capture a mid-gameplay
-  frame, use `ScreenshotPlugin` alone, or drive with `AutopilotPlugin` and grab
-  the window externally with `scrot`
-  (`tasks/20260704-220736/RETRO.md`). (History, for context: verified 07/08 gameplay via the old
-  hand-rolled harness in `tasks/20260703-213510`, `tasks/20260704-103544`.)
-- Seeing the screen (do not treat "a background run cannot see the screen" as a
-  hard limit): when `$DISPLAY` is set, a background session CAN screenshot the
-  running app and verify the visual layer. `scrot` and ImageMagick `import` grab
-  the root window; `xdotool` (via `nix run nixpkgs#xdotool` when not on PATH)
-  finds/moves the app window so you can crop it precisely (`magick IN -crop
-  WxH+X+Y +repage OUT`), and `import`/`Read` the PNG to actually look. To capture
-  a specific state or viewport, do NOT hand-roll the window-size + auto-advance
-  harness (it was re-invented twice). Add the reusable `ScreenshotPlugin`
-  (`debug/harness`, behind `#[cfg(feature = "debug")]`): `ScreenshotPlugin::new(
-  TargetState).settle_frames(n).path("shot.png")`, then run
-  `BCS_SHOT=390x844 cargo run --example NN_name --features debug` under `timeout`
-  -- the `WxH` env value forces the window resolution, the plugin advances to the
-  target state, waits `n` settled frames, writes the PNG and exits via
-  `AppExit::Success`. It is inert unless `BCS_SHOT` is set, so it stays in the
-  example permanently. This caught a real 09_reactor layout regression -- at phone width four
-  of six shop buttons rendered below the fold, invisible to `cargo build`,
-  clippy and the boot check but obvious in a screenshot
-  (`tasks/20260704-143000/RETRO.md`). For a
-  responsive Bevy 0.19 grid that must hold N columns at any width, use percentage
-  item widths, not fixed px + `flex_wrap` (flexbox wraps before it shrinks, so
-  fixed-px cards collapse to one column on a narrow frame).
-- Verifying builds: never judge a build/command by a piped `| tail`'s exit
-  code -- the pipe reports `tail`'s status, so a failed `cargo build | tail`
-  looks like it passed. Redirect to a file and check `$?` when pass/fail
-  matters; use `| tail` only for interactive peeking.
-- A bare `cargo build` compiles the library and bins but NOT the examples, so
-  it is a false green for any change that touches example call sites (the
-  examples are the integration tests). Use `cargo clippy --all-targets` (or
-  `cargo build --examples`) as the real compile gate. Missing this hid eight
-  example errors behind a "clean" build in `input/pointer`
-  (`tasks/20260704-161508/RETRO.md`).
-- Tests that embed a data file (`include_str!`) go stale when the same task edits
-  that file. If a `#[cfg(test)]` assertion checks the contents of a JSON/asset the
-  task also changes (e.g. an `include_str!`ed catalog), assert the *final shipped*
-  state and re-run `cargo test --examples` AFTER the data edit, not just after the
-  code edit -- a green example-test run before the data was finalized is a false
-  green for anything embedding it. Bit `12_bastion`'s data-driven catalog: a
-  roster-count test passed at 2+2 then failed once the "prove it" step made the
-  embedded catalog 3+3 (`tasks/20260704-220719/RETRO.md`).
-- Prelude name collisions with bevy: a public type re-exported through
-  `crate::prelude` must not share a name with anything in `bevy::prelude`.
-  A game-local `struct Foo` silently shadows a bevy-prelude `Foo`, so it never
-  clashes in an example; the moment you harvest it into the crate prelude,
-  `use bevy::prelude::*` + `use bevy_common_systems::prelude::*` make every
-  reference ambiguous (E0659). This bit the harvested unified pointer, whose
-  natural name `Pointer` collides with bevy's `bevy_picking` `Pointer` event --
-  it had to become `UnifiedPointer`. Check new prelude names against
-  `bevy::prelude` before committing to them
-  (`tasks/20260704-161508/RETRO.md`).
-- Doctests that construct and configure an `App` are runtime tests, not just
-  compile checks -- `cargo test --doc` actually runs them. `init_state` /
-  `NextState` / any state transition panics at runtime without the state
-  machinery, so a doctest built on `MinimalPlugins` alone compiles green then
-  panics with "The `StateTransition` schedule is missing. Did you forget to add
-  StatesPlugin or DefaultPlugins?". Give such doctests
-  `(MinimalPlugins, bevy::state::app::StatesPlugin)` (or `DefaultPlugins`), the
-  plugins the real app would have (`tasks/20260704-175425/RETRO.md`).
-- Web/wasm builds: `trunk` must run from the repo root (it fails with
-  `Unable to find any Trunk configuration` from a subdir like `web/`), and
-  `rand` on wasm needs the getrandom `wasm_js` backend. Both are handled in
-  `web/scripts/build-games.sh` and `.cargo/config.toml`; see
-  `docs/wasm-web-builds.md`. Verify web tooling through the real entry point
-  (`npm run build`), not a hand-run of the underlying tool.
-- Fresh worktrees have no `node_modules`. A sprout (or any new git worktree)
-  starts without `web/node_modules` (git-ignored, not copied from the main
-  checkout), so the first `npm run build` fails its webpack half with
-  `webpack: command not found` (exit 127) even though the trunk half succeeds.
-  Run `npm ci` in the worktree's `web/` before the first web build.
-- GitHub Actions workflow changes: validate them locally with
-  `nix run nixpkgs#actionlint -- .github/workflows/<file>.yml` (exit 0, no
-  output means clean) instead of pushing and watching the run. The devshell has
-  no `actionlint` or `python3-yaml` on PATH, but the `nix run` form works. The
-  Pages deploy (`pages.yml`) also retries `actions/deploy-pages` once because
-  that step intermittently returns a transient "Deployment failed, try again
-  later." -- do not remove the retry as redundant
-  (`tasks/20260704-101608/NOTES.md`).
-- A state-machine example screenshot at *state entry* is not gameplay
-  verification. `ScreenshotPlugin` snaps as soon as it reaches the target state,
-  before any input has driven the game, so a `BCS_SHOT` grab of a
-  menu/playing/game-over example shows the initial frame only (e.g. `13_glide`'s
-  board with just its two seed tiles, never a rendered merge). That is exactly
-  where a bug in logic-that-drives-rendering hides: `13_glide` shipped a blocker
-  where every merged tile displayed the stale un-doubled number because the
-  move->entity classification (`merges` list always empty) was wrong, and it
-  passed a headless autopilot run (no panic) plus a state-entry screenshot because
-  neither observed a merge, and the moves-to-entity mapping had zero test coverage
-  (`tasks/20260705-101442/RETRO.md`). Rule: when a pure function
-  returns both a result and a list describing side effects (a grid *and* the
-  per-tile moves), test the *list*, not just the result -- a correct grid/score
-  actively masks a mishandled moves list downstream. Make the rendering-driver
-  logic pure and unit-test it (`13_glide`'s `classify_moves`); that is more
-  reliable than any screenshot. `ScreenshotPlugin` (app framebuffer) and
-  `AutopilotPlugin` (drives the states) are mutually exclusive, and `scrot` of the
-  X root is unreliable in a headless session (it returned a stale WM framebuffer
-  from an orphaned earlier run), so do not lean on a live gameplay grab to catch
-  these -- lean on the test.
-- `AutopilotPlugin.hold(state, seconds)` force-drives the `States` machine on a
-  fixed timer, so it proves only what happens *up to* each forced transition, never a
-  transition the *game itself* makes. It is structurally blind to a game-driven state
-  change -- most importantly the **lose condition**. `14_breach` reported a clean
-  `Menu->Playing->GameOver` autopilot cycle with kills, yet the enemy melee was
-  effectively broken (a defenceless player survived 30s+) and the player-death path
-  (`Health` zero -> `RunOver` -> `GameOver`) never actually fired: the observed
-  GameOver was always the `.hold(Playing, N)` timer, and the "kills" only proved the
-  offence side (`tasks/20260705-114236/RETRO.md`). Rule: verify any
-  game-driven transition (lose/win/level-up) with a headless `App` unit test
-  (`MinimalPlugins` + `bevy::state::app::StatesPlugin` + the relevant crate plugin)
-  that drives the trigger and asserts the state/resource flips -- write it before
-  trusting the autopilot. And to debug *balance* headlessly (not just pass/fail),
-  extend the Playing `.hold`, neuter the autopilot's offence (stop it firing) and log
-  the relevant per-frame numbers (HP, distances): measurement turns "the player
-  mysteriously survives" into "enemies arrive at 7s and melt 100->0 in 3s". Related
-  avian-gameplay traps seen here: a cooldown-gated distance melee is unreliable when
-  both bodies are dynamic (collision knockback flings the attacker out of range each
-  frame -- use continuous proximity damage and/or drop the collision between them),
-  and straight-line enemy AI with no avoidance gets stuck on interior obstacles (keep
-  the arena open, or give the AI navigation).
-- Spurious rotation on a sphere is almost always `Quat::from_rotation_arc(Vec3::Y,
-  up)`. It is the obvious way to make something "upright" relative to a planet
-  surface (radial `up`), and it is correct for the *up axis*, but it silently
-  commits to a yaw/twist about that axis -- the one that falls out of the shortest
-  arc. That twist is not stable as `up` moves: it swings as `up` sweeps around the
-  sphere (parallel-transport holonomy, ~80 degrees by the time you round toward the
-  far side) and goes singular at the `-Y` antipode where the arc flips 180 degrees.
-  `08_dropzone` fed the same expression into both the ship's PD attitude target and
-  the chase camera, so flying around the planet yawed the hull around and rolled the
-  camera with it (`tasks/20260705-154507`,
-  `tasks/20260705-154507/NOTES.md`). Fix: when you need a full
-  orientation on a surface, anchor the yaw to an explicit heading -- build the frame
-  from `up` plus a `forward_ref` projected into the tangent plane
-  (`surface_frame(up, forward_ref)` in `08_dropzone`), never from a bare
-  shortest-arc. Two related traps that bit the same fix: `Quat::from_mat3` on an
-  improper (left-handed, det -1) basis returns garbage, so get the cross-product
-  handedness right (or let a numeric test catch it); and a regression test meant to
-  *prove* a rotation bug must be shown to actually observe it -- the first attempt
-  here probed with a vector parallel to the arc's rotation axis and measured a swing
-  of exactly 0, a green test looking in the wrong place. Measure the effect across
-  the input range before trusting the threshold.
+- `meth` is the real module name (math pun). Leave it.
+- `README.md` is a stale three-line stub; this file is the orientation doc.
+- `EventKind` derive's default `Info` path does not resolve (`tasks/20260703-095509`). Always pass `#[event_info(...)]`, as `03_modding` does.
+- `helpers/wasd` + `camera/wasd` are two halves of one feature; the camera math is input-agnostic on purpose.
+- Bevy 0.19 UI/light API: copy idioms from an existing example, never from memory. `TextFont.font_size` is `FontSize::Px(..)`; `TextLayout` is a struct literal (no `new_with_justify`); `AmbientLight` is per-camera, not a resource; rounded corners are `Node { border_radius: BorderRadius::MAX, .. }` (a field -- spawning `BorderRadius` fails the `Bundle` bound) while `BorderColor` IS a component. Grep `06`/`08` for `font_size:`, `TextLayout`, `AmbientLight`, `border_radius:` first. Bit three cycles (`tasks/20260703-150200`, `20260703-165432`, `20260704-103517` RETROs).
+- Same "copy, do not improvise the visual layer" rule for things that render wrong *silently* (no panic, and a background run cannot see the screen): an HDR `emissive` material must NOT be `unlit` (skips the lighting pass where emissive applies); an entity with mesh children but no mesh of its own needs explicit `Visibility` (else `B0004`); camera shake is `translation = BASE + offset`, never `+=`. All three shipped and were caught in `10_asteroids` review (`tasks/20260703-170744/RETRO.md`).
+- Running examples: a new/changed example is not done until it has been RUN once -- `cargo build` proves compile, not boot. Check `echo $DISPLAY`; run under `timeout` and confirm a `bevy_render::view::window` swap-chain line. Skipping this shipped a startup hang in `08_dropzone` (`tasks/20260703-165432/RETRO.md`).
+- Booting only reaches the menu. For gameplay headlessly, do NOT hand-roll an autopilot (re-invented and deleted 7 times). Use `AutopilotPlugin` behind `#[cfg(feature = "debug")]`: `.hold(state, seconds)` + optional `.input(|world, elapsed| ...)`, then `BCS_AUTOPILOT=1 cargo run --example NN --features debug` under `timeout`; confirm each `autopilot: -> State` line and `autopilot: cycle complete, no panic`. Exits via `AppExit::Success` (a raw `std::process::exit` segfaults on wgpu teardown -- harmless, not a crash). See `docs/dev-harness.md`; `08_dropzone`/`11_overload` are the reference.
+- Seeing the screen is possible: with `$DISPLAY` set, `scrot` / ImageMagick `import` grab the root window, `xdotool` (`nix run nixpkgs#xdotool`) finds/moves the window for a precise crop (`magick IN -crop WxH+X+Y +repage OUT`), then Read the PNG. For a specific state/viewport use `ScreenshotPlugin::new(TargetState).settle_frames(n).path("shot.png")` with `BCS_SHOT=390x844` -- do not hand-roll it (re-invented twice). Caught a real `09_reactor` phone-width regression: four of six shop buttons below the fold, invisible to build/clippy/boot check (`tasks/20260704-143000/RETRO.md`).
+- Responsive Bevy 0.19 grid holding N columns at any width: percentage item widths, not fixed px + `flex_wrap` (flexbox wraps before it shrinks).
+- `AutopilotPlugin` and `ScreenshotPlugin` are mutually exclusive in one run -- both drive `NextState`, so the screenshot never settles. For a mid-gameplay frame use `ScreenshotPlugin` alone, or autopilot + external `scrot` (`tasks/20260704-220736/RETRO.md`).
+- A screenshot at *state entry* is not gameplay verification: it snaps before any input. `13_glide` shipped a blocker (every merged tile showed the stale un-doubled number; the `merges` list was always empty) that passed both an autopilot run and a state-entry shot (`tasks/20260705-101442/RETRO.md`). Rule: when a pure function returns a result AND a list describing side effects, test the *list* -- a correct grid actively masks a mishandled moves list. Make rendering-driver logic pure and unit-test it (`classify_moves`); more reliable than any screenshot. `scrot` of the X root is unreliable headless (returns stale WM framebuffers).
+- `AutopilotPlugin.hold` force-drives states on a timer, so it is structurally blind to any transition the *game* makes -- above all the lose condition. `14_breach` reported a clean `Menu->Playing->GameOver` cycle while enemy melee was broken and the death path never fired (`tasks/20260705-114236/RETRO.md`). Rule: verify game-driven transitions (lose/win/level-up) with a headless `App` test (`MinimalPlugins` + `bevy::state::app::StatesPlugin` + the plugin) that drives the trigger and asserts the flip -- before trusting the autopilot. For balance, extend the `.hold`, neuter the autopilot's offence and log per-frame numbers (HP, distances).
+- Related avian traps: a cooldown-gated distance melee is unreliable when both bodies are dynamic (knockback flings the attacker out of range) -- use continuous proximity damage and/or drop the collision; straight-line AI with no avoidance snags on interior obstacles -- keep the arena open or add navigation.
+- Spurious rotation on a sphere is almost always `Quat::from_rotation_arc(Vec3::Y, up)`: correct for the up axis, but it commits to whatever yaw/twist falls out of the shortest arc. That twist swings as `up` sweeps (parallel-transport holonomy, ~80 degrees toward the far side) and goes singular at the `-Y` antipode. It yawed the hull and rolled the camera in `08_dropzone` (`tasks/20260705-154507/NOTES.md`). Fix: build the frame from `up` plus a `forward_ref` projected into the tangent plane (`surface_frame`), never a bare shortest-arc. Two traps in the same fix: `Quat::from_mat3` on an improper (det -1) basis returns garbage -- get cross-product handedness right; and a regression test must be shown to actually observe the bug (the first probe was parallel to the rotation axis and measured a swing of exactly 0).
+- Verifying builds: never judge by a piped `| tail` exit code -- the pipe reports `tail`'s status. Redirect to a file and check `$?` when pass/fail matters.
+- Bare `cargo build` does NOT compile examples -- a false green for anything touching example call sites. Use `cargo clippy --all-targets` (or `cargo build --examples`). Hid eight errors in `input/pointer` (`tasks/20260704-161508/RETRO.md`).
+- `include_str!`ed data goes stale when the same task edits the file. Assert the *final shipped* state and re-run `cargo test --examples` AFTER the data edit. Bit `12_bastion`'s catalog: passed at 2+2, failed once it became 3+3 (`tasks/20260704-220719/RETRO.md`).
+- Prelude names must not collide with `bevy::prelude`. A game-local `struct Foo` silently shadows in an example, then makes every reference ambiguous (E0659) once harvested. Cost the unified pointer its natural name (`Pointer` -> `UnifiedPointer`) (`tasks/20260704-161508/RETRO.md`).
+- Doctests that configure an `App` actually RUN (`cargo test --doc`). `init_state`/`NextState` panic on `MinimalPlugins` alone ("The `StateTransition` schedule is missing"). Use `(MinimalPlugins, bevy::state::app::StatesPlugin)` or `DefaultPlugins` (`tasks/20260704-175425/RETRO.md`).
+- Web/wasm: `trunk` must run from the repo root (fails with `Unable to find any Trunk configuration` from `web/`), and `rand` needs the getrandom `wasm_js` backend. Both handled in `web/scripts/build-games.sh` + `.cargo/config.toml`; see `docs/wasm-web-builds.md`. Verify through `npm run build`, not a hand-run of the underlying tool.
+- Fresh worktrees have no `web/node_modules` (git-ignored, not copied), so the first `npm run build` fails its webpack half with exit 127 while trunk succeeds. Run `npm ci` in the worktree's `web/` first.
+- Validate workflow changes with `nix run nixpkgs#actionlint -- .github/workflows/<file>.yml` (exit 0, no output = clean) instead of pushing. The devshell has no `actionlint` on PATH; the `nix run` form works. `pages.yml` retries `actions/deploy-pages` once on a transient "Deployment failed, try again later." -- do not remove it as redundant (`tasks/20260704-101608/NOTES.md`).
