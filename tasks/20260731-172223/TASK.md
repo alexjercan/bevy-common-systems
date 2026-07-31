@@ -28,7 +28,7 @@ from the code, drop the provenance narration.
 - [x] Compact each kept comment to one tagged line (`NOTE:` / `FIXME:` / `BUG:` / `TODO:`), HUID only when it points at a live task record.
 - [x] Audit rustdoc (`//!`, `///`) for stale claims; fix what is wrong, leave style alone.
 - [x] Measure code-before-tests per file; split only where the file carries more than one concern, and record the decision (split or keep) in `NOTES.md`.
-- [ ] Run the full verification suite. (clippy + `cargo test` left to the user, see close-out)
+- [x] Run the full verification suite.
 
 ## Definition of Done
 
@@ -89,14 +89,27 @@ exit 0; `cargo check --all-targets` exit 0 (only the expected
 debug` in-scope warnings 4 -> 0; `git diff master -- src/integrity
 src/physics` shows no changed `pub` signature or prelude line.
 
-**Not run.** `cargo clippy` (both configs) and `cargo test` (all three
-invocations) are the user's to run. Clippy is a standing session rule now
-recorded in `AGENTS.md`; both configs did pass earlier in the session, before
-the final `simulate_seconds` and rustdoc edits. `cargo test` is blocked
-separately by `rust-lld` exhausting system RAM while linking test binaries,
-under investigation as its own concern. `cargo check --all-targets` compiles
-every target including the test modules, so only test EXECUTION is
-outstanding.
+**Deferred proofs, since closed.** The clippy and `cargo test` proofs were
+outstanding at review time: clippy sat behind a session prohibition (since
+lifted -- it links nothing) and `cargo test` behind `rust-lld` exhausting
+system RAM, fixed as its own task 20260731-210044 (`CARGO_BUILD_JOBS`/
+`RUST_TEST_THREADS` capped in `flake.nix`). All were run on this branch
+before landing, after merging current master in:
+
+- `cargo clippy --all-targets` exit 0, `--features debug` exit 0; only the
+  expected `proc-macro-error2` future-incompat note in each.
+- `cargo test` 147 + 59, `--features debug` 154 + 66, `--examples` all pass
+  (run on the branch before the final master merge, which touched only a
+  `flake.nix` comment and task records).
+- `cargo doc --no-deps --features debug` exit 0; 6 warnings, all in untouched
+  files (`helpers/`, `input/`, `modding/`), 0 in scope -- none new.
+- `cargo fmt --check` exit 0; `./scripts/check-ascii.sh` exit 0;
+  `./scripts/check-comment-tags.sh src/integrity src/physics` exit 0;
+  bare-HUID grep 0 matches; `tatr check --ledger LESSONS.md` exit 0.
+
+The whole-tree `check-comment-tags.sh src bevy_common_systems_macros/src`
+still reports 188 untagged blocks -- all in the epic's three remaining
+clusters, which is the epic's gate, not this task's.
 
 **Reflection.** The split-or-keep call is much cheaper to make correctly when
 you look at the test modules first: two test modules that share no helper are
