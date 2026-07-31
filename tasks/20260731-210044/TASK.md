@@ -4,7 +4,7 @@
 - PRIORITY: 2
 - TAGS: build, memory, toolchain
 - KIND: TASK
-- FLOW STEP: WORKING
+- FLOW STEP: COMPOUNDING
 - PLAN STATUS: APPROVED
 
 ## Problem
