@@ -2,7 +2,7 @@
 //! plus WASD-style planar movement for a physics-body character.
 //!
 //! Named `Doom` on purpose. This is the pragmatic, arena-shooter controller
-//! harvested from [`examples/14_breach`] -- flat ground, no jump / crouch / air
+//! harvested from `examples/14_breach.rs` -- flat ground, no jump / crouch / air
 //! control / slope handling. The premium `FirstPersonController` / `FpsController`
 //! name is deliberately reserved for a more capable controller built later; reach
 //! for this when you want a Quake/Doom-simple first-person mover and nothing more.
@@ -74,7 +74,7 @@ impl Default for DoomController {
         Self {
             move_speed: 6.0,
             look_sensitivity: 0.0022,
-            // Just under +/- 90deg, so the view cannot flip over the pole.
+            // NOTE: keep just under +/- 90deg (1.5708), or the view flips over the pole.
             pitch_min: -1.54,
             pitch_max: 1.54,
         }
@@ -257,8 +257,7 @@ mod tests {
         app.update();
 
         let state = app.world().get::<DoomControllerState>(body).unwrap();
-        // yaw -= 50 * 0.01 = -0.5
-        assert!((state.yaw - (-0.5)).abs() < 1e-4);
+        assert!((state.yaw - (-0.5)).abs() < 1e-4); // yaw -= 50 * 0.01
 
         let out = app.world().get::<DoomControllerOutput>(body).unwrap();
         let expected = doom_move_dir(-0.5, Vec2::new(0.0, 1.0)) * 10.0;
@@ -283,7 +282,8 @@ mod tests {
                 .world_mut()
                 .get_mut::<DoomControllerInput>(body)
                 .unwrap();
-            // pitch -= look.y * 0.1; a big negative look.y drives pitch up past the cap.
+            // NOTE: pitch -= look.y * sensitivity, so a big NEGATIVE look.y is what drives
+            // pitch up past pitch_max.
             input.look = Vec2::new(0.0, -100.0);
         }
         app.update();
@@ -296,7 +296,6 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, DoomControllerPlugin));
 
-        // Two independent body+eye pairs with different orientations.
         let spawn_pair = |app: &mut App, yaw: f32, pitch: f32| -> Entity {
             let body = app.world_mut().spawn(DoomController::default()).id();
             {
@@ -319,7 +318,6 @@ mod tests {
         let expect = |yaw, pitch| Quat::from_euler(EulerRot::YXZ, yaw, pitch, 0.0);
         let rot_a = app.world().get::<Transform>(eye_a).unwrap().rotation;
         let rot_b = app.world().get::<Transform>(eye_b).unwrap().rotation;
-        // Each eye takes ITS OWN controller's orientation, not the other's.
         assert!(rot_a.angle_between(expect(0.5, 0.2)) < 1e-4);
         assert!(rot_b.angle_between(expect(-1.0, -0.3)) < 1e-4);
     }

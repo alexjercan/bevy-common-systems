@@ -28,7 +28,6 @@ pub mod prelude {
 
 /// Configures a blast: everything within `radius` takes up to `max_damage`, falling off
 /// linearly to zero at the edge.
-// NOTE: linear falloff for now; other falloff models could be added later.
 #[derive(Component, Debug, Clone, Reflect)]
 pub struct BlastDamageConfig {
     /// Radius of the blast sensor. Bodies beyond this take no damage.
@@ -57,10 +56,8 @@ pub fn blast_damage(config: BlastDamageConfig) -> impl Bundle {
         RigidBody::Static,
         Collider::sphere(config.radius),
         Sensor,
-        // The blast owns its collision events so it raises `CollisionStart` against every
-        // collider it overlaps, instead of depending on each target having events enabled
-        // (see `on_blast_collision_deal_damage`). Without this the blast only reaches bodies
-        // that independently opted into collision events.
+        // NOTE: do not drop. The blast must own its collision events or it only reaches bodies
+        // that independently opted in; see `damage::on_blast_collision_deal_damage`.
         CollisionEventsEnabled,
         Visibility::Visible,
     )

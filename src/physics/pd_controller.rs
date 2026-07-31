@@ -112,7 +112,6 @@ fn compute_pd_torque(
     inertia_principal: Vec3,
     inertia_local_frame: Quat,
 ) -> Vec3 {
-    // PD gains
     let kp = (6.0 * frequency).powi(2) * 0.25;
     let kd = 4.5 * frequency * damping_ratio;
 
@@ -121,32 +120,26 @@ fn compute_pd_torque(
         delta = Quat::from_xyzw(-delta.x, -delta.y, -delta.z, -delta.w);
     }
 
-    let (mut axis, mut angle) = delta.to_axis_angle();
-    axis = axis.normalize_or_zero();
+    let (axis, mut angle) = delta.to_axis_angle();
+    let axis = axis.normalize_or_zero(); // normalize_or_zero, not normalize: angle 0 gives no axis
     if angle > std::f32::consts::PI {
         angle -= 2.0 * std::f32::consts::PI;
     }
 
-    // Normalize axis (avoid NaNs if angle is zero)
-    axis = axis.normalize_or_zero();
-
-    // PD control (raw torque)
     let raw = axis * (kp * angle) - angular_velocity * kd;
 
-    // Scale the raw PD acceleration by the world-space inertia tensor,
-    // I_world = Q diag(principal) Q^-1 with Q = from_rotation * inertia_local_frame:
-    // `inertia_local_frame` maps the principal-axes frame into the body's local
-    // space (bevy_heavy's `new_with_local_frame` convention) and `from_rotation`
-    // maps body-local into world, so principal-to-world composes body rotation
-    // AFTER the local frame. The sandwich below is that product: rotate the raw
-    // world vector into the principal frame, scale per principal axis, rotate
-    // back out to world.
+    // NOTE: the sandwich below scales the raw PD acceleration by the world-space inertia
+    // tensor I_world = Q diag(principal) Q^-1, with Q = from_rotation * inertia_local_frame.
+    // The composition order is load-bearing: `inertia_local_frame` maps the principal-axes
+    // frame into body-local (bevy_heavy's `new_with_local_frame` convention) and
+    // `from_rotation` maps body-local into world, so body rotation applies AFTER the local
+    // frame. Getting it backwards passes every identity-frame test and corkscrews on a
+    // skewed body.
     let rot_inertia_to_world = from_rotation * inertia_local_frame;
     let torque_local = rot_inertia_to_world.inverse() * raw;
     let torque_scaled = torque_local * inertia_principal;
     let final_torque = rot_inertia_to_world * torque_scaled;
 
-    // Optionally clamp final torque magnitude
     if final_torque.length_squared() > max_torque * max_torque {
         final_torque.normalize() * max_torque
     } else {
@@ -317,14 +310,11 @@ mod tests {
         assert!(torque.length() > 0.0);
     }
 
-    // --- avian integration repro: a released, fast-spinning body must despin ---
-    //
-    // Mirrors how nova-protocol wires the controller: PD input written before
-    // `PDControllerSystems::Sync`, output applied to the target body via avian
-    // `Forces::apply_torque` after it, physics stepping in FixedUpdate ticks.
-    // The body is a ship-like symmetric top (three unit cuboids along its long
-    // z-axis), released with a roll about that axis and a command FROZEN at the
-    // release attitude - the corkscrew scenario from nova task 20260709-125640.
+    // NOTE: the tests below are the avian integration repro - a released, fast-spinning body
+    // must despin. They wire the controller the way a game does: PD input written before
+    // `PDControllerSystems::Sync`, output applied via `Forces::apply_torque` after it, physics
+    // stepping in FixedUpdate. The body is a symmetric top released with a roll about its long
+    // axis and a command frozen at the release attitude - the configuration that corkscrewed.
 
     /// Marks a controller whose command should track the body attitude every
     /// tick (pure damper); without it the command stays frozen where it was.
@@ -355,8 +345,8 @@ mod tests {
 
     fn physics_app() -> App {
         let mut app = App::new();
-        // Asset + mesh plugins: avian's collider cache reads AssetEvent<Mesh>
-        // even for primitive colliders.
+        // NOTE: AssetPlugin + MeshPlugin are required even for primitive colliders - avian's
+        // collider cache reads `AssetEvent<Mesh>`.
         app.add_plugins((
             MinimalPlugins,
             TransformPlugin,
@@ -374,7 +364,7 @@ mod tests {
             FixedUpdate,
             apply_pd_output.after(PDControllerSystems::Sync),
         );
-        // Avian initializes its diagnostics resources in Plugin::finish.
+        // NOTE: do not drop - avian initializes its diagnostics resources in `Plugin::finish`.
         app.finish();
         app
     }
@@ -416,8 +406,8 @@ mod tests {
                 Transform::default(),
             ))
             .id();
-        // Let avian link colliders and finalize mass properties before
-        // imposing the spin (mass is computed over the first few steps).
+        // NOTE: mass is computed over the first few steps, so the spin must not be imposed
+        // until avian has linked colliders and finalized mass properties.
         for _ in 0..4 {
             app.update();
         }
@@ -425,6 +415,14 @@ mod tests {
             .entity_mut(body)
             .insert(AngularVelocity(spin));
         (body, controller)
+    }
+
+    /// Step the app for `seconds` of simulated time at the 60 Hz manual timestep
+    /// `physics_app` installs.
+    fn simulate_seconds(app: &mut App, seconds: f32) {
+        for _ in 0..(seconds * 60.0) as usize {
+            app.update();
+        }
     }
 
     fn spin_rate(app: &App, body: Entity) -> f32 {
@@ -442,10 +440,7 @@ mod tests {
         let (body, controller) = spawn_spinning_ship(&mut app, Vec3::new(0.0, 0.0, 1.5));
         app.world_mut().entity_mut(controller).insert(TrackAttitude);
 
-        // 10 s of sim at 60 Hz.
-        for _ in 0..600 {
-            app.update();
-        }
+        simulate_seconds(&mut app, 10.0);
 
         let rate = spin_rate(&app, body);
         assert!(
@@ -462,10 +457,7 @@ mod tests {
         let mut app = physics_app();
         let (body, _) = spawn_spinning_ship(&mut app, Vec3::new(0.0, 0.0, 1.5));
 
-        // 30 s of sim at 60 Hz.
-        for _ in 0..1800 {
-            app.update();
-        }
+        simulate_seconds(&mut app, 30.0);
 
         let rate = spin_rate(&app, body);
         assert!(
@@ -524,10 +516,7 @@ mod tests {
             .entity_mut(body)
             .insert(AngularVelocity(Vec3::new(0.0, 0.0, 1.5)));
 
-        // 30 s of sim at 60 Hz.
-        for _ in 0..1800 {
-            app.update();
-        }
+        simulate_seconds(&mut app, 30.0);
 
         let rate = spin_rate(&app, body);
         assert!(
@@ -548,10 +537,7 @@ mod tests {
         let mut app = physics_app();
         let (body, _) = spawn_spinning_ship_with_torque(&mut app, Vec3::new(0.0, 0.0, 1.5), 100.0);
 
-        // 30 s of sim at 60 Hz.
-        for _ in 0..1800 {
-            app.update();
-        }
+        simulate_seconds(&mut app, 30.0);
 
         let rate = spin_rate(&app, body);
         assert!(
@@ -567,10 +553,7 @@ mod tests {
         let mut app = physics_app();
         let (body, _) = spawn_spinning_ship(&mut app, Vec3::new(0.0, 0.0, 0.7));
 
-        // 30 s of sim at 60 Hz.
-        for _ in 0..1800 {
-            app.update();
-        }
+        simulate_seconds(&mut app, 30.0);
 
         let rate = spin_rate(&app, body);
         assert!(

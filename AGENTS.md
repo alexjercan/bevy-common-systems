@@ -80,7 +80,8 @@ Pruned task worth keeping: recreate the folder as a CLOSED archive-stub
 - `integrity/` - `IntegrityPlugin`: destruction over a graph of connected health-bearing nodes.
   - `components` - `IntegrityRoot`, `ConnectedTo` (own neighbour list), `IntegrityLeafMarker` / `IntegrityDisabledMarker` / `IntegrityDestroyMarker`.
   - `blast` - `blast_damage()`: radial `BlastDamageConfig` sensor bundle, owns its collision events, linear-falloff damage.
-  - `plugin` - impacts (impulse from relative velocity + mass) and blast overlaps -> `HealthApplyDamage`; disable at zero; destroy disabled leaves (or a disabled root); prune from neighbours to cascade. Game owns both seams: builds the graph, reacts to `On<Add, IntegrityDestroyMarker>`. Demoed by `15_integrity`.
+  - `damage` (private) - the collision half: impacts (impulse from relative velocity + mass) and blast overlaps -> `HealthApplyDamage`. Owns the three damage constants and the avian dependency.
+  - `plugin` - `IntegrityPlugin` wiring plus the cascade: disable at zero; destroy disabled leaves (or a disabled root); prune from neighbours to cascade. Game owns both seams: builds the graph, reacts to `On<Add, IntegrityDestroyMarker>`. Demoed by `15_integrity`.
 - `material` - `glowing_material`: the emissive-that-blooms `StandardMaterial`; bakes in the "must NOT be `unlit`" footgun.
 - `mesh/`
   - `builder` - `TriangleMeshBuilder`: octahedron spheres, subdivision, noise displacement, plane slicing, normals/UVs, `Mesh` conversion.

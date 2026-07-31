@@ -67,7 +67,6 @@ mod tests {
 
     #[test]
     fn a_point_on_a_purely_translating_body_moves_with_the_body() {
-        // No rotation: every point moves at the body's linear velocity, regardless of offset.
         let v = rigid_body_point_velocity(
             Vec3::new(1.0, 2.0, 3.0),
             Vec3::ZERO,
@@ -79,7 +78,6 @@ mod tests {
 
     #[test]
     fn a_point_at_the_center_of_mass_ignores_rotation() {
-        // omega x 0 = 0, so a muzzle exactly on the COM inherits only the linear velocity.
         let v = rigid_body_point_velocity(
             Vec3::new(5.0, 0.0, 0.0),
             Vec3::new(0.0, 7.0, 0.0),
@@ -91,8 +89,7 @@ mod tests {
 
     #[test]
     fn rotation_adds_tangential_velocity_at_an_offset() {
-        // Spin about +Y at 2 rad/s; a point 3 units along +X of a stationary COM swings along
-        // -Z at 6 units/s (omega x r = (0,2,0) x (3,0,0) = (0,0,-6)).
+        // NOTE: the oracle is the cross product by hand: omega x r = (0,2,0) x (3,0,0) = (0,0,-6).
         let v = rigid_body_point_velocity(
             Vec3::ZERO,
             Vec3::new(0.0, 2.0, 0.0),
