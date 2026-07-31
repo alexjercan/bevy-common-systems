@@ -23,9 +23,14 @@ Code before `#[cfg(test)]`:
 | `modding/events.rs` | 543 | 404 | one (the event bus), 4 layers sharing a type | keep |
 | `modding/registry.rs` | 494 | 320 | one (JSON -> handler construction) | keep |
 | `modding/mod.rs` | 9 | 9 | one | keep |
-| `persist/mod.rs` | 200 | 200 | one (plugin + load/save systems) | keep |
+| `persist/mod.rs` | 200 | 148 | one (plugin + load/save systems) | keep |
 | `persist/backend.rs` | 160 | 80 | one (platform split behind load/save) | keep |
 | macros `lib.rs` | 43 | 43 | one (the derive) | keep |
+
+(`persist/mod.rs`'s test module is `#[cfg(all(test, not(target_arch =
+"wasm32")))]` at line 149, a form the first measuring grep missed -- it read
+200/200. Corrected to 148 code lines in review round 1; the split call is
+unchanged, and 148 was never near any split threshold.)
 
 ## Split decisions: all KEEP
 

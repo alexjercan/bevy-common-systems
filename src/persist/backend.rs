@@ -109,10 +109,14 @@ mod native {
             assert_ne!(path_in(root, "a"), path_in(root, "b"));
         }
 
-        /// Kept pure - no env, no storage - so it never races the env-based two-app
-        /// test on `BCS_PERSIST_DIR`. `load` / `save` both gate on `is_safe_key`.
+        /// `is_safe_key` accepts ordinary namespaced keys and rejects everything
+        /// that could escape the storage namespace. Both `load` and `save` gate on
+        /// it, so this is the containment boundary for a caller-supplied key.
         #[test]
         fn unsafe_keys_are_rejected() {
+            // NOTE: keep this test pure -- no env, no storage. Touching
+            // `BCS_PERSIST_DIR` here would race the two-app test in `persist::mod`,
+            // which is the only test allowed to set it.
             assert!(is_safe_key("my_game.high_score"));
             assert!(is_safe_key("a-b_c.1"));
             assert!(!is_safe_key(""));

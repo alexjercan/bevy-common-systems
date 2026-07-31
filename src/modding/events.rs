@@ -298,11 +298,12 @@ where
 /// Index of spawned handlers keyed by their event name, holding contiguous
 /// handler snapshots the dispatcher iterates directly.
 ///
-/// The dispatcher (the private `queue_system`) used to scan *every* handler in the world
-/// for *every* fired event, matching on `handler.name == event.name`. That is
-/// `O(handlers)` per event regardless of how many actually react - fine for the
-/// handful a first-party scenario spawns, but wasteful once a large community
-/// mod brings hundreds of handlers most of which are for other event names.
+/// The dispatcher (the private `queue_system`) used to scan *every* handler in
+/// the world for *every* fired event, matching on `handler.name == event.name`.
+/// That is `O(handlers)` per event regardless of how many actually react - fine
+/// for the handful a first-party scenario spawns, but wasteful once a large
+/// community mod brings hundreds of handlers most of which are for other event
+/// names.
 ///
 /// A first attempt indexed *entity ids* and looked each up with `Query::get`
 /// during dispatch. Benchmarking (task 20260714-083331) showed that lost most of
@@ -413,8 +414,6 @@ mod tests {
     /// `Serialize`. Nothing else in the repo derives without `#[event_info(...)]`.
     #[test]
     fn attribute_less_derive_defaults_to_no_payload() {
-        use crate::prelude::EventKind as _;
-
         #[derive(Clone, bevy_common_systems_macros::EventKind)]
         struct OnQuiet;
 
