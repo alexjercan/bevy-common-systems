@@ -76,12 +76,23 @@
           # runs bare cargo on the small runner and needs no cap at all.
           # The divisor is 6, i.e. ~6 GB of RAM budgeted per concurrent link.
           # That is roughly 2x the measured cost: the largest single rust-lld
-          # was 3.0 GB and the whole-run peak divided by the cap comes to
+          # sampled at 3.0 GB and the whole-run peak divided by the cap comes to
           # ~2.7 GB per job, the rest being rustc and the driver. The margin is
           # deliberate -- the peak is what matters, and overshooting it means
           # swap, not a slow build. See tasks/20260731-210044/NOTES.md for the
           # four measured configurations; re-measure with
           # ./scripts/sample-peak-rss.sh after adding examples or doctests.
+          #
+          # NOTE: that 3.0 GB is a LOWER BOUND, so do not shave the margin
+          # against it. A 1-second sampler catches the ramp, not the spike:
+          # rust-lld's RSS peaks narrowly near the end of a link, and the
+          # nova-protocol session measured a comparable link at 2.14 GiB
+          # sampled against 2.93 GiB from `time -v` (`wait4` `ru_maxrss`,
+          # which cannot miss a peak) -- a ~27% under-report. The whole-run
+          # totals are far less affected, since N links in flight smooth an
+          # individual miss, which is why the cap is sized off the 13.5 GB
+          # whole-run figure and not off the per-link one. For a per-link
+          # number use `time -v` on an isolated `-j1` link instead.
           #
           # NOTE: 6, not 4. A divisor of 4 gives 7 here and was measured at
           # 18.4 GB on `cargo test --features debug` -- over this repo's 16 GB
