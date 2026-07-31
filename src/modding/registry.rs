@@ -342,7 +342,7 @@ mod tests {
         }
     }
 
-    // An action that carries params deserialized from JSON.
+    /// An action that carries params deserialized from JSON.
     #[derive(Deserialize)]
     struct AddCounter {
         amount: i32,
@@ -354,7 +354,7 @@ mod tests {
         }
     }
 
-    // A filter that reads a threshold from params.
+    /// A filter that reads a threshold from params.
     #[derive(Deserialize)]
     struct MinCounter {
         min: i32,
@@ -391,27 +391,25 @@ mod tests {
         assert_eq!(handlers.len(), 1);
         let handler = &handlers[0];
 
-        // The filter's `min: 3` param blocks below the threshold and passes at
-        // or above it.
         let mut world = TestWorld { counter: 0 };
         assert!(!handler.filter(&world, &GameEventInfo::default()));
         world.counter = 3;
         assert!(handler.filter(&world, &GameEventInfo::default()));
 
-        // The action's `amount: 5` param actually drives behaviour: running the
-        // built actions advances the counter by the JSON-supplied amount.
-        // (`actions` is `pub(super)`, reachable from this child module.)
+        // NOTE: reaching `handler.actions` (`pub(super)`) is deliberate -- running the
+        // built actions is what proves the JSON `amount: 5` reached behaviour, which
+        // asserting on the handler's shape alone would not.
         for action in &handler.actions {
             action.action(&mut world, &GameEventInfo::default());
         }
         assert_eq!(world.counter, 8);
     }
 
+    /// A typo in a field name ("acions") must be a parse error, not a silently
+    /// no-op handler.
     #[test]
     fn unknown_json_fields_are_rejected() {
         let registry = registry();
-        // A typo in a field name ("acions") must be a parse error, not a silent
-        // no-op handler.
         let err = registry
             .parse_handlers(r#"[{ "event": "tick", "acions": [] }]"#)
             .err()
@@ -419,9 +417,9 @@ mod tests {
         assert!(matches!(err, RegistryError::Parse(_)));
     }
 
-    // `EventHandler` holds trait objects and is not `Debug`, so the tests below
-    // use `.err().unwrap()` (no `Debug` bound on the `Ok` value) rather than
-    // `Result::unwrap_err`.
+    // NOTE: `EventHandler` holds trait objects and is not `Debug`, so the tests below
+    // must use `.err().unwrap()` rather than `Result::unwrap_err`, which would need a
+    // `Debug` bound on the `Ok` value.
 
     #[test]
     fn unknown_event_is_reported() {
@@ -456,8 +454,9 @@ mod tests {
 
     #[test]
     fn bad_params_are_reported() {
+        // NOTE: `amount` is an integer in `AddCounter`, so the string here is what
+        // makes deserialization fail.
         let registry = registry();
-        // `amount` should be an integer; a string fails deserialization.
         let err = registry
             .parse_handlers(
                 r#"[{ "event": "tick", "actions": [
@@ -483,7 +482,8 @@ mod tests {
     fn custom_constructor_can_ignore_params() {
         let mut registry = EventHandlerRegistry::<TestWorld>::new();
         registry.register_event::<TickEvent>();
-        // A constructor that takes no params at all.
+        // NOTE: this constructor ignores its params argument entirely, which is the
+        // case under test.
         registry.register_action("noop", |_| Ok::<_, String>(AddCounter { amount: 0 }));
 
         let handlers = registry

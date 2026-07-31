@@ -76,10 +76,9 @@ pub struct EventHandler<W: EventWorld> {
     pub(super) actions: Vec<Arc<dyn EventAction<W>>>,
 }
 
-// Hand-written so the bound is `W: EventWorld`, not the `W: Clone` a derive would
-// add: the fields are a `&'static str` and `Vec`s of `Arc` trait objects, none of
-// which need the world itself to be `Clone`. The event-handler index clones
-// handler snapshots for cache-friendly dispatch, which requires this.
+// NOTE: hand-written, not derived -- a derive would add a `W: Clone` bound the
+// fields (a `&'static str` and `Vec`s of `Arc` trait objects) do not need, and
+// `EventHandlerIndex` requires this impl to snapshot handlers.
 impl<W: EventWorld> Clone for EventHandler<W> {
     fn clone(&self) -> Self {
         Self {
@@ -253,9 +252,9 @@ where
         app.add_observer(on_game_event::<W>);
 
         app.init_resource::<W>();
-        // The index maintenance runs every frame, ungated, so a handler spawned
-        // or despawned on a quiet frame is still reflected before the next
-        // event - and ordered before the dispatch that reads it.
+        // NOTE: ungated and every frame, unlike the dispatch chain below, so a
+        // handler spawned or despawned on a quiet frame still lands before the next
+        // event; `.before` pins it ahead of the dispatch that reads it.
         app.add_systems(
             PostUpdate,
             maintain_handler_index::<W>.before(queue_system::<W>),
@@ -299,11 +298,12 @@ where
 /// Index of spawned handlers keyed by their event name, holding contiguous
 /// handler snapshots the dispatcher iterates directly.
 ///
-/// The dispatcher ([`queue_system`]) used to scan *every* handler in the world
-/// for *every* fired event, matching on `handler.name == event.name`. That is
-/// `O(handlers)` per event regardless of how many actually react - fine for the
-/// handful a first-party scenario spawns, but wasteful once a large community
-/// mod brings hundreds of handlers most of which are for other event names.
+/// The dispatcher (the private `queue_system`) used to scan *every* handler in
+/// the world for *every* fired event, matching on `handler.name == event.name`.
+/// That is `O(handlers)` per event regardless of how many actually react - fine
+/// for the handful a first-party scenario spawns, but wasteful once a large
+/// community mod brings hundreds of handlers most of which are for other event
+/// names.
 ///
 /// A first attempt indexed *entity ids* and looked each up with `Query::get`
 /// during dispatch. Benchmarking (task 20260714-083331) showed that lost most of
@@ -315,7 +315,8 @@ where
 /// `Vec` for the fired event, touching neither the ECS nor scattered memory.
 ///
 /// The snapshot is valid because a handler is built, spawned once, and never
-/// mutated in place; [`maintain_handler_index`] refreshes it on add/despawn.
+/// mutated in place; the private `maintain_handler_index` refreshes it on
+/// add/despawn.
 #[derive(Resource)]
 pub struct EventHandlerIndex<W: EventWorld> {
     by_name: HashMap<&'static str, Vec<(Entity, EventHandler<W>)>>,
@@ -385,9 +386,6 @@ fn queue_system<W: EventWorld>(
             event.info
         );
 
-        // Only the handlers registered for this event name, walked contiguously
-        // from the index - not a scan over every handler in the world, and no
-        // per-handler ECS lookup.
         for (_entity, handler) in index.handlers(event.name) {
             if handler.filter(&*world, &event.info) {
                 trace!("queue_system: handler {:?} passed filters", handler.name);
@@ -405,9 +403,28 @@ fn queue_system<W: EventWorld>(
 mod tests {
     use std::collections::HashMap as StdHashMap;
 
-    // `bevy::prelude::*` (App, World, Resource, ...) comes in via `super::*`,
-    // which re-globs the parent module's own prelude import.
+    // NOTE: `bevy::prelude::*` (App, World, Resource, ...) arrives through this
+    // glob, which re-exports the parent module's own prelude import.
     use super::*;
+
+    /// The attribute-less `#[derive(EventKind)]`: name defaults to the lowercased
+    /// struct name and `Info` to `()`. This test exists to keep that default
+    /// COMPILING - it is the path AGENTS.md once told everyone to avoid, because
+    /// the original default named a type that neither resolved nor implemented
+    /// `Serialize`. Nothing else in the repo derives without `#[event_info(...)]`.
+    #[test]
+    fn attribute_less_derive_defaults_to_no_payload() {
+        #[derive(Clone, bevy_common_systems_macros::EventKind)]
+        struct OnQuiet;
+
+        assert_eq!(OnQuiet::name(), "onquiet");
+
+        // NOTE: this call is the real assertion -- the `Info = ()` bound fails to
+        // COMPILE, not to run, if the default payload type ever changes back to
+        // something that does not resolve, which is the original defect.
+        fn requires_unit_payload<E: EventKind<Info = ()>>() {}
+        requires_unit_payload::<OnQuiet>();
+    }
 
     /// Minimal event world that just counts action fires by tag.
     #[derive(Resource, Default)]
@@ -478,7 +495,8 @@ mod tests {
             "alpha handlers must not re-run on beta"
         );
 
-        // An event with no registered handler must be a harmless no-op.
+        // NOTE: gamma has no registered handler at all -- firing it must be a
+        // harmless no-op, not a panic or a stray dispatch.
         fire(&mut app, "gamma");
         assert_eq!(count(&app, "a1"), 1);
     }
@@ -494,8 +512,8 @@ mod tests {
         assert_eq!(count(&app, "a1"), 1);
         assert_eq!(count(&app, "a2"), 1);
 
-        // Despawn one handler; the ungated maintenance system must prune it on
-        // the next frame even though the dispatch chain itself is idle.
+        // NOTE: the dispatch chain is idle on this frame, so pruning can only come
+        // from the ungated maintenance system -- that is what this step exercises.
         app.world_mut().entity_mut(a1).despawn();
         app.update();
 
@@ -504,11 +522,11 @@ mod tests {
         assert_eq!(count(&app, "a2"), 2);
     }
 
+    /// The read-accessor contract: a plain observer on `On<GameEvent>` (a run
+    /// recorder, a debug overlay) sees each event's kind name and payload as it
+    /// passes by, without draining the dispatch queue.
     #[test]
     fn observers_read_a_fired_events_name_and_payload() {
-        // The read-accessor contract: a plain observer on `On<GameEvent>` (a
-        // run recorder, a debug overlay) sees each event's kind name and
-        // payload as it passes by, without draining the dispatch queue.
         #[derive(Resource, Default)]
         struct Seen(Vec<(String, Option<serde_json::Value>)>);
 
@@ -535,8 +553,8 @@ mod tests {
         );
         assert_eq!(seen.0[1], ("onstart".to_string(), None));
 
-        // Observing must not have starved the real dispatch path: the queue
-        // observer also ran, so both events sit in the queue for handlers.
+        // NOTE: the point of this assertion is that observing did NOT starve the
+        // real dispatch path -- the queue observer ran too, so handlers still see both.
         let queue = app.world().resource::<GameEventQueue<Counts>>();
         assert_eq!(queue.events.len(), 2);
     }
