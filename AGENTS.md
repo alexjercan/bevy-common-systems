@@ -137,6 +137,7 @@ Modules are deliberately uniform; consistency is the main defense against bloat.
 - rustfmt owns imports (`imports_granularity = "Crate"`, `group_imports = "StdExternalCrate"`). Clippy allows `type_complexity` and `too_many_arguments` crate-wide.
 - Plain ASCII everywhere (code, comments, docs, commits): `-`, `--`, `...`, `->`.
 - Own-line (non-doc) comments only guard a value, explain a non-obvious setting, or record a hazard, and open with `NOTE:` / `FIXME:` / `BUG:` / `TODO:` on the block's first line. Restatement and task narration go to `tasks/<id>/NOTES.md`. Enforced by `./scripts/check-comment-tags.sh <path>...`. Exempt: rustdoc, and end-of-line comments (`let x = 1; // 1 neighbor`), which label a value in place and read worse tagged -- they still must earn their keep.
+  - In a `#[cfg(test)]` module the same split applies: what the TEST proves, or why it exists, is a `///` doc comment on the test fn (it outlives any line in the body, and `cargo test -- --list` shows it); what guards a VALUE inside the body stays a tagged `NOTE:` block. The `///` form is exempt from the checker, so use it for test intent only -- never to move an untagged body comment out of its reach (`tasks/20260731-172224/NOTES.md`).
 
 ### Promoted ledger lessons (folded 2026-07-20, task 20260720-220050)
 

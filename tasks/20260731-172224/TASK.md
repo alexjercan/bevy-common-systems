@@ -4,7 +4,7 @@
 - PRIORITY: 70
 - TAGS: chore, kiss, mesh, camera
 - KIND: STORY
-- FLOW STEP: WORKING
+- FLOW STEP: REVIEWING
 - PLAN STATUS: APPROVED
 - PARENT: 20260731-172116
 - DEPENDS ON: 20260731-172208
@@ -64,7 +64,8 @@ plane-slice kernel `edge_plane_intersection` / `TriangleSliceResult` /
 file that is total by construction -- every entry point must return a finite
 result for degenerate or parallel input, because `explode` runs it on
 arbitrary game meshes -- and that contract now has a module doc stating it.
-Public API is byte-identical: `slice` is private, the moved items were private
+Public API is byte-identical: the new `slice` MODULE is private (the
+`TriangleMeshBuilder::slice` method is untouched), the moved items were private
 and are now `pub(super)`, and `mesh::prelude::TriangleMeshBuilder` is
 untouched.
 

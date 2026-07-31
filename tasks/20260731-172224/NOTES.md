@@ -7,7 +7,10 @@ Design/fix record for task 20260731-172224. Sibling of 20260731-172208
 ## Baseline
 
 `./scripts/check-comment-tags.sh src/mesh src/meth src/camera` reported **57**
-untagged non-doc comment blocks. Bare tatr HUIDs in scope: **0** (the grep
+untagged non-doc comment BLOCKS (not lines - TASK.md's "33 comments" for
+`shake.rs` counts raw comment lines, which is a different unit). Per file:
+`builder.rs` 9, `explode.rs` 12, `lerp.rs` 6, `sphere.rs` 6, `shake.rs` 15,
+`chase.rs` 5, `skybox.rs` 3, `wasd.rs` 1. Bare tatr HUIDs in scope: **0** (the grep
 proof was already green at base; it is kept as a regression guard).
 
 Code before `#[cfg(test)]`, measured at base:
@@ -48,8 +51,10 @@ which it could not have while it was three loose private fns in the middle of
 a builder.
 
 `builder.rs` 618 -> 495 lines (521 -> 447 code); `slice.rs` is 138 lines
-(87 code). Public API byte-identical: `slice` is a private module, the moved
-items were private and are now `pub(super)`, and
+(87 code). Public API byte-identical: `slice` is a private MODULE (the
+`TriangleMeshBuilder::slice` METHOD is untouched); of the moved items, the two
+`builder.rs` still calls are `pub(super)` and `edge_plane_intersection` stays
+plain private since its only caller moved with it. And
 `bevy_common_systems::mesh::prelude::TriangleMeshBuilder` is untouched.
 
 **Alternatives rejected.**
@@ -67,7 +72,7 @@ items were private and are now `pub(super)`, and
 modules first - two that share no helper are a seam the author already found."
 `builder.rs` had ONE test module, so that signal was absent here; the split
 rests on the dependency-set argument alone, and the tests were partitioned to
-follow the code (3 of 7 moved to `slice.rs`, sharing no helper with the rest).
+follow the code (3 of 6 moved to `slice.rs`, sharing no helper with the rest).
 
 `camera/shake.rs` (313 code) was the other size candidate and was **kept**:
 one concern (trauma -> offset), and its bulk is a headless-app test rig that
@@ -123,7 +128,7 @@ retention factor which `powf(dt)` then makes frame-rate independent.
 `// -Z`, `// +X`, `// +Y` in two tests: **drop**. Each labels an assertion
 whose expected value (`Vec3::new(0.0, 0.0, -1.0)`) already states the axis.
 
-### `camera/shake.rs` (20)
+### `camera/shake.rs` (15)
 
 | Line | Comment | Call |
 | --- | --- | --- |
@@ -171,3 +176,26 @@ Two defects fixed, both factual:
 
 Everything else was left alone, including prose the pass would have written
 differently - the epic forbids style rewrites.
+
+## Convention decision: test intent as `///`, not `//`
+
+Eleven kept comments in this cluster were promoted to `///` doc comments on
+the `#[test]` fn they explain rather than tagged `NOTE:` blocks inside the
+body. That needs stating, because `check-comment-tags.sh` exempts rustdoc and
+rustdoc never renders items inside a `#[cfg(test)] mod`, so the route is
+invisible to both tools and would otherwise read as a loophole.
+
+It is deliberate and it has precedent: 13 `///`-on-`#[test]` comments already
+exist in landed code, including `mesh/explode.rs` itself and both files of the
+preceding epic task (`physics/pd_controller.rs`, `debug/inspector.rs`). The
+line the pass drew:
+
+- text that says what the TEST proves, or why it exists -> `///` on the fn.
+  It describes the whole test, it survives the body being rewritten, and
+  `cargo test -- --list` / an IDE shows it.
+- text that guards a VALUE or a line inside the body (the 60-frame decay loop
+  in `shake.rs`, the `chunks_exact(2)` boundary in `builder.rs`) -> tagged
+  `NOTE:` block, because it is attached to that line and dies with it.
+
+Folded into AGENTS.md's Conventions bullet in this task so the two remaining
+epic clusters do not each re-decide it.

@@ -287,9 +287,9 @@ mod test {
     }
 
     /// Drive the full `ExplodeMeshPlugin` observer path in a headless app -
-    /// the same interaction `examples/05_explode.rs` triggers - without a
-    /// window or renderer. This is the integration test the graphical example
-    /// cannot be for CI.
+    /// the same interaction `examples/05_explode.rs` triggers, on the same
+    /// component shape its target uses - without a window or renderer. This is
+    /// the integration test the graphical example cannot be for CI.
     #[test]
     fn test_explode_mesh_plugin_produces_fragments() {
         let mut app = App::new();

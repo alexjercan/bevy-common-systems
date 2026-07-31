@@ -14,12 +14,7 @@ use bevy::prelude::*;
 /// plane the crossing is undefined and a division would yield inf/NaN, so we
 /// fall back to the edge midpoint. The parameter is also clamped to the
 /// segment so numerical overshoot cannot push the vertex off the edge.
-pub(super) fn edge_plane_intersection(
-    a: Vec3,
-    b: Vec3,
-    plane_point: Vec3,
-    plane_normal: Vec3,
-) -> Vec3 {
+fn edge_plane_intersection(a: Vec3, b: Vec3, plane_point: Vec3, plane_normal: Vec3) -> Vec3 {
     let ab = b - a;
     let denom = ab.dot(plane_normal);
 
