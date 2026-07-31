@@ -1,10 +1,10 @@
 # KISS pass: modding/ + persist/ + macros subcrate
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 60
 - TAGS: chore, kiss, modding, persist
 - KIND: STORY
-- FLOW STEP: COMPOUNDING
+- FLOW STEP: DONE
 - PLAN STATUS: APPROVED
 - PARENT: 20260731-172116
 - DEPENDS ON: 20260731-172208
