@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 55
 - TAGS: bug,breach,example,ui
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Resolution
 

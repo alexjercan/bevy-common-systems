@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 25
 - TAGS: feature,input,helpers
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Follow-up from tatr 20260704-161508 (input/pointer), review NIT R1.2.
 > Spike: tasks/20260704-161210/SPIKE.md.

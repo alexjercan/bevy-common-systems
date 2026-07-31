@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 85
 - TAGS: feature,example,bastion,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Part of the 12_bastion polish goal. Today enemies trickle out one at a time
 > every `SPAWN_INTERVAL` seconds within a wave, and difficulty scales only gently

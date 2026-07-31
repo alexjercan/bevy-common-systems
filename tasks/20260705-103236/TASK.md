@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: spike,feature,example,fps,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 30
 - TAGS: spike,feature,input
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Spike: tasks/20260704-161210/SPIKE.md (read first). Wave A -- three independent copies exist.
 

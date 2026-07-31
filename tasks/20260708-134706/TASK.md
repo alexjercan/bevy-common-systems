@@ -3,6 +3,9 @@
 - STATUS: OPEN
 - PRIORITY: 68
 - TAGS: bug,mesh
+- KIND: TASK
+- FLOW STEP: BACKLOG
+- PLAN STATUS: DRAFT
 
 The mesh slicer (`ExplodeMeshPlugin` / `ExplodeMesh` in `mesh/`) can panic on bad input.
 Guard its internal edge cases so it returns gracefully instead of crashing:

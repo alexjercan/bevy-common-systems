@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 75
 - TAGS: feature,example,bastion,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Part of the 12_bastion polish goal. The user asked for "juice": particles when
 > a tower is built, an explosion when things are destroyed, and (more) screen

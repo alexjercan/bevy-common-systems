@@ -3,7 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 34
 - TAGS: feature,ui,cleanup
-
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Follow-up from tasks/20260704-134530 (ui/popup module). See
 > tasks/20260704-134530/NOTES.md and

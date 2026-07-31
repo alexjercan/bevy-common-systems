@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 28
 - TAGS: spike,feature,ui,input
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Spike: tasks/20260704-161210/SPIKE.md (read first). Wave A -- the most-documented duplication in the
 > repo (4 touch docs, 3 touch retros). Ship PRIMITIVES, not a fixed pad.

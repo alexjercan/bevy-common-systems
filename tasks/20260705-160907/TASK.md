@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 0
 - TAGS: archive,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 Archive stub: the original task folder was pruned before the 2026-07-16
 docs restructure moved research/retro records next to their tasks. The

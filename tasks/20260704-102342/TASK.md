@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 3
 - TAGS: feature,dropzone,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > SUPERSEDED: this combined follow-up was split, per user direction, into three
 > focused tasks. Do not implement this one; use these instead:

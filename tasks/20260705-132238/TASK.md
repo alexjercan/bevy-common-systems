@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 65
 - TAGS: spike,breach,example,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

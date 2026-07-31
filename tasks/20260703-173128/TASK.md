@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 95
 - TAGS: feature,example,input,touch
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

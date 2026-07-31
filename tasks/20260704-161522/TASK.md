@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 20
 - TAGS: spike,feature,physics
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Spike: tasks/20260704-161210/SPIKE.md (read first). Wave B -- only 2 games; a documented recipe is an
 > acceptable outcome.

@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 70
 - TAGS: crates,feature,integrity,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 Promote the Tier A + Tier B promotion candidates from the nova-protocol spike
 (`nova-protocol/docs/spikes/20260708-110317-promotion-eligible-systems.md`) into this

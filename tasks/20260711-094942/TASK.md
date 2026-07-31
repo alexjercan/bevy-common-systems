@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 95
 - TAGS: bug,physics,pd
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

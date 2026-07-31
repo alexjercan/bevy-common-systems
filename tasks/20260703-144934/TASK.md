@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: feature,web
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

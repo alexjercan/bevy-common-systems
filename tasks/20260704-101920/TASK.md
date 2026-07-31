@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: bug,web,audio
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

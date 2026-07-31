@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 80
 - TAGS: harness,testing,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Close-out (2026-07-20)
 

@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 70
 - TAGS: web,wasm,audio,verify
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: bug,08_dropzone,crash,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 When I try to go around the planet there is some weird rotation behaviour. The
 camera does a weird rotation which also makes the spaceship turn around.

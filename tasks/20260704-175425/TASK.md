@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: spike,feature
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Spike: tasks/20260704-175058/SPIKE.md (read
 > first). Wave 2 -- tiny extensions to already-shipped modules + leaf one-liners.

@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 50
 - TAGS: feature,example
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 Second pick from the 01-05 games spike (see
 `tasks/20260703-165138/NOTES.md`). Hover a ship over the

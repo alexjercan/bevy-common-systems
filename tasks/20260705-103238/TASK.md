@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: spike,feature,harvest,fps,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

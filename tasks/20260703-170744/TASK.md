@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 15
 - TAGS: feature,example
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 Lowest-priority pick from the 01-05 games spike (see
 `tasks/20260703-165138/NOTES.md`). 3D asteroids: a ship fires at

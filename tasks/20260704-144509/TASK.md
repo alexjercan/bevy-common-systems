@@ -3,7 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 38
 - TAGS: feature,camera,cleanup
-
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Follow-up from tasks/20260704-134500 (camera/shake module). See
 > tasks/20260704-134500/NOTES.md and

@@ -3,7 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 34
 - TAGS: feature,feedback,cleanup
-
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Split out of tasks/20260704-134600 (feedback material Flash). While building
 > the material Flash it turned out the spike's "material flash | 06,07,10"

@@ -3,6 +3,10 @@
 - STATUS: CLOSED
 - PRIORITY: 85
 - TAGS: web,audio,wasm,safari,ios
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
+
 - Depends on: 20260703-200005 (the AudioContext unlock shim this extends)
 
 ## Goal

@@ -1,0 +1,397 @@
+# Historical schema exemptions
+
+`tatr check` validates every sibling record against its schema, and `tatr flow`
+gates its transitions on the same rules. The records below were written before
+the rule they now trip, and the flow trail is append-only history: a task
+record is not rewritten to satisfy a rule invented after it landed. Each line
+classifies one such record explicitly.
+
+Format, one exemption per line:
+
+```
+- <task-id> <rule>: <why this record is exempt>
+```
+
+An entry suppresses that rule for that task only. An entry that never fires is
+reported as `unused-exemption` on a full `tatr check`, so the list cannot rot:
+when a record is legitimately rewritten, its exemption must go with it.
+
+New work does not get exemptions. Scaffold the record with
+`tatr scaffold <id> <RECORD>` and it is schema-clean from the first byte.
+
+## Pre-v2 records
+
+- 20260703-000001 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-000001 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-000001 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-000003 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-000003 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-000003 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-094842 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-094842 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-095339 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-095339 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-095509 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-095509 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-101712 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-101712 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-103940 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-103940 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-110851 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-110851 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-110915 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-110915 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-114259 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-114259 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-114259 bad-finding-id: pre-v2 REVIEW.md, findings not R<round>.<index>
+- 20260703-114259 approve-with-open-findings: pre-v2 REVIEW.md, findings not ticked off
+- 20260703-121347 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-121347 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-121414 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-121414 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-121418 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-121418 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-132207 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-132207 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-132210 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-132210 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-132214 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-132214 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140237 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140237 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140238 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140238 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140239 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140239 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140240 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140240 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140241 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140241 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140242 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140242 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140243 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140243 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140244 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140244 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140246 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140246 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140247 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140247 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140248 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140248 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-140249 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-140249 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-143615 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-143615 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-144934 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-144934 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-144936 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-144936 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-145707 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-145707 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-145707 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-145725 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-145725 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-145725 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-145730 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-145730 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-145730 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-150132 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-150132 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-150132 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-150200 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-150200 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-152544 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-152544 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-152544 bad-finding-id: pre-v2 REVIEW.md, findings not R<round>.<index>
+- 20260703-152544 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-152612 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-152612 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-152612 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-152619 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-152619 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-153128 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-153128 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-163328 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-163328 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-163329 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-163329 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-165138 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-165138 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-165138 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-165400 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-165400 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-165400 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-165427 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-165427 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-165432 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-165432 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-165439 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-165439 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-170738 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-170738 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-170738 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-170744 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-170744 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-173128 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-173128 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-175719 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-175719 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260703-175719 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-175735 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-175735 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-200005 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-200005 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-212303 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-212303 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-213510 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-213510 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-213510 bad-finding-id: pre-v2 REVIEW.md, findings not R<round>.<index>
+- 20260703-213510 approve-with-open-findings: pre-v2 REVIEW.md, findings not ticked off
+- 20260703-214926 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-214926 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260703-214926 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260703-214927 bad-record-schema: pre-v2 record, free-form headings
+- 20260703-214927 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-101608 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-101608 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-101920 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-101920 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-102022 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-102022 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-102022 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-102342 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-102342 closed-unchecked: pre-v2 TASK.md, step boxes are honest history
+- 20260704-102342 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-102342 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-103517 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-103517 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-103544 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-103544 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-103553 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-103553 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-130314 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-130314 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-130314 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-130316 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-130316 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-130316 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-134035 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-134035 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-134035 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-134500 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-134500 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-134530 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-134530 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-134600 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-134600 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-134630 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-134630 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-134700 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-134700 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-134730 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-134730 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-142016 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-142016 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-142016 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-143000 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-143000 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-144509 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-144509 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-153237 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-153237 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-155505 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-155505 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-161210 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-161210 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-161210 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-161502 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-161502 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-161508 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-161508 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-161513 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-161513 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-161518 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-161518 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-161522 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-161522 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-161526 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-161526 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-165400 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-165400 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-170738 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-170738 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-173937 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-173937 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-175058 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-175058 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-175058 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-175421 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-175421 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260704-175421 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-175422 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-175422 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-175423 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-175423 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-175424 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-175424 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-175425 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-175425 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-190405 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-190405 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-201801 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-201801 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-220530 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-220530 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260704-220530 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260704-220719 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-220719 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-220736 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-220736 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260704-223846 bad-record-schema: pre-v2 record, free-form headings
+- 20260704-223846 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-000005 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-000005 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-000005 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-085334 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-085334 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-085334 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-085335 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-085335 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-085335 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-085337 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-085337 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-085337 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-085338 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-085338 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-085338 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-090421 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-090421 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-090421 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-090557 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-090557 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-090624 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-090624 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-090624 bad-finding-id: pre-v2 REVIEW.md, findings not R<round>.<index>
+- 20260705-090624 approve-with-open-findings: pre-v2 REVIEW.md, findings not ticked off
+- 20260705-090624 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-090640 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-090640 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-092619 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-092619 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-094950 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-094950 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-101224 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-101224 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-101442 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-101442 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-103116 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-103116 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-103116 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-103236 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-103236 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-103236 bad-finding-id: pre-v2 REVIEW.md, findings not R<round>.<index>
+- 20260705-103236 approve-with-open-findings: pre-v2 REVIEW.md, findings not ticked off
+- 20260705-103236 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-103238 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-103238 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-103238 bad-finding-id: pre-v2 REVIEW.md, findings not R<round>.<index>
+- 20260705-103238 approve-with-open-findings: pre-v2 REVIEW.md, findings not ticked off
+- 20260705-103238 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-114236 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-114236 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-132024 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132024 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-132024 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-132200 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132200 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260705-132200 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-132207 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132207 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260705-132207 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-132238 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132238 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260705-132238 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-132240 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132240 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260705-132240 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-132242 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132242 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260705-132242 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-132244 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132244 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260705-132244 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-132542 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132542 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-134942 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-134942 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-140043 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-140043 closed-unchecked: pre-v2 TASK.md, step boxes are honest history
+- 20260705-140043 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-140043 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-140110 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-140110 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-140110 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-140727 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-140727 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-142611 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-142611 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-143000 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-143000 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-143706 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-143706 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-145227 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-145227 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-150314 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-150314 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-151315 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-151315 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-151725 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-151725 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-151725 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-151821 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-151821 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260705-151821 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-154058 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-154058 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-154350 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-154350 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-154507 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-154507 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260705-154507 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-155230 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-155230 bad-review-round: pre-v2 REVIEW.md, no round structure
+- 20260705-155230 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260705-160907 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-160907 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-161600 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-161600 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260705-163112 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-163112 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260708-112713 bad-record-schema: pre-v2 record, free-form headings
+- 20260708-112713 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260708-112713 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260711-091519 bad-record-schema: pre-v2 record, free-form headings
+- 20260711-091519 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260711-094942 bad-record-schema: pre-v2 record, free-form headings
+- 20260711-094942 missing-reviewer: pre-v2 REVIEW.md, reviewer not recorded
+- 20260716-000016 bad-record-schema: pre-v2 record, free-form headings
+- 20260716-000016 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260716-000016 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260716-084433 bad-record-schema: pre-v2 record, free-form headings
+- 20260716-084433 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260719-124137 bad-record-schema: pre-v2 record, free-form headings
+- 20260719-124137 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260719-124137 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260720-000752 bad-record-schema: pre-v2 record, free-form headings
+- 20260720-000752 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260720-000752 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260720-171843 bad-record-schema: pre-v2 record, free-form headings
+- 20260720-220050 bad-record-schema: pre-v2 record, free-form headings
+- 20260720-220102 bad-proof-syntax: pre-v2 TASK.md, DoD written as prose
+- 20260720-220102 bad-record-schema: pre-v2 record, free-form headings
+- 20260720-232058 bad-record-schema: pre-v2 record, free-form headings
+- 20260720-232058 closed-missing-review: pre-v2 cycle, no review record was written
+- 20260720-232058 closed-missing-retro: pre-v2 cycle, no retro record was written
+- 20260720-235803 bad-record-schema: pre-v2 record, free-form headings
+- 20260705-132024 dangling-seeded-task: SPIKE.md seeds '20260705-132500' which has no TASK.md

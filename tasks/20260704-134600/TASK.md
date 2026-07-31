@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 36
 - TAGS: spike,feature,feedback
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 1 -- promote recurring example juice into the library.

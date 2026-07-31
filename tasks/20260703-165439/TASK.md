@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 50
 - TAGS: feature,modding
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 Surfaced by the 01-05 games spike (see
 `tasks/20260703-165138/NOTES.md`). The `modding/events` module can

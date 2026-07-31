@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 30
 - TAGS: spike,feature,meth
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 2 -- foundation that also backs popup and flash.

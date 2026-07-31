@@ -3,7 +3,9 @@
 - STATUS: OPEN
 - PRIORITY: 30
 - TAGS: suggestion,example
-
+- KIND: TASK
+- FLOW STEP: BACKLOG
+- PLAN STATUS: DRAFT
 
 PROPOSAL for the user -- NOT to be implemented autonomously; it needs a
 dependency decision.

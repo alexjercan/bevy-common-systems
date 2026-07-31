@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: feature,web,wasm,audio
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

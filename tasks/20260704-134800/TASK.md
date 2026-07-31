@@ -3,6 +3,9 @@
 - STATUS: OPEN
 - PRIORITY: 15
 - TAGS: spike,suggestion,ui
+- KIND: TASK
+- FLOW STEP: BACKLOG
+- PLAN STATUS: DRAFT
 
 > Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 3 -- DEFERRED, needs a user decision before any code.

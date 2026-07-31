@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 20
 - TAGS: feature,example,modding,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 Low-priority pick from the 01-05 games spike (see
 `tasks/20260703-165138/NOTES.md`). An idle/incremental game where

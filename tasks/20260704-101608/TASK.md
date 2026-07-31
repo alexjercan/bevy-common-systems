@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: bug,ci,web
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Problem
 

@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 85
 - TAGS: bug,bevy-migration,example,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

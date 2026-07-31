@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 50
 - TAGS: modding,api,historical
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Record
 

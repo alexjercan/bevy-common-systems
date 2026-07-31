@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 1
 - TAGS: spike,examples,modding
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Spike: tasks/20260704-220530/SPIKE.md (read first).
 > Follow-up to the tower-defense game; DEPENDS ON 12_bastion shipping first

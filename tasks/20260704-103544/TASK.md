@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 5
 - TAGS: feature,dropzone
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 ## Goal
 

@@ -3,6 +3,9 @@
 - STATUS: CLOSED
 - PRIORITY: 32
 - TAGS: spike,feature,camera
+- KIND: TASK
+- FLOW STEP: DONE
+- PLAN STATUS: NOT_REQUIRED
 
 > Spike: tasks/20260704-161210/SPIKE.md (read first). Wave A -- smallest, unblocks the others; start here.
 
