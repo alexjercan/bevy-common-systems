@@ -20,11 +20,10 @@ pub trait LerpSnap {
 
 impl LerpSnap for f32 {
     fn lerp_and_snap(&self, to: Self, smoothness: f32, dt: f32) -> Self {
-        // Adjust smoothing factor for exponential effect
+        // NOTE: powi(7) turns the 0..1 `smoothness` dial into a per-second retention
+        // factor; `powf(dt)` then makes the result frame-rate independent.
         let t = smoothness.powi(7);
-        // Interpolate using Bevy's built-in lerp
         let mut new_value = self.lerp(to, 1.0 - t.powf(dt));
-        // Snap to target if very close and smoothing is not 1
         if smoothness < 1.0 && (new_value - to).abs() < f32::EPSILON {
             new_value = to;
         }
@@ -35,11 +34,8 @@ impl LerpSnap for f32 {
 
 impl LerpSnap for Vec3 {
     fn lerp_and_snap(&self, to: Self, smoothness: f32, dt: f32) -> Self {
-        // Adjust smoothing factor for exponential effect
         let t = smoothness.powi(7);
-        // Interpolate using Bevy's built-in Vec3::lerp
         let mut new_value = self.lerp(to, 1.0 - t.powf(dt));
-        // Snap to target if very close and smoothing is not 1
         if smoothness < 1.0 && (new_value - to).length() < f32::EPSILON {
             new_value = to;
         }

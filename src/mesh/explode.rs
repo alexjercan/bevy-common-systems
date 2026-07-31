@@ -1,8 +1,9 @@
-/// A Bevy plugin that makes entities explode into pieces when they are destroyed.
-///
-/// This plugin listens for `ExplodeMesh` components being added to entities and
-/// generates fragments from their meshes. Fragments are stored in an `ExplodeFragments` component
-/// and can be used for visual effects or physics simulations.
+//! A Bevy plugin that makes entities explode into pieces when they are destroyed.
+//!
+//! This plugin listens for `ExplodeMesh` components being added to entities and
+//! generates fragments from their meshes. Fragments are stored in an `ExplodeFragments` component
+//! and can be used for visual effects or physics simulations.
+
 use std::collections::VecDeque;
 
 use bevy::prelude::*;
@@ -61,7 +62,6 @@ impl Plugin for ExplodeMeshPlugin {
     fn build(&self, app: &mut App) {
         debug!("ExplodeMeshPlugin: build");
 
-        // Observe when an ExplodeMesh component is added and handle explosion.
         app.add_observer(handle_explosion);
     }
 }
@@ -92,7 +92,6 @@ fn handle_explosion(
 
     let fragment_count = explode.fragment_count;
 
-    // Collect all mesh entities, including children recursively
     let mut mesh_entities = Vec::new();
     if let Ok(mesh_entity) = q_mesh.get(entity) {
         mesh_entities.push(mesh_entity);
@@ -115,7 +114,6 @@ fn handle_explosion(
         }
     }
 
-    // Generate fragments for each mesh entity
     let mut fragment_meshes = Vec::new();
     for (mesh_entity, mesh3d) in mesh_entities.into_iter() {
         let Some(mesh) = meshes.get(&**mesh3d) else {
@@ -141,9 +139,8 @@ fn handle_explosion(
         };
 
         for (mesh, normal) in fragments {
-            // A carried (never-sliced) fragment can have a zero direction, and
-            // a bad normal could be non-finite; fall back to a fixed axis so
-            // the Dir3 is always valid.
+            // NOTE: a carried (never-sliced) fragment has a zero direction and a bad
+            // normal may be non-finite, so fall back to a fixed axis to keep Dir3 valid.
             let direction = Dir3::new(normal.normalize_or_zero()).unwrap_or(Dir3::Y);
             fragment_meshes.push(ExplodeFragment {
                 origin: mesh_entity,
@@ -153,7 +150,6 @@ fn handle_explosion(
         }
     }
 
-    // Attach the generated fragments to the entity
     commands
         .entity(entity)
         .insert(ExplodeFragments(fragment_meshes));
@@ -185,7 +181,8 @@ fn explode_mesh(
     let builder = TriangleMeshBuilder::try_from_mesh(original)?;
     let mut rng = rand::rng();
 
-    // Each entry is a fragment builder plus the direction of its last cut.
+    // NOTE: the Vec3 in each entry is the normal of that fragment's last cut, which
+    // becomes its explosion direction.
     let mut queue: Vec<(TriangleMeshBuilder, Vec3)> = vec![(builder, Vec3::ZERO)];
 
     for _ in 0..max_iterations {
@@ -203,8 +200,8 @@ fn explode_mesh(
                     next.push((neg, -plane_normal));
                 }
                 None => {
-                    // The plane missed this fragment (one side came out
-                    // empty); keep it intact so no geometry is lost.
+                    // NOTE: the plane missed this fragment (one side came out empty);
+                    // keep it intact so no geometry is lost.
                     next.push((mesh_builder, direction));
                 }
             }
@@ -213,7 +210,6 @@ fn explode_mesh(
         queue = next;
     }
 
-    // Build only the surviving, non-empty fragments.
     let fragments: Vec<(Mesh, Vec3)> = queue
         .into_iter()
         .filter(|(builder, _)| !builder.is_empty())
@@ -252,12 +248,12 @@ mod test {
         }
     }
 
+    /// Plane normals are random, so this runs many times to hammer the RNG
+    /// paths that produce degenerate slivers and parallel edges.
     #[test]
     fn test_explode_mesh_produces_finite_geometry() {
         let mesh = TriangleMeshBuilder::new_octahedron(2).build();
 
-        // Plane normals are random, so run many times to hammer the RNG paths
-        // that produce degenerate slivers and parallel edges.
         for _ in 0..50 {
             let fragments = explode_mesh(&mesh, 8, MAX_ITERATIONS)
                 .expect("an octahedron centered at the origin always splits");
@@ -275,9 +271,9 @@ mod test {
         }
     }
 
+    /// An index-less mesh must decline gracefully, not panic.
     #[test]
     fn test_explode_mesh_without_indices_returns_none() {
-        // An index-less mesh must decline gracefully, not panic.
         let mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
             bevy::asset::RenderAssetUsages::default(),
@@ -291,9 +287,9 @@ mod test {
     }
 
     /// Drive the full `ExplodeMeshPlugin` observer path in a headless app -
-    /// the same interaction `examples/05_explode.rs` triggers - without a
-    /// window or renderer. This is the integration test the graphical example
-    /// cannot be for CI.
+    /// the same interaction `examples/05_explode.rs` triggers, on the same
+    /// component shape its target uses - without a window or renderer. This is
+    /// the integration test the graphical example cannot be for CI.
     #[test]
     fn test_explode_mesh_plugin_produces_fragments() {
         let mut app = App::new();
@@ -311,8 +307,6 @@ mod test {
             .resource_mut::<Assets<StandardMaterial>>()
             .add(StandardMaterial::default());
 
-        // Same component shape the example's target uses; ExplodeMesh triggers
-        // the observer, which slices and inserts ExplodeFragments.
         let entity = app
             .world_mut()
             .spawn((
@@ -336,7 +330,6 @@ mod test {
             fragments.len()
         );
 
-        // Every fragment must have a real mesh handle and a valid direction.
         let meshes = app.world().resource::<Assets<Mesh>>();
         for fragment in fragments.iter() {
             let mesh = meshes
