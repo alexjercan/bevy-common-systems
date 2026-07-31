@@ -1,5 +1,12 @@
 # Taming `cargo test` peak memory
 
+> SUPERSEDED IN PART, 2026-07-31. Everything below is correct **for the repo as
+> it stood at 6 examples and 12 doctests**. The fix was never wrong, it was
+> outgrown: at 15 examples and 60 doctests the same mechanism exhausts RAM
+> again, and the doctest phase turned out never to have been covered by this
+> profile at all. Treat the peak figures here as historical. Current analysis,
+> numbers and the added concurrency caps: `tasks/20260731-210044/NOTES.md`.
+
 ## Symptom
 
 Running the unit tests (`cargo test`) consumed almost the entire machine's RAM
@@ -63,6 +70,10 @@ The committed config keeps the peak comfortably under half of physical RAM.
   worth the extra few GB when line-tables-only keeps failure diagnostics.
 - Capping cargo's job count during linking: would lower the peak but slows every
   build and does not address the real cost (embedded DWARF). Rejected.
+  **Reversed 2026-07-31 (task 20260731-210044).** The reasoning held only while
+  per-binary size was the dominant term. Once the target count grew 2.5x and the
+  doctest count 5x, concurrency became the multiplier that no per-binary saving
+  could offset, and the cap went in as `[build] jobs` plus `RUST_TEST_THREADS`.
 - `cargo test --lib` (skip examples): sidesteps the heavy example binaries, but
   the examples are the crate's integration tests and CI builds them, so the
   profile fix (which helps examples, tests and `cargo run` alike) is better.
