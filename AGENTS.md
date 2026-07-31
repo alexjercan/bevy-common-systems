@@ -85,6 +85,7 @@ Pruned task worth keeping: recreate the folder as a CLOSED archive-stub
 - `material` - `glowing_material`: the emissive-that-blooms `StandardMaterial`; bakes in the "must NOT be `unlit`" footgun.
 - `mesh/`
   - `builder` - `TriangleMeshBuilder`: octahedron spheres, subdivision, noise displacement, plane slicing, normals/UVs, `Mesh` conversion.
+  - `slice` (private) - the triangle-vs-plane geometry kernel behind `builder`'s `slice()`. Pure math, total by construction (degenerate/parallel input stays finite).
   - `explode` - `ExplodeMeshPlugin`: `ExplodeMesh` slices an entity's mesh (and children) into `ExplodeFragments`.
 - `meth/` - math helpers (pun is intentional, do not "fix" it)
   - `lerp` - `LerpSnap`: exponential lerp with snap-to-target for `f32`/`Vec3`.

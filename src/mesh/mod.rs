@@ -6,6 +6,7 @@
 
 pub mod builder;
 pub mod explode;
+mod slice;
 
 /// The prelude re-exports the most commonly used mesh utilities.
 ///

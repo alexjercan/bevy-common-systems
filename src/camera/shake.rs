@@ -187,12 +187,10 @@ impl Plugin for CameraShakePlugin {
             .register_type::<CameraShakeOutput>()
             .register_type::<CameraShakeState>();
 
-        // Restore must always run before Apply, whether or not a base driver
-        // sits between them. Ordering against `ChaseCameraSystems::Sync` alone
-        // is not enough: when the chase plugin is absent that set is empty, so
-        // the `.before`/`.after` edges to it vanish and Restore/Apply would be
-        // unordered (yet both write `Transform`) -- which could reintroduce the
-        // very drift this module prevents. Pin the set order explicitly.
+        // NOTE: pin Restore before Apply explicitly. Ordering only against
+        // `ChaseCameraSystems::Sync` breaks when the chase plugin is absent: an empty
+        // set drops the edges, leaving two `Transform` writers unordered and
+        // reintroducing the drift this module exists to prevent.
         app.configure_sets(
             PostUpdate,
             CameraShakeSystems::Apply.after(CameraShakeSystems::Restore),
@@ -271,9 +269,8 @@ fn camera_shake_apply_system(
     for (shake, mut input, mut output, mut state, mut transform) in q_camera.iter_mut() {
         trace!("camera_shake_apply_system: trauma {}", state.trauma);
 
-        // Consume input. A reset clears trauma first; a same-frame `add_trauma`
-        // then still lands on top of the cleared value (reset is a floor, not a
-        // veto), so a game can reset and kick a fresh shake in one frame.
+        // NOTE: reset is a floor, not a veto -- it clears trauma first, so a
+        // same-frame `add_trauma` still lands and a game can reset and re-kick at once.
         if input.reset {
             state.trauma = 0.0;
             input.reset = false;
@@ -317,7 +314,6 @@ mod tests {
     #[test]
     fn decay_reduces_trauma_and_clamps_at_zero() {
         assert!((decay_trauma(1.0, 2.0, 0.1) - 0.8).abs() < 1e-6);
-        // Overshooting the floor clamps to zero rather than going negative.
         assert_eq!(decay_trauma(0.1, 2.0, 1.0), 0.0);
     }
 
@@ -332,7 +328,6 @@ mod tests {
     fn shake_amount_is_trauma_to_the_exponent() {
         assert!((shake_amount(0.5, 2.0) - 0.25).abs() < 1e-6);
         assert!((shake_amount(0.5, 1.0) - 0.5).abs() < 1e-6);
-        // Zero trauma yields zero amount for any exponent.
         assert_eq!(shake_amount(0.0, 2.0), 0.0);
     }
 
@@ -344,13 +339,13 @@ mod tests {
         );
     }
 
+    /// Full sample at half amount against a peak of 0.6 gives 0.3 per set axis,
+    /// while a zeroed axis stays zero regardless of the sample.
     #[test]
     fn offset_scales_with_amount_and_max_offset() {
-        // Full sample, half amount, peak offset 0.6 -> 0.3 on each set axis.
         let offset = shake_offset(0.5, Vec3::new(0.6, 0.6, 0.0), Vec3::splat(1.0));
         assert!((offset.x - 0.3).abs() < 1e-6);
         assert!((offset.y - 0.3).abs() < 1e-6);
-        // A zeroed axis stays zero regardless of the sample.
         assert_eq!(offset.z, 0.0);
     }
 
@@ -387,6 +382,8 @@ mod tests {
         app.update();
     }
 
+    /// Peak offset per axis is 0.6, so the camera can never sit further from base
+    /// than that diagonal, whatever the random sample was.
     #[test]
     fn shake_offset_stays_within_the_configured_bound() {
         let base = Vec3::new(0.0, 0.0, 22.0);
@@ -396,8 +393,6 @@ mod tests {
             .unwrap()
             .add_trauma = 1.0;
 
-        // Peak offset per axis is 0.6, so the camera can never be further from
-        // base than that diagonal, no matter what the random sample was.
         let bound = Vec3::splat(0.6).length() + 1e-4;
         for _ in 0..10 {
             step(&mut app, 16);
@@ -411,11 +406,11 @@ mod tests {
         }
     }
 
+    /// Regression for the bug this module exists to prevent: an accumulating shake
+    /// that leaves the camera off-center. Kick trauma repeatedly, let it decay
+    /// between kicks, and confirm the camera settles back exactly on base.
     #[test]
     fn camera_recenters_and_does_not_drift() {
-        // The bug this module prevents: an accumulating shake that leaves the
-        // camera off-center. Kick trauma repeatedly, let it decay between kicks,
-        // and confirm the camera settles back exactly on base -- no drift.
         let base = Vec3::new(0.0, 0.0, 22.0);
         let (mut app, cam) = shake_app(base);
 
@@ -424,7 +419,8 @@ mod tests {
                 .get_mut::<CameraShakeInput>(cam)
                 .unwrap()
                 .add_trauma = 1.0;
-            // Advance well past the full decay time (1.0 / 1.8 ~= 0.56 s).
+            // NOTE: 60 frames at 16 ms is well past the full decay time
+            // (1.0 / 1.8 ~= 0.56 s), so trauma is guaranteed to have settled.
             for _ in 0..60 {
                 step(&mut app, 16);
             }
@@ -443,19 +439,17 @@ mod tests {
     #[derive(Resource, Default)]
     struct DriverClock(u32);
 
+    /// A base driver (standing in for the chase camera or a framing system) rewrites
+    /// the camera translation every frame *between* Restore and Apply. The shake must
+    /// ride on that moving base: within the offset bound of it throughout, and exactly
+    /// on it once trauma decays, with no accumulation.
     #[test]
     fn composes_with_a_moving_base_driver() {
-        // A base driver (standing in for the chase camera or a framing system)
-        // rewrites the camera translation every frame *between* Restore and
-        // Apply. The shake must ride on top of that moving base -- staying
-        // within the offset bound of it and settling exactly on it once trauma
-        // decays -- with no accumulation.
         let mut app = App::new();
         app.init_resource::<Time>();
         app.init_resource::<DriverClock>();
         app.add_plugins(CameraShakePlugin);
 
-        // The base marches along +x by 1.0 world unit per frame.
         fn base_at(frame: u32) -> Vec3 {
             Vec3::new(frame as f32, 0.0, 22.0)
         }
@@ -484,9 +478,6 @@ mod tests {
             ))
             .id();
 
-        // Kick trauma, then run frames; the camera must never stray further
-        // from the *current* base than the offset bound (proving it tracks the
-        // moving base rather than an accumulator).
         app.world_mut()
             .get_mut::<CameraShakeInput>(cam)
             .unwrap()
@@ -507,7 +498,6 @@ mod tests {
             );
         }
 
-        // After decay the camera sits exactly on the (still moving) base.
         let pos = app.world().get::<Transform>(cam).unwrap().translation;
         assert!(
             (pos - base_at(last_frame)).length() < 1e-3,
@@ -517,11 +507,11 @@ mod tests {
         );
     }
 
+    /// With a non-zero max_kick the rotation is perturbed while trauma is positive
+    /// and must return to the base rotation once it decays. Guards the
+    /// `last_kick.inverse()` restore order.
     #[test]
     fn kick_recenters_rotation_after_decay() {
-        // With a non-zero max_kick the rotation is perturbed while trauma is
-        // positive and must return to the base rotation once it decays -- this
-        // guards the `last_kick.inverse()` restore order.
         let base_rot = Quat::from_rotation_y(0.3);
         let mut app = App::new();
         app.init_resource::<Time>();
@@ -566,7 +556,6 @@ mod tests {
             .add_trauma = 1.0;
         step(&mut app, 16);
 
-        // Reset should snap the camera back to base on the very next frame.
         app.world_mut()
             .get_mut::<CameraShakeInput>(cam)
             .unwrap()

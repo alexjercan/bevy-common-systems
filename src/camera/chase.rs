@@ -143,8 +143,8 @@ impl Plugin for ChaseCameraPlugin {
         app.add_observer(initialize_chase_camera);
         app.add_observer(destroy_chase_camera);
 
-        // PostUpdate ensures camera motion is computed *after* game logic and
-        // input update systems, reducing jitter and preventing a one-frame lag.
+        // NOTE: PostUpdate, so camera motion is computed after game logic and input
+        // systems -- in Update it would lag them by a frame and jitter.
         app.add_systems(
             PostUpdate,
             (
@@ -186,7 +186,7 @@ fn destroy_chase_camera(remove: On<Remove, ChaseCamera>, mut commands: Commands)
     let entity = remove.entity;
     trace!("destroy_chase_camera: entity {:?}", entity);
 
-    // Use `try_remove` in case the entity is despawned.
+    // NOTE: `try_remove`, since the entity may already be despawned.
     commands
         .entity(entity)
         .try_remove::<(ChaseCameraInput, ChaseCameraState)>();
@@ -205,13 +205,11 @@ fn chase_camera_update_state_system(
     for (chase, input, mut state) in q_camera.iter_mut() {
         let target_pos = input.anchor_pos;
 
-        // Compute offset in the target's rotation frame.
         let desired_pos = target_pos
             + input.anchor_rot * Vec3::NEG_Z * chase.offset.z
             + input.anchor_rot * Vec3::Y * chase.offset.y
             + input.anchor_rot * Vec3::X * chase.offset.x;
 
-        // Smooth interpolation
         state.anchor_pos = state
             .anchor_pos
             .lerp_and_snap(desired_pos, chase.smoothing, dt);
@@ -233,7 +231,6 @@ fn chase_camera_sync_transform_system(
     for (chase, input, state, mut transform) in q_camera.iter_mut() {
         transform.translation = state.anchor_pos;
 
-        // Compute the look-at point using the focus offset.
         let focus = input.anchor_pos
             + input.anchor_rot * Vec3::NEG_Z * chase.focus_offset.z
             + input.anchor_rot * Vec3::Y * chase.focus_offset.y

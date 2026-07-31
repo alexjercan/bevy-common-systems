@@ -18,7 +18,7 @@
 //! Normalize elapsed time to `0..=1` over a fixed duration, then interpolate a
 //! value from its start to its cap. Wrap the normalized `t` in a Bevy
 //! `EaseFunction` sample (`ease.sample_clamped(t)`) for a curved ramp instead of
-//! a linear one; the crate's future `tween` easing will wrap the same call.
+//! a linear one; the crate's [`tween`](crate::tween) module wraps the same call.
 //!
 //! ```rust
 //! // Normalized progress through a fixed-duration ramp, clamped to 0..=1.

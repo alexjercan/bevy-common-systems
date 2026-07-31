@@ -26,6 +26,7 @@ use bevy::{
 };
 use noise::NoiseFn;
 
+use super::slice::{triangle_slice, TriangleSliceResult};
 use crate::meth::prelude::*;
 
 pub mod prelude {
@@ -238,9 +239,9 @@ impl TriangleMeshBuilder {
 
         let center = boundary.iter().fold(Vec3::ZERO, |acc, v| acc + v) / (boundary.len() as f32);
 
-        // Boundary vertices come in pairs (each triangle split pushes two).
-        // `chunks_exact(2)` consumes them pairwise and safely ignores a
-        // trailing unpaired vertex, so a malformed boundary cannot panic.
+        // NOTE: boundary vertices come in pairs (each triangle split pushes two), and
+        // `chunks_exact(2)` ignores a trailing unpaired one, so a malformed boundary
+        // cannot panic.
         for pair in boundary.chunks_exact(2) {
             let t = Triangle3d::new(pair[0], pair[1], center);
             self.add_triangle(t);
@@ -294,10 +295,8 @@ impl TriangleMeshBuilder {
             let b = t.vertices[1];
             let c = t.vertices[2];
 
-            // Degenerate (zero-length-edge or zero-area) triangles - which
-            // slicing readily produces - would make `normalize` return NaN.
-            // `normalize_or_zero` keeps the UVs finite; a collapsed triangle
-            // just gets zeroed axes and therefore (0, 0) UVs.
+            // NOTE: `normalize_or_zero`, not `normalize` - slicing readily produces
+            // degenerate triangles whose zero-length edges would yield NaN UVs.
             let u_axis = (b - a).normalize_or_zero();
             let v_axis = t
                 .normal()
@@ -328,7 +327,6 @@ impl TriangleMeshBuilder {
             let bc = slerp(b, c, 0.5);
             let ca = slerp(c, a, 0.5);
 
-            // Recursively subdivide into four smaller triangles
             self.subdivide_face_sphere(a, ab, ca, depth - 1);
             self.subdivide_face_sphere(b, bc, ab, depth - 1);
             self.subdivide_face_sphere(c, ca, bc, depth - 1);
@@ -344,7 +342,6 @@ impl TriangleMeshBuilder {
             let bc = (b + c) * 0.5;
             let ca = (c + a) * 0.5;
 
-            // Recursively subdivide into four smaller triangles
             self.subdivide_face_plane(a, ab, ca, depth - 1);
             self.subdivide_face_plane(b, bc, ab, depth - 1);
             self.subdivide_face_plane(c, ca, bc, depth - 1);
@@ -447,133 +444,14 @@ impl From<Mesh> for TriangleMeshBuilder {
     }
 }
 
-/// Compute intersection between an edge and a plane.
-///
-/// The result is always finite. If the edge is (nearly) parallel to the
-/// plane the crossing is undefined and a division would yield inf/NaN, so we
-/// fall back to the edge midpoint. The parameter is also clamped to the
-/// segment so numerical overshoot cannot push the vertex off the edge.
-fn edge_plane_intersection(a: Vec3, b: Vec3, plane_point: Vec3, plane_normal: Vec3) -> Vec3 {
-    let ab = b - a;
-    let denom = ab.dot(plane_normal);
-
-    if denom.abs() < 1e-6 {
-        return a + ab * 0.5;
-    }
-
-    let t = ((plane_point - a).dot(plane_normal) / denom).clamp(0.0, 1.0);
-
-    a + ab * t
-}
-
-/// Result of slicing a triangle against a plane.
-enum TriangleSliceResult {
-    Single(Triangle3d),
-    Split(Triangle3d, Triangle3d, Triangle3d),
-}
-
-/// Slice a triangle along a plane.
-///
-/// Returns a tuple containing the slice result and a boolean indicating
-/// whether the lonely vertex is on the positive side of the plane.
-fn triangle_slice(
-    tri: Triangle3d,
-    plane_normal: Vec3,
-    plane_point: Vec3,
-) -> (TriangleSliceResult, bool) {
-    let d0 = plane_normal.dot(tri.vertices[0] - plane_point);
-    let d1 = plane_normal.dot(tri.vertices[1] - plane_point);
-    let d2 = plane_normal.dot(tri.vertices[2] - plane_point);
-
-    let sides = [d0 >= 0.0, d1 >= 0.0, d2 >= 0.0];
-
-    if sides[0] && sides[1] && sides[2] {
-        (TriangleSliceResult::Single(tri), true)
-    } else if !sides[0] && !sides[1] && !sides[2] {
-        (TriangleSliceResult::Single(tri), false)
-    } else {
-        let lonely_index = if sides[0] == sides[1] {
-            2
-        } else if sides[0] == sides[2] {
-            1
-        } else {
-            0
-        };
-        let (lonely, first, second) = match lonely_index {
-            0 => (tri.vertices[0], tri.vertices[2], tri.vertices[1]),
-            1 => (tri.vertices[1], tri.vertices[0], tri.vertices[2]),
-            2 => (tri.vertices[2], tri.vertices[1], tri.vertices[0]),
-            _ => unreachable!(),
-        };
-
-        let lonely_side = sides[lonely_index];
-        let first_int = edge_plane_intersection(lonely, first, plane_point, plane_normal);
-        let second_int = edge_plane_intersection(lonely, second, plane_point, plane_normal);
-
-        let single = Triangle3d::new(lonely, second_int, first_int);
-        let tri1 = Triangle3d::new(first, first_int, second);
-        let tri2 = Triangle3d::new(second, first_int, second_int);
-
-        (TriangleSliceResult::Split(single, tri1, tri2), lonely_side)
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
 
-    #[test]
-    fn test_edge_plane_intersection() {
-        let a = Vec3::new(0.0, 0.0, 0.0);
-        let b = Vec3::new(1.0, 0.0, 0.0);
-        let plane_point = Vec3::new(0.5, 0.0, 0.0);
-        let plane_normal = Vec3::new(1.0, 0.0, 0.0);
-
-        let intersection = edge_plane_intersection(a, b, plane_point, plane_normal);
-
-        assert_eq!(intersection, Vec3::new(0.5, 0.0, 0.0));
-    }
-
-    #[test]
-    fn test_triangle_slice() {
-        let tri = Triangle3d::new(
-            Vec3::new(0.0, 1.0, 0.0),
-            Vec3::new(-1.0, -1.0, 0.0),
-            Vec3::new(1.0, -1.0, 0.0),
-        );
-        let plane_point = Vec3::new(0.0, 0.0, 0.0);
-        let plane_normal = Vec3::new(0.0, 1.0, 0.0);
-
-        let (result, is_positive) = triangle_slice(tri, plane_normal, plane_point);
-
-        assert!(
-            matches!(result, TriangleSliceResult::Split(_, _, _)),
-            "Expected triangle to be split"
-        );
-        assert!(is_positive, "Expected lonely vertex to be on positive side");
-    }
-
-    #[test]
-    fn test_edge_plane_intersection_parallel_is_finite() {
-        // Edge along X, plane normal also along X: the edge is parallel to
-        // the plane, so the denominator is zero. The result must stay finite.
-        let a = Vec3::new(0.0, 1.0, 0.0);
-        let b = Vec3::new(1.0, 1.0, 0.0);
-        let plane_point = Vec3::ZERO;
-        let plane_normal = Vec3::new(0.0, 1.0, 0.0); // parallel to edge AB
-
-        let p = edge_plane_intersection(a, b, plane_point, plane_normal);
-
-        assert!(
-            p.is_finite(),
-            "parallel edge intersection must be finite, got {p:?}"
-        );
-    }
-
+    /// A fully collapsed triangle (all vertices equal) has zero-length edges,
+    /// so a plain `normalize` in the UV basis would return NaN.
     #[test]
     fn test_uvs_degenerate_triangle_are_finite() {
-        // A fully collapsed triangle (all vertices equal) has zero-length
-        // edges; UVs must not be NaN.
         let p = Vec3::new(1.0, 2.0, 3.0);
         let builder = TriangleMeshBuilder {
             triangles: vec![Triangle3d::new(p, p, p)],
@@ -584,9 +462,9 @@ mod test {
         }
     }
 
+    /// A position-only mesh with no index buffer must decline, not panic.
     #[test]
     fn test_try_from_mesh_without_indices_returns_none() {
-        // A position-only mesh with no index buffer must decline, not panic.
         let mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
@@ -599,9 +477,10 @@ mod test {
         assert!(TriangleMeshBuilder::try_from_mesh(&mesh).is_none());
     }
 
+    /// An odd-length boundary must not index out of bounds: the unpaired
+    /// trailing vertex is ignored, leaving one triangle from the pair (0, 1).
     #[test]
     fn test_fill_boundary_odd_length_does_not_panic() {
-        // An odd-length boundary must not index out of bounds.
         let mut builder = TriangleMeshBuilder::new_empty();
         let boundary = vec![
             Vec3::new(0.0, 0.0, 0.0),
@@ -611,8 +490,6 @@ mod test {
 
         builder.fill_boundary(&boundary);
 
-        // One pair (0,1) forms a triangle; the unpaired third vertex is
-        // ignored rather than panicking.
         assert_eq!(builder.triangles.len(), 1);
     }
 }

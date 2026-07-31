@@ -62,19 +62,16 @@ mod tests {
     fn test_spherical_to_cartesian() {
         let radius = 1.0;
 
-        // -Z
         let theta = 0.0;
         let phi = 0.0;
         let pos = spherical_to_cartesian(radius, theta, phi);
         assert!(pos.abs_diff_eq(Vec3::new(0.0, 0.0, -1.0), 1e-6));
 
-        // +X
         let theta = std::f32::consts::FRAC_PI_2;
         let phi = 0.0;
         let pos = spherical_to_cartesian(radius, theta, phi);
         assert!(pos.abs_diff_eq(Vec3::new(1.0, 0.0, 0.0), 1e-6));
 
-        // +Y
         let theta = 0.0;
         let phi = std::f32::consts::FRAC_PI_2;
         let pos = spherical_to_cartesian(radius, theta, phi);
@@ -83,19 +80,16 @@ mod tests {
 
     #[test]
     fn test_direction_to_spherical() {
-        // -Z
         let dir = Vec3::new(0.0, 0.0, -1.0);
         let (theta, phi) = direction_to_spherical(dir);
         assert!(theta.abs() <= 1e-6);
         assert!(phi.abs() <= 1e-6);
 
-        // +X
         let dir = Vec3::new(1.0, 0.0, 0.0);
         let (theta, phi) = direction_to_spherical(dir);
         assert!((theta - std::f32::consts::FRAC_PI_2).abs() <= 1e-6);
         assert!(phi.abs() <= 1e-6);
 
-        // +Y
         let dir = Vec3::new(0.0, 1.0, 0.0);
         let (theta, phi) = direction_to_spherical(dir);
         assert!(theta.abs() <= 1e-6);
