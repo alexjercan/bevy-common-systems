@@ -124,7 +124,7 @@ missing measurements are the reason the cap was wrong.
 - **R1.2** Both configurations measured. `--features debug` peaks at **18.4 GB**
   at cap 7 -- the heaviest config was indeed the one over the line, exactly as
   predicted. `--examples` 17.2 GB.
-- **Consequence: the divisor changed 4 -> 6** (`flake.nix:112`), cap 7 -> 5. All
+- **Consequence: the divisor changed 4 -> 6** (`flake.nix:121`), cap 7 -> 5. All
   four configurations re-measured at cap 5: 11.6 / 10.6 / 13.5 / 9.9 GB, all
   exit 0. The reviewer's two MAJORs were the whole finding; the code was not
   merely under-documented, it was under-sized.
@@ -132,7 +132,7 @@ missing measurements are the reason the cap was wrong.
   16.4 GB at the same cap. Dropped from NOTES rather than reconciled -- one
   unrepeated sample against four fresh ones.
 - **R1.3** Resolved by stating the real value rather than rounding. At the new
-  divisor a 4-core/16 GB runner derives 2, not 4; `flake.nix:96` says so and
+  divisor a 4-core/16 GB runner derives 2, not 4; `flake.nix:92` says so and
   justifies the halving (4 links x ~3 GB is ~12 GB of a 15.6 GiB runner).
 - **R1.4/R1.5** Both overloaded knobs documented in `flake.nix` and in a new
   NOTES table naming intended effect, side effect, and cost, plus the
@@ -150,3 +150,71 @@ The `PLAN STATUS` self-approval is untouched -- still the user's call.
 Method note: every run above forced a relink with `touch src/lib.rs` against a
 warm target, and took `flock /home/alex/.claude/shared/heavy-build.lock` so the
 other Claude session sharing this box could not pollute a system-wide sample.
+
+## Round 2
+
+- REVIEWER: in-session (primary). EXCEPTION to the out-of-context default,
+  recorded per the review skill: spawning a subagent is prohibited in this
+  session, so no out-of-context reviewer was available. The verdict below rests
+  on re-run evidence rather than on a fresh reading, and the conflict of
+  interest is real -- the primary made the round-1 fixes it is now judging. See
+  the pending user check at the end.
+- VERDICT: APPROVE
+
+No new findings. All eight round-1 items verified fixed, and the two MAJORs
+changed the shipped configuration rather than only the record.
+
+### Re-derived rather than accepted
+
+- **The divisor actually changed behaviour, not just prose.**
+  `nix develop --command bash -c 'echo $CARGO_BUILD_JOBS $RUST_TEST_THREADS'`
+  -> `5 5`, matching `min(24, floor(32670224 kB / 1048576) / 6)` = 5. The
+  previous round verified 7 by the same method, so this is a measured
+  before/after on the same command.
+- **Runner arithmetic recomputed at the new divisor**, since R1.3 was a
+  miscalculation of exactly this kind: `mem_gb=15` -> `15 / 6` = 2,
+  `min(4, 2)` = 2. `flake.nix:92` states 2. Correct, and it states the cost
+  (halved `pages.yml` parallelism) rather than hiding it.
+- **All four peaks re-measured at cap 5**, each forcing a relink with
+  `touch src/lib.rs` against a warm target so no run was scored on cached
+  binaries: 11.6 / 10.6 / 13.5 / 9.9 GB, all exit 0. The binding DoD line is
+  `cargo test` under 16 GB: 11.6 GB. The heaviest configuration overall,
+  `--features debug`, is 13.5 GB.
+- **No stale figure survives.** Every remaining occurrence of `13.1 GB` in the
+  tree is inside prose that explicitly withdraws it (`NOTES.md:152`,
+  `TASK.md:101`); grep finds no surviving `MemTotalGB / 4`, `cap of 7`, or
+  `4 GB of headroom` claim in `flake.nix`.
+- **Sampler guard reasoned through, not just read.** `read -r` on a truncated
+  peak file leaves both variables empty, `"$peak_total$peak_lld"` is then `""`,
+  and the `case` catches it before awk can print a confident `0.0 GB`. A
+  legitimate all-zero sample (command exited inside the first interval) still
+  prints `0.0 GB`, which is correct rather than a false pass.
+- Gates: doctest count `60 tests, 0 benchmarks`; `cargo fmt --check`,
+  `./scripts/check-ascii.sh`, `tatr check --ledger LESSONS.md` all exit 0.
+
+### Cross-checked against the nova-protocol session
+
+That session is debugging the same failure on the same box and independently
+measured its own repo. Two of its results bear on this branch and neither
+requires a change here:
+
+- It retracted the claim that `[profile.test]` does not reach example targets
+  (`cargo test` applies the test profile to examples; only
+  `cargo build --example` uses dev). BCS sets no `[profile.test]`, so the
+  retracted premise never entered this repo -- it existed only in a message.
+- Its independent cap check, `floor(MemTotalGB * 0.6 / largest_link)`, gives 6
+  against this repo's 3.0 GB largest `rust-lld`. This branch ships 5. Two
+  methods, one apart, this one the more conservative.
+
+It also reached the same ranking from the opposite debuginfo regime: the
+concurrency cap dominates, and the profile knobs are secondary. Its DWARF is
+~73% first-party where this repo's is ~0%, and the same two knobs pay out ~27%
+there against ~100% here -- which is why the caps, not the profile block, are
+what this task changed.
+
+### Pending user checks
+
+- Carried over, unresolved: `PLAN STATUS: APPROVED` on TASK.md line 8 was set
+  by the implementing agent on its own plan. That gate is the user's.
+- New: this round was self-reviewed (see REVIEWER above). A user or fresh
+  reviewer confirming the round-2 diff would close that gap.
