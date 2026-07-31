@@ -1,3 +1,8 @@
+# NOTE: the link-parallelism cap that keeps `cargo test` inside RAM is
+# deliberately NOT here. It has to scale with the machine -- this box has 24
+# cores and 31 GB, a GitHub runner has 4 cores and 16 GB -- and a fixed number
+# committed here would RAISE parallelism on the smaller of the two. It is
+# derived per machine in flake.nix instead. See tasks/20260731-210044/NOTES.md.
 [build]
 
 [target.wasm32-unknown-unknown]

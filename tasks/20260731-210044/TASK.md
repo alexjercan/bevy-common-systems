@@ -1,10 +1,10 @@
 # Re-size the cargo test peak-RAM fix for 15 examples / 60 doctests
 
-- STATUS: OPEN
+- STATUS: IN_PROGRESS
 - PRIORITY: 2
 - TAGS: build, memory, toolchain
 - KIND: TASK
-- FLOW STEP: PLANNED
+- FLOW STEP: COMPOUNDING
 - PLAN STATUS: APPROVED
 
 ## Problem
@@ -71,3 +71,46 @@ outright -- but a repo-wide change; seeded as its own task).
 - No stale peak-RAM figure survives: every occurrence of the 2026-07-03 numbers carries the workload it was measured at (cmd: `grep -rn '16\.5 GB\|19\.7 GB\|38\.3 GB' Cargo.toml tasks/ docs/` -- each hit sits in a block naming its example/doctest counts).
 - `NOTES.md` records before/after peaks and the sampling method, so the next growth spurt is re-measured the same way (manual: read `tasks/20260731-210044/NOTES.md`).
 - The edition-2024 merged-doctests follow-up exists as its own task, and the dangling `bcs-no-full-test-suite` slug referenced by nova-protocol resolves to a real ledger entry (manual: `tatr ls -f` shows the new task; `grep -n 'bcs-no-full-test-suite' LESSONS.md` hits).
+
+## Close-out
+
+**What and why.** The 2026-07-03 peak-RAM fix was sized against 6 examples /
+12 doctests and the workload had grown to 15 / 60. Two settings were added --
+`[profile.dev.package."*"] debug = false` to shrink each linked binary, and a
+derived `CARGO_BUILD_JOBS` / `RUST_TEST_THREADS` cap in `flake.nix` to bound how
+many link at once -- plus `scripts/sample-peak-rss.sh` so the measurement is
+re-runnable instead of ad hoc. `RUST_TEST_THREADS` is not redundant with
+`CARGO_BUILD_JOBS`: cargo passes no job limit to rustdoc's harness, so it is the
+only lever on the 60 doctest links, which are the single largest term.
+
+**The cap divisor was wrong and review caught it.** Round 1 flagged that three
+of the four DoD configurations were never measured. Measuring them falsified the
+fix rather than merely documenting it: at the shipped cap of 7,
+`cargo test --doc` alone peaked at 16.4 GB and `--features debug` at 18.4 GB,
+both over the 16 GB target. The divisor moved `MemTotalGB / 4` -> `/ 6` (cap
+7 -> 5) and all four configurations now measure 11.6 / 10.6 / 13.5 / 9.9 GB.
+
+**Alternatives.** `.cargo/config.toml` for the cap was the planned Step 1 and
+was rejected -- it would also hit `ci.yml`, which runs bare cargo on a small
+runner that needs no cap. `mold` was rejected (a link-speed tool; peak RSS is
+not reliably lower and it does not touch concurrency). Global `debug = 0` was
+rejected for `package."*"`, which keeps first-party backtraces. Edition 2024
+merged doctests would delete the doctest term outright and is the largest
+available win, deferred as its own task 20260731-210413.
+
+**Difficulties.** The headline 13.1 GB figure from the first implementation pass
+could not be reproduced and was withdrawn: it cannot bound the suite when a
+strict subset costs 16.4 GB at the same cap. Cached binaries measure nothing, so
+every run forces a relink with `touch src/lib.rs` against a warm target. The
+sampler is system-wide and this box is shared with another Claude session, so
+runs take `flock /home/alex/.claude/shared/heavy-build.lock`.
+
+**Evidence.** Four sampled configurations in `NOTES.md`, all exit 0; doctest
+count unchanged at 60; `cargo fmt --check`, `./scripts/check-ascii.sh`,
+`tatr check --ledger LESSONS.md` all exit 0; `nix develop` derives jobs=5
+threads=5 as designed.
+
+**Reflection.** A cap sized against the default feature set is not sized. The
+heaviest configuration (`--features debug`, which links egui into every binary)
+is the one that had to be measured, and it was the one skipped. Measure the
+worst case or the number is decoration.
