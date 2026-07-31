@@ -134,6 +134,7 @@ Modules are deliberately uniform; consistency is the main defense against bloat.
 - Logging: `debug!("XPlugin: build")` in `Plugin::build`, `trace!` in systems/observers.
 - rustfmt owns imports (`imports_granularity = "Crate"`, `group_imports = "StdExternalCrate"`). Clippy allows `type_complexity` and `too_many_arguments` crate-wide.
 - Plain ASCII everywhere (code, comments, docs, commits): `-`, `--`, `...`, `->`.
+- Own-line (non-doc) comments only guard a value, explain a non-obvious setting, or record a hazard, and open with `NOTE:` / `FIXME:` / `BUG:` / `TODO:` on the block's first line. Restatement and task narration go to `tasks/<id>/NOTES.md`. Enforced by `./scripts/check-comment-tags.sh <path>...`. Exempt: rustdoc, and end-of-line comments (`let x = 1; // 1 neighbor`), which label a value in place and read worse tagged -- they still must earn their keep.
 
 ### Promoted ledger lessons (folded 2026-07-20, task 20260720-220050)
 

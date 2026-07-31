@@ -48,12 +48,12 @@ use super::{completion, AUTOPILOT_ENV};
 /// autopilot started driving.
 type InputFn = dyn Fn(&mut World, f32) + Send + Sync;
 
-/// Message written each time a [`loop_while_pending`]
-/// (`AutopilotPlugin::loop_while_pending`) autopilot restarts its cycle
-/// because other completion collectors are still pending. The game observes
-/// it to reset its scene/script state (re-trigger a scenario load, zero its
-/// script resource) so the repeated cycle measures ACTIVITY, not an idle
-/// tail.
+/// Message written each time a
+/// [`loop_while_pending`](AutopilotPlugin::loop_while_pending) autopilot
+/// restarts its cycle because other completion collectors are still pending.
+/// The game observes it to reset its scene/script state (re-trigger a
+/// scenario load, zero its script resource) so the repeated cycle measures
+/// ACTIVITY, not an idle tail.
 #[derive(Message)]
 pub struct AutopilotLoop;
 
@@ -195,9 +195,9 @@ impl<S: States + FreelyMutableState> Plugin for AutopilotPlugin<S> {
         });
         app.add_message::<AutopilotLoop>();
         completion::register(app, completion::AUTOPILOT);
-        // Runs in PreUpdate after input collection so the input closure can set
-        // a fresh `just_pressed` that survives into the game's Update systems
-        // (Bevy clears `just_pressed` in `InputSystems` every frame).
+        // NOTE: must run after `InputSystems`, which clears `just_pressed`
+        // every frame - only then does the input closure's fresh press
+        // survive into the game's Update systems.
         app.add_systems(PreUpdate, autopilot_drive::<S>.after(InputSystems));
     }
 }
@@ -212,9 +212,8 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
         .remove_resource::<AutopilotState<S>>()
         .expect("AutopilotState is inserted by AutopilotPlugin::build");
 
-    // The timeline is finished (or the script reported done first); stay
-    // inert (do not index past the end of the schedule) while the
-    // completion watcher waits for any other collectors.
+    // NOTE: stay inert once finished - do NOT index past the end of the
+    // schedule while the completion watcher waits on other collectors.
     if st.done
         || (st.self_completing
             && !world
@@ -225,9 +224,9 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
         return;
     }
 
-    // First frame: set the starting state (unless already there, to avoid a
-    // spurious OnExit/OnEnter of the default state), then wait a frame for the
-    // transition to apply before the clock starts.
+    // NOTE: skip the set when already in the first state, or the run opens
+    // with a spurious OnExit/OnEnter of the default state; the clock starts
+    // a frame later, once the transition has applied.
     if !st.started {
         let first = st.schedule[0].0.clone();
         if *world.resource::<State<S>>().get() != first {
@@ -247,10 +246,9 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
         input(world, st.elapsed);
     }
 
-    // In the LOOPING regime, finish the moment the other collectors are
-    // done instead of waiting for the current cycle's end - a slow cycle
-    // otherwise wastes up to its full length after a capture completes,
-    // and can straddle the completion deadline into a false laggard.
+    // NOTE: while looping, finish the moment other collectors are done
+    // rather than at the cycle's end - a slow cycle otherwise wastes up to
+    // its full length and can straddle the deadline into a false laggard.
     if st.loops > 0
         && !world
             .resource::<completion::HarnessCompletion>()
@@ -283,8 +281,9 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
                     st.loops
                 );
                 world.write_message(AutopilotLoop);
-                // Stay on the final step (no state transitions); zero the
-                // clocks so the input script sees a fresh cycle.
+                // NOTE: hold the final step (no further state transitions)
+                // and zero both clocks, so the input script sees a fresh
+                // cycle rather than a monotonic elapsed.
                 st.index = st.schedule.len() - 1;
                 st.elapsed = 0.0;
                 st.state_elapsed = 0.0;
@@ -292,8 +291,8 @@ fn autopilot_drive<S: States + FreelyMutableState>(world: &mut World) {
                 return;
             }
             if st.self_completing {
-                // The runway expired with the script still pending: an
-                // ABORT, not a completion (error exits do not negotiate).
+                // NOTE: an expired runway is an ABORT, not a completion -
+                // error exits do not negotiate with other collectors.
                 error!(
                     "autopilot: timeline expired but the self-completing \
                      script never reported done (t={:.1}s)",

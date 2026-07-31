@@ -17,7 +17,7 @@ Promoted 2026-07-20 (task 20260720-220050) into the global `~/AGENTS.md` and the
 flow skills, which run in every repo - kept here (annotated) as the paid record.
 
 - `evidence-before-claim` (x9, PROMOTED 2026-07-20 -> global ~/AGENTS.md: an edit is a hypothesis until the artifact shows it): Never write a behavioral claim before the run or assertion that backs it is in hand. 20260704-170738, 20260704-220736.
-- `full-command-output` (x6, PROMOTED 2026-07-20 -> global ~/AGENTS.md: never let a pipe/echo eat the exit code): redirect to a file, read the section in full, check `$?` of the real command. 20260703-094842, 20260703-144934.
+- `full-command-output` (x7, PROMOTED 2026-07-20 -> global ~/AGENTS.md: never let a pipe/echo eat the exit code): redirect to a file, read the section in full, check `$?` of the real command. A `tail -N` that hides a warning also poisons the RECORD, even when the exit code is honestly 0. 20260703-094842, 20260731-172208.
 - `pkill-by-pid` (x4, PROMOTED 2026-07-20 -> global ~/AGENTS.md: kill by recorded PID, never `pkill -f`): anchor `xdotool search --name` to `^title$`. 20260705-163112, 20260704-173937.
 - `regression-test-must-fail-without-fix` (x4, PROMOTED 2026-07-20 -> review skill: "would it fail with the fix deleted?"): flip the code buggy and confirm the new test reds. 20260705-155230, 20260711-091519.
 - `verify-api-in-source` (x8, PROMOTED 2026-07-20 -> plan skill: read the dependency's source/probe before designing around it): grep the exact symbol, do not trust memory or AGENTS.md. 20260705-134942, 20260704-103517.
@@ -26,6 +26,8 @@ flow skills, which run in every repo - kept here (annotated) as the paid record.
 - `one-tatr-new-per-call` (x3, PROMOTED 2026-07-20 -> tatr skill: one `tatr new` per command): second-resolution IDs collide and (pre-0.2.0) silently overwrote. 20260703-150200, 20260703-173128.
 - `no-concurrent-git-same-tree` (x3, PROMOTED 2026-07-20 -> flow land protocol: `git merge-base --is-ancestor master <branch>` right before squash-land): do not merge into master while a human commits there. 20260703-212303, 20260704-175422.
 - `negative-result-is-a-deliverable` (x4, PROMOTED 2026-07-20 -> spike/compound skills: a "we decided not to" is recorded, not silent): still leave a module doc / testable snippet / pointer and the reasoning. 20260704-161522, 20260704-161526.
+- `convention-and-checker-are-one-artifact` (x1): when the deliverable is a RULE, diff the prose's scope against the tool's matcher and name each gap an exemption or a bug -- a checker narrower than its wording is worse than none, since exit 0 reads as compliance. 20260731-172208.
+- `probe-a-new-checker-both-ways` (x1): before trusting a new check script, probe it on a synthetic file for cases it must REJECT and must ACCEPT; a clean exit on real sources cannot reveal a matcher that silently covers less than intended. Complements `regression-test-must-fail-without-fix` (red on a violation) with coverage. 20260731-172208.
 
 ## Technical lessons
 

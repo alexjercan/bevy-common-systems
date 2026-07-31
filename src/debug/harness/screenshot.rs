@@ -124,8 +124,8 @@ impl<S: States + FreelyMutableState> Plugin for ScreenshotPlugin<S> {
             return;
         };
 
-        // Both harnesses drive `NextState`; running them together would fight
-        // over it. Autopilot wins -- the screenshot harness stands down.
+        // NOTE: both harnesses drive `NextState` and would fight over it;
+        // autopilot wins and the screenshot harness stands down.
         if std::env::var(AUTOPILOT_ENV).is_ok() {
             warn!(
                 "ScreenshotPlugin: both {SCREENSHOT_ENV} and {AUTOPILOT_ENV} are set; \
@@ -134,7 +134,6 @@ impl<S: States + FreelyMutableState> Plugin for ScreenshotPlugin<S> {
             return;
         }
 
-        // A `WxH` env value overrides the builder's default resolution.
         let resolution = parse_resolution(&env_value).or(self.resolution);
 
         debug!(
@@ -156,8 +155,6 @@ impl<S: States + FreelyMutableState> Plugin for ScreenshotPlugin<S> {
         if resolution.is_some() {
             app.add_systems(Startup, resize_window::<S>);
         }
-        // The screenshot is for verifying the game's own layout, so hide the
-        // inspector/diagnostics overlay if InspectorDebugPlugin is present.
         app.add_systems(Startup, hide_debug_overlay);
         app.add_systems(Update, screenshot_drive::<S>);
         completion::register(app, completion::SCREENSHOT);
@@ -184,8 +181,8 @@ fn resize_window<S: States + FreelyMutableState>(
     };
     if let Ok(mut window) = windows.single_mut() {
         window.resolution.set(width, height);
-        // Pin the size so a tiling/reflowing WM cannot resize the window back
-        // and undermine a responsive-layout capture.
+        // NOTE: pin the size, or a tiling/reflowing WM resizes the window
+        // back and the responsive-layout capture measures the wrong width.
         window.resizable = false;
         trace!("screenshot: forced window resolution to {width}x{height}");
     }
@@ -203,7 +200,6 @@ fn screenshot_drive<S: States + FreelyMutableState>(
         return;
     }
 
-    // First run: request the target state (unless already there).
     if !config.advanced {
         if state.get() != &config.state {
             next.set(config.state.clone());
@@ -213,8 +209,6 @@ fn screenshot_drive<S: States + FreelyMutableState>(
         return;
     }
 
-    // Wait until the transition has actually applied. Bound the wait so an
-    // unreachable target state exits with an error instead of hanging.
     if state.get() != &config.state {
         config.waited_frames += 1;
         if config.waited_frames >= MAX_WAIT_FRAMES {
@@ -240,9 +234,8 @@ fn screenshot_drive<S: States + FreelyMutableState>(
         config.state, config.frames_in_state
     );
 
-    // save_to_disk writes the PNG synchronously in its observer; a second
-    // observer on the same capture reports completion once the frame is on
-    // disk (the app exits when every registered collector is done).
+    // NOTE: `save_to_disk` writes the PNG synchronously in its observer, so
+    // the second observer only reports done once the frame is on disk.
     commands
         .spawn(Screenshot::primary_window())
         .observe(save_to_disk(path))
@@ -275,16 +268,13 @@ mod tests {
     fn parses_valid_wxh() {
         assert_eq!(parse_resolution("800x600"), Some((800.0, 600.0)));
         assert_eq!(parse_resolution("390x844"), Some((390.0, 844.0)));
-        // Capital X is accepted too.
         assert_eq!(parse_resolution("1024X768"), Some((1024.0, 768.0)));
-        // Surrounding whitespace is trimmed.
         assert_eq!(parse_resolution(" 640 x 480 "), Some((640.0, 480.0)));
     }
 
     #[test]
     fn rejects_non_resolution_values() {
-        // A plain toggle value must not parse as a resolution.
-        assert_eq!(parse_resolution("1"), None);
+        assert_eq!(parse_resolution("1"), None, "a plain toggle value");
         assert_eq!(parse_resolution(""), None);
         assert_eq!(parse_resolution("wide"), None);
         assert_eq!(parse_resolution("800x"), None);
@@ -292,9 +282,9 @@ mod tests {
         assert_eq!(parse_resolution("800x600x3"), None);
     }
 
+    /// Zero or negative dimensions would be nonsense fed to `resolution.set`.
     #[test]
     fn rejects_non_positive_dimensions() {
-        // Zero or negative dimensions would be nonsense fed to `resolution.set`.
         assert_eq!(parse_resolution("0x0"), None);
         assert_eq!(parse_resolution("800x0"), None);
         assert_eq!(parse_resolution("-5x10"), None);

@@ -107,9 +107,9 @@ pub fn register(app: &mut App, name: &'static str) {
         return;
     }
     completion.pending.push(name);
-    // Adding the watcher once per REGISTRANT is deliberate: there is no
-    // cheap "is this system already added" check, and extra copies are
-    // harmless (the `exited` flag makes the body idempotent).
+    // NOTE: once per REGISTRANT is deliberate - there is no cheap "already
+    // added" check, and duplicates are harmless because the `exited` flag
+    // makes the body idempotent.
     app.add_systems(Last, completion_watch);
 }
 

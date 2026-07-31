@@ -32,42 +32,30 @@ pub struct InspectorDebugPlugin;
 
 impl Plugin for InspectorDebugPlugin {
     fn build(&self, app: &mut App) {
-        // Start with debug mode enabled.
         app.insert_resource(DebugEnabled(true));
 
-        // Add the Egui plugin and enable Bevy Inspector defaults.
         app.add_plugins(EguiPlugin::default());
         app.add_plugins(DefaultInspectorConfigPlugin);
 
-        // Render inspector UI only when debug mode is enabled.
         app.add_systems(
             EguiPrimaryContextPass,
             inspector_ui.run_if(resource_equals(DebugEnabled(true))),
         );
 
-        // Disable auto creation of the primary Egui context.
-        // We want to assign it manually when cameras are added.
+        // NOTE: auto-creation stays off - `keep_inspector_on_window_camera`
+        // owns primary-context placement, and both would fight over it.
         app.insert_resource(bevy_egui::EguiGlobalSettings {
             auto_create_primary_context: false,
             ..Default::default()
         });
-
-        // Keep the PrimaryEguiContext parked on a window camera, every
-        // frame. This replaces the old "first camera added wins" observer,
-        // which handed the inspector to whichever camera spawned first -
-        // including render-to-texture cameras, where the egui UI ends up
-        // inside an offscreen image (nova-protocol's target-inset camera,
-        // task 20260710-104421; root-fixed here per 20260712-201603).
         app.add_systems(Update, keep_inspector_on_window_camera);
 
-        // Physics debug plugins.
         app.add_plugins((
             avian3d::prelude::PhysicsDebugPlugin,
             PhysicsDiagnosticsPlugin,
             PhysicsDiagnosticsUiPlugin,
         ));
 
-        // Update debug state each frame.
         app.add_systems(
             Update,
             (enable_physics_gizmos, enable_physics_ui, toggle_debug_mode),
@@ -95,15 +83,12 @@ fn inspector_ui(world: &mut World) {
 
     egui::Window::new("Debug Inspector").show(egui_context.get_mut(), |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            // Full world inspector.
             bevy_inspector_egui::bevy_inspector::ui_for_world(world, ui);
 
-            // Materials section.
             egui::CollapsingHeader::new("Materials").show(ui, |ui| {
                 bevy_inspector_egui::bevy_inspector::ui_for_assets::<StandardMaterial>(world, ui);
             });
 
-            // Entity explorer.
             ui.heading("Entities");
             bevy_inspector_egui::bevy_inspector::ui_for_entities(world, ui);
         });
@@ -127,6 +112,11 @@ fn inspector_ui(world: &mut World) {
 /// "Window" here means any non-`Image` target (`TextureView` included), and
 /// "first" is query order, not spawn order - sufficient for the
 /// single-window debug tooling this serves.
+///
+/// Replaces an earlier "first camera added wins" observer, which handed the
+/// inspector to whichever camera spawned first - including render-to-texture
+/// cameras, where the UI lands inside an offscreen image (nova-protocol's
+/// target-inset camera, tasks 20260710-104421 and 20260712-201603).
 fn keep_inspector_on_window_camera(
     mut commands: Commands,
     q_cameras: Query<(Entity, Option<&RenderTarget>, Has<PrimaryEguiContext>), With<Camera>>,
@@ -139,12 +129,11 @@ fn keep_inspector_on_window_camera(
     for (entity, target, has_context) in &q_cameras {
         if renders_to_image(target) {
             if has_context {
-                // Shed the WHOLE egui cluster, not just the marker:
-                // `PrimaryEguiContext` requires `EguiContext` (which does
-                // not cascade on removal) and its on_insert hook adds
-                // `EguiMultipassSchedule` under multipass - leaving either
-                // behind means two entities run the same egui schedule and
-                // bevy_egui panics on the next pass.
+                // NOTE: shed the WHOLE egui cluster, not just the marker.
+                // `PrimaryEguiContext` requires `EguiContext` (no cascade on
+                // removal) and its on_insert hook adds
+                // `EguiMultipassSchedule`; leaving either behind means two
+                // entities run the same egui schedule and bevy_egui panics.
                 commands
                     .entity(entity)
                     .remove::<(PrimaryEguiContext, EguiContext, EguiMultipassSchedule)>();
@@ -203,11 +192,11 @@ mod tests {
         RenderTarget::Image(Handle::default().into())
     }
 
+    /// The regression the first-camera-wins observer was replaced for: a
+    /// render-to-texture camera whose `Add` fires first must not own the
+    /// inspector UI (nova-protocol's target inset, task 20260710-104421).
     #[test]
     fn an_rtt_camera_spawned_first_never_takes_the_context() {
-        // The regression this replaces the first-camera-wins observer for:
-        // a render-to-texture camera whose Add fires first must not own the
-        // inspector UI (nova-protocol's target inset, task 20260710-104421).
         let mut app = rig();
         let rtt = app
             .world_mut()
@@ -229,9 +218,6 @@ mod tests {
 
     #[test]
     fn the_context_rehomes_when_its_holder_becomes_rtt() {
-        // Retargeting a live camera to an image must hand the inspector to
-        // a window camera - placement is a per-frame reconcile, not a
-        // spawn-time decision.
         let mut app = rig();
         let first = app.world_mut().spawn(Camera::default()).id();
         let second = app.world_mut().spawn(Camera::default()).id();
@@ -300,7 +286,6 @@ mod rehome_hazard_tests {
             "the hook must arm the holder's multipass schedule (rig guard)"
         );
 
-        // Retarget the holder to an image: the reconcile rehomes the context.
         app.world_mut()
             .entity_mut(first)
             .insert(RenderTarget::Image(Handle::default().into()));

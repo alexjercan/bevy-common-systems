@@ -4,9 +4,8 @@
 
 pub mod audio;
 pub mod camera;
-// Ungated on purpose: the harness completion protocol is a dependency-free
-// coordination primitive that feature-less consumers (a frame capture that
-// also builds for wasm) must be able to reference; the harness PLUGINS that
+// NOTE: ungated on purpose - feature-less consumers (a wasm frame capture)
+// must reference the completion protocol; only the harness PLUGINS that
 // register into it stay behind `debug`.
 pub mod completion;
 #[cfg(feature = "debug")]

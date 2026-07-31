@@ -41,19 +41,12 @@ pub struct WireframeDebugPlugin;
 
 impl Plugin for WireframeDebugPlugin {
     fn build(&self, app: &mut App) {
-        // Start with wireframe mode enabled.
         app.insert_resource(DebugEnabled(true));
-
-        // Register the built in Bevy wireframe plugin.
         app.add_plugins(WireframePlugin::default());
-
-        // Configure global wireframe rendering.
         app.insert_resource(WireframeConfig {
             global: true,
             ..default()
         });
-
-        // Update the wireframe state and listen for toggle input.
         app.add_systems(Update, (enable_wireframe, toggle_debug_mode));
     }
 }
