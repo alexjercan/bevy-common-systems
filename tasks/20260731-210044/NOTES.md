@@ -254,3 +254,41 @@ Also considered and rejected:
 - **`debug = 0` globally.** Buys a few GB at the cost of test backtraces
   pointing at nothing. The dependency-scoped override gets most of the saving
   and keeps them.
+
+## Post-landing: sampled per-link peaks are lower bounds
+
+Added 2026-07-31 after the task closed, from the nova-protocol session's
+independent measurement on the same box. It does not change the shipped cap,
+but it changes how much confidence the per-link number deserves.
+
+`sample-peak-rss.sh` polls once a second. That is fine for a whole-run bound and
+misleading for a single link: rust-lld's RSS ramps and peaks narrowly near the
+end of the link, so a 1-second grid usually samples the ramp. Measured there on
+one link, same class as ours:
+
+| Method | Largest single rust-lld |
+| --- | --- |
+| 1s sampler, whole-suite run | 2.14 GiB |
+| `time -v` on an isolated `-j1` link | 2.93 GiB |
+
+`time -v` reads `wait4`'s `ru_maxrss` and structurally cannot miss a peak, so
+the sampler under-reported by ~27% on a link lasting several seconds -- not a
+case of missing the process, just of missing its spike.
+
+Consequences for the numbers above:
+
+- The 3.0 GB largest `rust-lld` on `--features debug` is a floor; the true
+  figure is plausibly ~3.8 GB. Do not shave the divisor against it.
+- The whole-run totals (11.6 / 10.6 / 13.5 / 9.9 GB) are much less affected:
+  with N links in flight the sum smooths any individual miss. The cap is sized
+  off 13.5 GB, so the conclusion stands.
+- Tightening the interval is the wrong fix -- `ps -eo rss` at 100ms across a
+  24-core storm perturbs what it measures. Use the sampler for whole-run bounds
+  and `time -v` at `-j1` for per-link numbers.
+
+Related: the withdrawn 13.1 GB figure was taken under
+`systemd-run -p MemoryMax=24G`. A memory ceiling changes reclaim and page-cache
+behaviour, so a link that would peak at 3 GB unconstrained can complete under
+the cap by reclaiming instead. Any `-m` run is a different experiment, not a
+comparable one -- which is a second, independent reason that figure could not be
+reconciled with the others.
