@@ -116,7 +116,7 @@ impl Plugin for FlashPlugin {
     fn build(&self, app: &mut App) {
         debug!("FlashPlugin: build");
 
-        // The ease-back / completion ride on a `Tween<f32>`; make sure it runs.
+        // NOTE: the ease-back rides a `Tween<f32>`; add TweenPlugin only if the game has not.
         if !app.is_plugin_added::<TweenPlugin>() {
             app.add_plugins(TweenPlugin);
         }
@@ -192,8 +192,7 @@ fn on_insert_flash(
         return;
     };
 
-    // Already flashing: re-pop from full by rebuilding the tween, reusing the
-    // existing clone/original (and clearing any finished marker).
+    // NOTE: already flashing -- reuse the clone/original; removing TweenFinished re-arms the tween.
     if q_state.contains(entity) {
         commands
             .entity(entity)
@@ -203,13 +202,12 @@ fn on_insert_flash(
     }
 
     let Ok(mesh_material) = q_material.get(entity) else {
-        // No StandardMaterial to flash: drop the Flash so it does not linger.
         commands.entity(entity).remove::<Flash>();
         return;
     };
 
     let original = mesh_material.0.clone();
-    // Own the source material before `add` so the immutable borrow ends first.
+    // NOTE: `.cloned()` ends the immutable borrow before `add` takes a mutable one.
     let Some(source) = materials.get(&original).cloned() else {
         commands.entity(entity).remove::<Flash>();
         return;
@@ -270,8 +268,7 @@ fn animate_flash(
     for (flash, state, fade) in q_flash.iter() {
         let k = fade.value();
 
-        // Read the original channel value first (a Copy), then mutate the clone,
-        // so the two Assets borrows do not overlap.
+        // NOTE: read the original channel (a Copy) before `get_mut`, so the Assets borrows do not overlap.
         let Some(original) = materials.get(&state.original) else {
             continue;
         };
@@ -297,13 +294,10 @@ mod tests {
     fn flash_mix_endpoints_and_midpoint() {
         let orig = LinearRgba::new(0.1, 0.2, 0.3, 1.0);
         let flash = LinearRgba::new(1.0, 0.0, 0.0, 1.0);
-        // k = 1 -> fully flash (alpha kept from original).
         let hot = flash_mix(orig, flash, 1.0);
         assert!((hot.red - 1.0).abs() < 1e-6 && hot.green.abs() < 1e-6);
-        // k = 0 -> fully original.
         let cold = flash_mix(orig, flash, 0.0);
         assert!((cold.red - 0.1).abs() < 1e-6 && (cold.blue - 0.3).abs() < 1e-6);
-        // k = 0.5 -> halfway on each channel.
         let mid = flash_mix(orig, flash, 0.5);
         assert!((mid.red - 0.55).abs() < 1e-6);
         assert!((mid.green - 0.1).abs() < 1e-6);
@@ -313,7 +307,6 @@ mod tests {
     fn flash_mix_clamps_and_keeps_alpha() {
         let orig = LinearRgba::new(0.0, 0.0, 0.0, 0.5);
         let flash = LinearRgba::new(1.0, 1.0, 1.0, 1.0);
-        // k past 1 clamps to the flash color; original alpha (0.5) is preserved.
         let v = flash_mix(orig, flash, 2.0);
         assert!((v.red - 1.0).abs() < 1e-6);
         assert!((v.alpha - 0.5).abs() < 1e-6);
@@ -339,7 +332,6 @@ mod tests {
     fn flash_clones_the_material_leaving_shared_users_untouched() {
         let mut app = flash_app();
 
-        // One shared material handle on two entities.
         let shared = app
             .world_mut()
             .resource_mut::<Assets<StandardMaterial>>()
@@ -351,16 +343,14 @@ mod tests {
         let flashed = app.world_mut().spawn(MeshMaterial3d(shared.clone())).id();
         let bystander = app.world_mut().spawn(MeshMaterial3d(shared.clone())).id();
 
-        // Flash the first entity's emissive white.
         app.world_mut().entity_mut(flashed).insert(Flash {
             color: Color::WHITE,
             duration: 0.5,
             channel: FlashChannel::Emissive,
         });
-        // Flush the on_add observer + run one animate step.
+        // NOTE: one step flushes the insert observer AND runs animate once; both are needed below.
         step(&mut app, 50);
 
-        // The flashed entity is now on a distinct clone handle...
         let flashed_handle = app
             .world()
             .get::<MeshMaterial3d<StandardMaterial>>(flashed)
@@ -371,14 +361,12 @@ mod tests {
             flashed_handle, shared,
             "flashed entity should be on a clone"
         );
-        // ...whose emissive has been pushed toward the flash color.
         let mats = app.world().resource::<Assets<StandardMaterial>>();
         assert!(
             mats.get(&flashed_handle).unwrap().emissive.red > 0.5,
             "flashed clone should be lit toward white"
         );
 
-        // The bystander still points at the shared material, and it is untouched.
         let bystander_handle = app
             .world()
             .get::<MeshMaterial3d<StandardMaterial>>(bystander)
@@ -425,12 +413,11 @@ mod tests {
             .get(&clone)
             .is_some());
 
-        // Run past the duration.
+        // NOTE: 5 x 100ms is well past the 0.2s duration, so the tween has landed.
         for _ in 0..5 {
             step(&mut app, 100);
         }
 
-        // The original handle is restored and Flash/FlashState are gone.
         let restored = app
             .world()
             .get::<MeshMaterial3d<StandardMaterial>>(flashed)
@@ -445,7 +432,6 @@ mod tests {
             app.world().get::<Flash>(flashed).is_none(),
             "Flash should be removed"
         );
-        // The clone asset is freed (no leak).
         assert!(
             app.world()
                 .resource::<Assets<StandardMaterial>>()
@@ -455,6 +441,8 @@ mod tests {
         );
     }
 
+    /// Re-inserting `Flash` mid-flash must reset elapsed so the flash re-pops
+    /// from full, and must reuse the existing clone rather than leaking a second.
     #[test]
     fn reflashing_restarts_the_animation() {
         let mut app = flash_app();
@@ -470,7 +458,7 @@ mod tests {
             duration: 0.5,
             channel: FlashChannel::Emissive,
         });
-        // Age the flash most of the way through (elapsed ~0.4 of 0.5).
+        // NOTE: 4 x 100ms ages elapsed to ~0.4 of the 0.5s duration, near restored.
         for _ in 0..4 {
             step(&mut app, 100);
         }
@@ -481,8 +469,6 @@ mod tests {
             .0
             .clone();
 
-        // Re-flash: On<Insert> must reset elapsed so it re-pops from full and
-        // reuses the same clone (no leak of a second clone).
         app.world_mut().entity_mut(flashed).insert(Flash {
             color: Color::WHITE,
             duration: 0.5,
@@ -490,7 +476,6 @@ mod tests {
         });
         step(&mut app, 50);
 
-        // Same clone handle (not a fresh one).
         let after = app
             .world()
             .get::<MeshMaterial3d<StandardMaterial>>(flashed)
@@ -498,8 +483,8 @@ mod tests {
             .0
             .clone();
         assert_eq!(after, clone, "re-flash should reuse the existing clone");
-        // Still bright: at elapsed ~0.05 of 0.5 the emissive is near-full white,
-        // which it would NOT be had elapsed stayed at ~0.45 (near restored).
+        // NOTE: 0.8 discriminates -- at the restarted elapsed ~0.05 of 0.5 the emissive is
+        // near-full white, which it would NOT be had elapsed stayed at ~0.45.
         let emissive = app
             .world()
             .resource::<Assets<StandardMaterial>>()
@@ -516,7 +501,6 @@ mod tests {
     #[test]
     fn flash_without_material_is_dropped() {
         let mut app = flash_app();
-        // An entity with no MeshMaterial3d: the Flash must not linger.
         let ent = app.world_mut().spawn(Flash::default()).id();
         app.update();
         assert!(
@@ -551,7 +535,6 @@ mod tests {
             .get(&clone)
             .is_some());
 
-        // Despawn while still flashing; the remove observer must free the clone.
         app.world_mut().entity_mut(flashed).despawn();
         app.update();
         assert!(

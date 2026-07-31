@@ -55,8 +55,8 @@ mod tests {
         let mat = glowing_material(base, glow);
         assert_eq!(mat.base_color, base);
         assert_eq!(mat.emissive, glow);
-        // The whole point of the helper: never `unlit`, or the emissive would
-        // not be applied and the material would not bloom.
+        // NOTE: never `unlit` -- that skips the lighting pass where emissive applies, so it
+        // would not bloom.
         assert!(!mat.unlit);
     }
 }

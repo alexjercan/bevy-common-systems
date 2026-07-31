@@ -71,8 +71,7 @@ impl Plugin for SmoothLookRotationPlugin {
 
         app.add_observer(initialize_smooth_look_system);
 
-        // I am using PostUpdate here to ensure that this runs after any input or other systems
-        // that might modify the target angle.
+        // NOTE: PostUpdate, so the target angle written by Update input systems is already current.
         app.add_systems(
             PostUpdate,
             smooth_look_rotation_update_system.in_set(SmoothLookRotationSystems::Sync),

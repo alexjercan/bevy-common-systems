@@ -148,6 +148,8 @@ fn rebuild_lines(
 mod tests {
     use super::*;
 
+    /// Including when the list shrinks: the panel rebuilds down, despawning the
+    /// lines it no longer needs.
     #[test]
     fn the_panel_renders_one_line_per_objective() {
         let mut app = App::new();
@@ -161,7 +163,6 @@ mod tests {
         let children = app.world().get::<Children>(panel).expect("panel children");
         assert_eq!(children.len(), 2);
 
-        // Shrinking the list rebuilds down to one line (old lines are despawned).
         app.world_mut().resource_mut::<GameObjectives>().objectives =
             vec![Objective::new("a", "Alpha")];
         app.update();

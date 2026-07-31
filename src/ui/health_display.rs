@@ -130,21 +130,22 @@ mod tests {
         assert_eq!(display_percent(115.0, 230.0), 50);
     }
 
+    /// Any health above zero must read at least 1%, or a living ship reads dead.
+    /// At and above 1% the value rounds normally again.
     #[test]
     fn living_sliver_ceils_to_one_percent() {
-        // 0.4 / 230 = 0.17%, which would round to 0% - a living ship must not read dead.
+        // NOTE: of 230, 0.4 is the 0.17% sliver that would round to 0, and 2.29 vs 2.30
+        // straddles the 1% boundary where ceiling hands back over to rounding.
         assert_eq!(display_percent(0.4, 230.0), 1);
-        // Just under 1% still ceils up.
         assert_eq!(display_percent(2.29, 230.0), 1);
-        // At/above 1% rounds normally.
         assert_eq!(display_percent(2.3, 230.0), 1);
         assert_eq!(display_percent(3.45, 230.0), 2);
     }
 
+    /// A section-less root aggregate writes `Health { current: 0, max: 0 }`;
+    /// dividing by that max would render "NaN%", so it must read 0% instead.
     #[test]
     fn non_positive_max_reads_zero_not_nan() {
-        // A section-less root aggregate writes Health { current: 0, max: 0 };
-        // dividing would render "NaN%" - it must read 0% instead.
         assert_eq!(display_percent(0.0, 0.0), 0);
         assert_eq!(display_percent(5.0, 0.0), 0);
         assert_eq!(display_percent(1.0, -10.0), 0);

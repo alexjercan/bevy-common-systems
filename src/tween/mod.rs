@@ -225,9 +225,8 @@ fn advance_tween<T: TweenValue>(
 ) {
     let dt = time.delta_secs();
     for (entity, mut tween) in q_tween.iter_mut() {
-        // The completion policy fires exactly once; a `Keep` tween is left in
-        // place afterwards, so guard on `completed`, not `finished` (a
-        // zero-duration tween is `finished` from the start but not yet applied).
+        // NOTE: guard on `completed`, not `finished` -- a `Keep` tween stays in place after
+        // completing, and a zero-duration tween is `finished` before it is ever applied.
         if tween.completed {
             continue;
         }
@@ -235,12 +234,8 @@ fn advance_tween<T: TweenValue>(
         tween.advance(dt);
         if tween.finished() {
             tween.completed = true;
-            // Use the fallible `try_*` commands: another system (or an observer fired
-            // during a prior flush) may despawn this entity between here and when the
-            // command buffer applies -- a `feedback/flash` tween on an enemy the kill
-            // chain removes, a `ui/popup` fade whose node is despawned, etc. The plain
-            // `entity(..).insert/despawn` panics on a stale entity ("Entity despawned");
-            // the `try_*` variants are no-ops instead.
+            // NOTE: `try_*` only -- another system may despawn this entity before the buffer
+            // applies, and the plain commands panic with "Entity despawned".
             match tween.on_complete {
                 TweenOnComplete::Keep => {
                     commands.entity(entity).try_insert(TweenFinished);
@@ -304,13 +299,12 @@ mod tests {
 
     #[test]
     fn easing_bends_the_value_off_the_linear_line() {
-        // A non-linear ease is not at the midpoint value at the time midpoint.
         let mut linear_t = linear(0.0, 1.0, 1.0);
         let mut eased_t = Tween::new(0.0, 1.0, 1.0, EaseFunction::QuadraticIn);
         linear_t.advance(0.5);
         eased_t.advance(0.5);
         assert!((linear_t.value() - 0.5).abs() < 1e-6);
-        // QuadraticIn(0.5) = 0.25, well below the linear 0.5.
+        // NOTE: 0.4 sits between QuadraticIn(0.5) = 0.25 and the linear 0.5.
         assert!(eased_t.value() < 0.4);
     }
 
@@ -326,10 +320,12 @@ mod tests {
         assert!((t.value() - Vec3::new(0.5, 1.0, 2.0)).length() < 1e-6);
     }
 
-    // A zero-duration tween is `finished` from the start; these drive the plugin
-    // one frame and check each completion policy fires exactly once (the
-    // `completed`-flag path), which also covers the "completes on first advance"
-    // contract deterministically without a controllable clock.
+    /// Drive the plugin one frame over a tween, returning the entity so the caller
+    /// can assert its completion policy fired.
+    ///
+    /// The callers pass a zero-duration tween, which is `finished` from the start:
+    /// that makes the `completed`-flag path fire on the first frame deterministically,
+    /// without needing a controllable clock.
     fn app_with_tween(tween: Tween<f32>) -> (App, Entity) {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, TweenPlugin));
@@ -349,7 +345,7 @@ mod tests {
 
     #[test]
     fn remove_policy_drops_the_tween_but_keeps_the_entity() {
-        // `Tween::new` defaults to Remove.
+        // NOTE: no `with_on_complete` -- `Tween::new` already defaults to Remove.
         let (app, e) = app_with_tween(Tween::new(0.0, 1.0, 0.0, EaseFunction::Linear));
         assert!(app.world().get_entity(e).is_ok(), "entity survives");
         assert!(!app.world().entity(e).contains::<Tween<f32>>());
@@ -364,14 +360,6 @@ mod tests {
         );
         assert!(app.world().get_entity(e).is_err(), "entity is despawned");
     }
-
-    // Regression for the P100 breach crash: a tween completes and queues its completion
-    // command, but the entity is despawned by ANOTHER system before the command buffer
-    // applies (a flash tween on a killed enemy, a popup node despawned mid-fade). The
-    // despawner is ordered BEFORE `advance_tween`, so its despawn is queued first and
-    // applies first; `advance_tween`'s completion command then lands on a stale entity.
-    // With the plain `entity(..).insert/despawn` this panicked with "Entity despawned";
-    // the `try_*` commands make it a clean no-op.
 
     #[derive(Component)]
     struct Doomed;
@@ -421,7 +409,7 @@ mod tests {
 
     #[test]
     fn remove_completion_does_not_panic_if_entity_despawned_first() {
-        // `Tween::new` defaults to Remove (remove the tween + insert TweenFinished).
+        // NOTE: no `with_on_complete` -- `Tween::new` already defaults to Remove.
         let (app, e) = app_with_doomed_tween(Tween::new(0.0, 1.0, 0.0, EaseFunction::Linear));
         assert!(
             app.world().get_entity(e).is_err(),

@@ -92,7 +92,7 @@ impl Plugin for PopupPlugin {
     fn build(&self, app: &mut App) {
         debug!("PopupPlugin: build");
 
-        // The fade / despawn ride on a `Tween<f32>`; make sure it is advanced.
+        // NOTE: the fade rides a `Tween<f32>`; add TweenPlugin only if the game has not.
         if !app.is_plugin_added::<TweenPlugin>() {
             app.add_plugins(TweenPlugin);
         }
@@ -221,7 +221,7 @@ mod tests {
             ))
             .id();
 
-        // One 100ms step: the popup rose (top decreased) and faded (alpha < 1).
+        // NOTE: one 100ms step is mid-lifetime, so the popup is caught risen but not yet gone.
         step(&mut app, 100);
         let node = app.world().get::<Node>(ent).unwrap();
         let Val::Px(top) = node.top else {
@@ -237,7 +237,7 @@ mod tests {
             "alpha should be fading: {alpha}"
         );
 
-        // Past the lifetime the popup despawns itself.
+        // NOTE: 100 + 6 x 100ms is past the popup's lifetime, so the tween lands and despawns it.
         for _ in 0..6 {
             step(&mut app, 100);
         }
@@ -247,10 +247,10 @@ mod tests {
         );
     }
 
+    /// The animate system queries `Node` / `TextColor` optionally, so a `Popup`
+    /// with neither still ages and despawns rather than leaking.
     #[test]
     fn bare_popup_without_node_or_text_despawns() {
-        // The animate system queries Node/TextColor optionally so a Popup with
-        // neither still ages and despawns (rather than leaking).
         let mut app = App::new();
         app.init_resource::<Time>();
         app.add_plugins(PopupPlugin);

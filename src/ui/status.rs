@@ -1,6 +1,11 @@
 //! The Status plugin provides a simple status bar UI for displaying different metrics.
-//! The idea is it should be easy to add what metrics to display via generic components
-//! Then you update the components and the ststaus bar updates automatically.
+//! The idea is it should be easy to add what metrics to display via generic components.
+//! Then you update the components and the status bar updates automatically.
+//!
+//! Keep the `value_fn` closures cheap: they take `&World`, so they run in an
+//! exclusive system that blocks all parallel system execution, once per frame.
+//! (`color_fn` takes the produced value, not the world, and runs in an ordinary
+//! parallel system.)
 
 use std::{any::Any, fmt::Display, sync::Arc};
 
@@ -126,10 +131,10 @@ impl Plugin for StatusBarPlugin {
     }
 }
 
-// If you really need full, immediate read/write access to the world or resources, you can use an
-// "exclusive system".
-// WARNING: These will block all parallel execution of other systems until they finish, so they
-// should generally be avoided if you want to maximize parallelism.
+/// Run every item's `value_fn` against the world and stage the results.
+///
+/// Exclusive (`&mut World`), because the closures take `&World`: it blocks all
+/// parallel system execution while it runs, every frame. Keep the closures cheap.
 fn update_status_bar_item_values(world: &mut World) {
     let mut query =
         world.query_filtered::<(Entity, &StatusBarItemValueFnBoxed), With<StatusBarItemValue>>();

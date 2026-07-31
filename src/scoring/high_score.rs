@@ -114,6 +114,8 @@ mod tests {
         assert!(!hs.is_new_best());
     }
 
+    /// A lower score neither becomes the best nor sets the per-run flag; a higher
+    /// one does both.
     #[test]
     fn record_updates_and_reports_a_new_best() {
         let mut hs = HighScore::<u32>::default();
@@ -121,12 +123,10 @@ mod tests {
         assert_eq!(hs.best(), 10);
         assert!(hs.is_new_best());
 
-        // A lower score is not a new best and does not lower the best.
         assert!(!hs.record(4));
         assert_eq!(hs.best(), 10);
         assert!(!hs.is_new_best());
 
-        // A higher score is a new best.
         assert!(hs.record(15));
         assert_eq!(hs.best(), 15);
     }
@@ -162,7 +162,6 @@ mod tests {
         hs.record(42);
         assert!(hs.is_new_best());
         let json = serde_json::to_string(&hs).unwrap();
-        // Only the best is stored; the per-run flag is skipped.
         assert_eq!(json, "{\"best\":42}");
         let loaded: HighScore<u32> = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.best(), 42);

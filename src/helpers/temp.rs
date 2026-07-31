@@ -63,7 +63,7 @@ impl Plugin for TempEntityPlugin {
 
         app.add_observer(on_insert_temp_entity);
 
-        // Update stage ensures timers advance correctly with the frame delta.
+        // NOTE: Update, so the timers tick with the frame delta.
         app.add_systems(
             Update,
             (update_temp_entities,)

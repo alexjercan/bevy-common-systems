@@ -69,14 +69,11 @@ impl Plugin for WASDCameraControllerPlugin {
     fn build(&self, app: &mut App) {
         debug!("WASDCameraControllerPlugin: build");
 
-        // Add input context for the WASD camera
         app.add_input_context::<WASDCameraInputMarker>();
 
-        // Observers for setup and teardown
         app.add_observer(setup_wasd_camera);
         app.add_observer(destroy_wasd_camera);
 
-        // Observers for input actions
         app.add_observer(on_wasd_input);
         app.add_observer(on_wasd_input_completed);
         app.add_observer(on_mouse_input);

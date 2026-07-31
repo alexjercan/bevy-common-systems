@@ -103,7 +103,7 @@ impl Plugin for ScreenFlashPlugin {
     fn build(&self, app: &mut App) {
         debug!("ScreenFlashPlugin: build");
 
-        // The decay / despawn ride on a `Tween<f32>`; make sure it is advanced.
+        // NOTE: the decay rides a `Tween<f32>`; add TweenPlugin only if the game has not.
         if !app.is_plugin_added::<TweenPlugin>() {
             app.add_plugins(TweenPlugin);
         }
@@ -136,8 +136,7 @@ fn on_insert_screen_flash(
     };
     trace!("on_insert_screen_flash: entity {:?}", entity);
 
-    // A zero (or negative) decay holds at the peak forever; an infinite duration
-    // makes the tween never advance off its start.
+    // NOTE: a non-positive decay must hold at the peak forever; INFINITY keeps the tween on its start.
     let duration = if flash.decay > 0.0 {
         1.0 / flash.decay
     } else {
@@ -155,8 +154,7 @@ fn on_insert_screen_flash(
             Tween::new(flash.peak_alpha, 0.0, duration, EaseFunction::Linear)
                 .with_on_complete(on_complete),
         )
-        // Clear a finished marker from a previous decay so the fresh tween starts
-        // clean on a re-spike.
+        // NOTE: a finished marker from the previous decay would leave the re-spiked tween landed.
         .remove::<TweenFinished>();
 }
 
@@ -232,24 +230,22 @@ mod tests {
             .spawn((
                 ScreenFlash {
                     peak_alpha: 0.5,
-                    // Zero decay so intensity holds at the spike for this check.
+                    // NOTE: zero decay holds intensity at the spike for this check.
                     decay: 0.0,
                     despawn_on_end: false,
                 },
                 BackgroundColor(red.with_alpha(0.0)),
             ))
             .id();
-        // Flush the insert observer + one animate step.
+        // NOTE: one step flushes the insert observer AND runs animate once; both are needed below.
         step(&mut app, 16);
 
-        // Intensity spiked to full, so alpha is the full peak...
         let bg = app.world().get::<BackgroundColor>(ent).unwrap().0;
         assert!(
             (bg.alpha() - 0.5).abs() < 1e-6,
             "insert should spike to peak alpha, got {}",
             bg.alpha()
         );
-        // ...and the RGB tint is preserved (only alpha is animated).
         let lin = bg.to_linear();
         let red_lin = red.to_linear();
         assert!((lin.red - red_lin.red).abs() < 1e-6);
@@ -265,7 +261,7 @@ mod tests {
             .spawn(screen_flash(Color::srgb(0.9, 0.1, 0.1), 0.5, 2.0))
             .id();
 
-        // Halfway through the 0.5s life: intensity ~0.5, alpha ~0.25.
+        // NOTE: 250ms is half the 0.5s life (decay 2.0), so alpha lands at half the 0.5 peak.
         step(&mut app, 250);
         let bg = app.world().get::<BackgroundColor>(ent).unwrap().0;
         assert!(
@@ -278,7 +274,7 @@ mod tests {
             "overlay should still exist mid-fade"
         );
 
-        // Past the full life: intensity hits zero and despawn_on_end despawns it.
+        // NOTE: 250 + 400ms is past the 0.5s life, so the tween lands and despawn_on_end fires.
         step(&mut app, 400);
         assert!(
             app.world().get_entity(ent).is_err(),
@@ -302,7 +298,7 @@ mod tests {
             ))
             .id();
 
-        // Let it decay fully to transparent; it must NOT despawn.
+        // NOTE: 10 x 100ms is past the 1/3s life, so the fade completes before the assert.
         for _ in 0..10 {
             step(&mut app, 100);
         }
@@ -313,7 +309,6 @@ mod tests {
         let faded = app.world().get::<BackgroundColor>(ent).unwrap().0.alpha();
         assert!(faded < 0.02, "should be near transparent, got {}", faded);
 
-        // Re-insert to re-spike: alpha jumps back to the peak.
         app.world_mut().entity_mut(ent).insert(ScreenFlash {
             peak_alpha: 0.4,
             decay: 3.0,

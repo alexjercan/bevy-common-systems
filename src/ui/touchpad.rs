@@ -234,6 +234,10 @@ fn apply_touch_reveal(
 mod tests {
     use super::*;
 
+    /// Columns map in order, the far edges clamp into the first / last column
+    /// rather than going out of range, and a point outside the zone, an
+    /// off-window x, a zero-size window and a zero-column grid are all misses
+    /// rather than panics.
     #[test]
     fn button_grid_maps_columns_and_rejects_misses() {
         let win = Vec2::new(800.0, 600.0);
@@ -243,7 +247,6 @@ mod tests {
         let in_strip_y = (strip_top + win.y) * 0.5;
         let cols = 4;
 
-        // Each quarter-width column maps to its index, in order.
         for i in 0..cols {
             let x = (i as f32 + 0.5) / cols as f32 * win.x;
             assert_eq!(
@@ -252,13 +255,11 @@ mod tests {
             );
         }
 
-        // A point above the strip is a miss even if horizontally over a column.
         assert_eq!(
             button_grid_at(Vec2::new(win.x * 0.5, strip_top - 1.0), win, cols, 1, zone),
             None
         );
 
-        // The far edges clamp into the first / last column, never out of range.
         assert_eq!(
             button_grid_at(Vec2::new(0.0, in_strip_y), win, cols, 1, zone),
             Some(0)
@@ -268,7 +269,6 @@ mod tests {
             Some(cols - 1)
         );
 
-        // Off-window x, and a degenerate window / grid, are misses, not panics.
         assert_eq!(
             button_grid_at(Vec2::new(-1.0, in_strip_y), win, cols, 1, zone),
             None
@@ -288,7 +288,6 @@ mod tests {
     fn button_grid_maps_rows_row_major() {
         let win = Vec2::new(100.0, 100.0);
         let zone = Rect::new(0.0, 0.0, 1.0, 1.0);
-        // 2x2 grid over the whole window: quadrants map row-major 0,1 / 2,3.
         assert_eq!(
             button_grid_at(Vec2::new(25.0, 25.0), win, 2, 2, zone),
             Some(0)
@@ -307,26 +306,24 @@ mod tests {
         );
     }
 
+    /// Offsets inside the dead zone (and the degenerate origin) give no
+    /// deflection, the dead-zone-to-radius span maps onto 0..1, and the result
+    /// never leaves the unit disc for any offset.
     #[test]
     fn stick_deflection_maps_and_clamps() {
         let (r, d) = (100.0, 10.0);
-        // Inside the dead zone (and the degenerate origin) produce no deflection.
         assert_eq!(stick_deflection(Vec2::new(d * 0.5, 0.0), r, d), Vec2::ZERO);
         assert_eq!(stick_deflection(Vec2::ZERO, r, d), Vec2::ZERO);
 
-        // At the radius the deflection is full along the drag direction.
         let right = stick_deflection(Vec2::new(r, 0.0), r, d);
         assert!((right - Vec2::X).length() < 1e-4);
 
-        // Past the radius it clamps to the unit disc.
         let past = stick_deflection(Vec2::new(r * 3.0, 0.0), r, d);
         assert!((past - Vec2::X).length() < 1e-4);
 
-        // Midway between dead and radius is a partial deflection (0..1).
         let mid = stick_deflection(Vec2::new(d + (r - d) * 0.5, 0.0), r, d);
         assert!((mid.x - 0.5).abs() < 1e-4);
 
-        // Never leaves the unit disc for any offset.
         for &(x, y) in &[(r, r), (-r, r), (r * 5.0, -r * 5.0), (d + 1.0, d + 1.0)] {
             assert!(stick_deflection(Vec2::new(x, y), r, d).length() <= 1.0 + 1e-4);
         }

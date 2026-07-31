@@ -17,14 +17,15 @@ pub mod prelude {
 #[derive(Component, Clone, Copy, Debug, Reflect)]
 pub struct PointRotation {
     /// Initial rotation of the point - used to compute the initial facing direction.
+    ///
+    /// The default, `Quat::IDENTITY`, means the point faces down the -Z axis with
+    /// up on +Y and right on +X.
     pub initial_rotation: Quat,
 }
 
 impl Default for PointRotation {
     fn default() -> Self {
         Self {
-            // We assume the initial rotation is identity, meaning the point is facing down the -Z
-            // axis, up is +Y, and right is +X.
             initial_rotation: Quat::IDENTITY,
         }
     }
@@ -140,7 +141,8 @@ fn point_rotation_quat(state: PointRotationState) -> Quat {
     let right = state.right.normalize();
     let up = state.right.cross(state.forward).normalize();
 
-    // Local basis: right, up, forward
+    // NOTE: the local basis (right, up, -forward) must stay right-handed -- `from_mat3` on an
+    // improper (det -1) basis returns garbage.
     let mat3 = Mat3::from_cols(right, up, -forward);
     Quat::from_mat3(&mat3)
 }
@@ -149,6 +151,7 @@ fn point_rotation_quat(state: PointRotationState) -> Quat {
 mod test {
     use super::*;
 
+    /// Yawing 90 degrees to the right from the -Z default.
     #[test]
     fn test_compute_point_rotation_1() {
         let initial_state = PointRotationState {
@@ -156,13 +159,13 @@ mod test {
             right: Vec3::X,
         };
 
-        // Rotate 90 degrees to the right (yaw)
         let input = PointRotationInput(Vec2::new(-std::f32::consts::FRAC_PI_2, 0.0));
         let new_state = compute_point_rotation(&initial_state, &input);
         assert!(new_state.forward.abs_diff_eq(Vec3::X, 1e-6));
         assert!(new_state.right.abs_diff_eq(Vec3::Z, 1e-6));
     }
 
+    /// Pitching 90 degrees up from the -Z default; right is unchanged.
     #[test]
     fn test_compute_point_rotation_2() {
         let initial_state = PointRotationState {
@@ -170,13 +173,13 @@ mod test {
             right: Vec3::X,
         };
 
-        // Rotate 90 degrees up (pitch)
         let input = PointRotationInput(Vec2::new(0.0, std::f32::consts::FRAC_PI_2));
         let new_state = compute_point_rotation(&initial_state, &input);
         assert!(new_state.forward.abs_diff_eq(Vec3::Y, 1e-6));
         assert!(new_state.right.abs_diff_eq(Vec3::X, 1e-6));
     }
 
+    /// Combined 45 degrees right and 45 degrees up: yaw and pitch compose.
     #[test]
     fn test_compute_point_rotation_3() {
         let initial_state = PointRotationState {
@@ -184,7 +187,6 @@ mod test {
             right: Vec3::X,
         };
 
-        // Rotate 45 degrees right and 45 degrees up
         let input = PointRotationInput(Vec2::new(
             -std::f32::consts::FRAC_PI_4,
             std::f32::consts::FRAC_PI_4,
@@ -196,6 +198,7 @@ mod test {
         assert!(new_state.right.abs_diff_eq(expected_right, 1e-6));
     }
 
+    /// Yawing 90 degrees to the left: the mirror of test 1.
     #[test]
     fn test_compute_point_rotation_4() {
         let initial_state = PointRotationState {
@@ -203,13 +206,13 @@ mod test {
             right: Vec3::X,
         };
 
-        // Rotate 90 degrees to the left (yaw)
         let input = PointRotationInput(Vec2::new(std::f32::consts::FRAC_PI_2, 0.0));
         let new_state = compute_point_rotation(&initial_state, &input);
         assert!(new_state.forward.abs_diff_eq(Vec3::NEG_X, 1e-6));
         assert!(new_state.right.abs_diff_eq(Vec3::NEG_Z, 1e-6));
     }
 
+    /// Pitching 90 degrees down: the mirror of test 2.
     #[test]
     fn test_compute_point_rotation_5() {
         let initial_state = PointRotationState {
@@ -217,7 +220,6 @@ mod test {
             right: Vec3::X,
         };
 
-        // Rotate -90 degrees down (pitch)
         let input = PointRotationInput(Vec2::new(0.0, -std::f32::consts::FRAC_PI_2));
         let new_state = compute_point_rotation(&initial_state, &input);
         assert!(new_state.forward.abs_diff_eq(Vec3::NEG_Y, 1e-6));

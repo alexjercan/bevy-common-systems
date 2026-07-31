@@ -76,7 +76,7 @@ Derive the working order with `tatr frontier <epic-id>`.
 | 20260731-172223 | 80 | bevy-common-systems | KISS pass: integrity/ + physics/ | x |
 | 20260731-172224 | 70 | bevy-common-systems | KISS pass: mesh/ + meth/ + camera/ | x |
 | 20260731-172232 | 60 | bevy-common-systems | KISS pass: modding/ + persist/ + macros subcrate | x |
-| 20260731-172233 | 50 | bevy-common-systems | KISS pass: feedback/ tween/ ui/ transform/ + small modules | |
+| 20260731-172233 | 50 | bevy-common-systems | KISS pass: feedback/ tween/ ui/ transform/ + small modules | x |
 
 ## Manual Acceptance
 
@@ -87,6 +87,18 @@ Derive the working order with `tatr frontier <epic-id>`.
   and blank lines stripped from both revisions, only an added `assert_eq!`
   message differed), and `NOTES.md` carrying a per-block keep/compact/drop
   call plus code-before-tests measurements. Each sibling owes the same two.
+- From 20260731-172233 (last child), both discharged for its cluster: public
+  API unchanged (`git diff -U0 master -- src` touches no line containing `pub`
+  or `prelude`), and `NOTES.md` carrying a per-block call for all 106 blocks
+  plus code-before-tests numbers behind every split-or-keep decision. It also
+  discharges the epic-wide comment gate:
+  `./scripts/check-comment-tags.sh src bevy_common_systems_macros/src` now
+  exits 0, after that child picked up `src/material.rs`, which its review found
+  no child had claimed.
+- Still open for the epic close: the whole-epic public-API spot-check above,
+  and the user's disposition on `state-what-the-checker-cannot-see`, which hit
+  x3 in the last child and is parked in `LESSONS.md` under Pending promotions
+  for `/lessons`.
 
 ## Notes for the remaining children
 

@@ -140,21 +140,17 @@ fn random_sphere_update_state(
     let dt = time.delta_secs();
 
     for (orbit, mut state, next) in query.iter_mut() {
-        // Interpolate angles toward next
         let delta_theta = next.theta - state.theta;
         let delta_phi = next.phi - state.phi;
 
-        // We can move with angular_speed; i.e. maximum angular change per second
         let max_delta = orbit.angular_speed * dt;
 
-        // Move theta
         let new_theta = if delta_theta.abs() <= max_delta {
             next.theta
         } else {
             state.theta + delta_theta.signum() * max_delta
         };
 
-        // Move phi
         let new_phi = if delta_phi.abs() <= max_delta {
             next.phi
         } else {

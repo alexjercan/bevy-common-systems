@@ -142,7 +142,7 @@ mod tests {
     fn color_vec4_round_trips() {
         let color = Color::srgb(0.2, 0.6, 0.9);
         let back = vec4_to_color(color_to_vec4(color));
-        // Round-trip through linear space is exact for the linear components.
+        // NOTE: compare in linear space -- that is the representation the round-trip preserves.
         let a = color.to_linear();
         let b = back.to_linear();
         assert!((a.red - b.red).abs() < 1e-6);
@@ -151,12 +151,14 @@ mod tests {
         assert!((a.alpha - b.alpha).abs() < 1e-6);
     }
 
+    /// The flash convention is "start bright, ease to the node's colour", so at
+    /// t=0 the tweened value must be white regardless of the target.
+    ///
+    /// The end value -- `color_to_vec4(target)` -- is NOT covered here, since
+    /// advancing a `Tween` needs `TweenPlugin`; the `13_glide` merge flash
+    /// exercises it.
     #[test]
     fn node_flash_starts_bright_white() {
-        // The flash convention is "start bright, ease to the node's colour", so at
-        // t=0 the tweened value must be white regardless of the target. (The end
-        // value -- `color_to_vec4(target)` -- is exercised by the 13_glide merge
-        // flash, since advancing a `Tween` is driven by `TweenPlugin`.)
         let tween = node_flash(Color::srgb(0.1, 0.3, 0.5), 0.2);
         assert_eq!(tween.value(), Vec4::ONE);
     }

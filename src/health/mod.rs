@@ -95,7 +95,6 @@ impl Plugin for HealthPlugin {
     fn build(&self, app: &mut App) {
         debug!("HealthPlugin: build");
 
-        // Listen for damage events and apply them to entities
         app.add_observer(on_damage);
     }
 }
@@ -125,8 +124,8 @@ fn on_damage(
     trace!("on_damage: target {:?}, damage {:?}", target, damage.amount);
 
     let Ok((entity, mut health, destroyed)) = q_health.get_mut(target) else {
-        // No `Health` on this node (e.g. an intermediate transform parent). Leave the
-        // amount unchanged so it keeps bubbling to the next ancestor that does have one.
+        // NOTE: a node with no `Health` absorbs nothing, so leave the amount UNCHANGED
+        // (unlike the zero-health branches below) for the next ancestor that has one.
         trace!("on_damage: entity {:?} not found in q_health", target);
         return;
     };
@@ -143,7 +142,6 @@ fn on_damage(
         return;
     }
 
-    // Apply at most the node's remaining health, and propagate only what landed.
     let applied = damage.amount.min(health.current);
     health.current -= applied;
     damage.amount = applied;
@@ -174,7 +172,6 @@ mod tests {
             .spawn((Health::new(100.0), ChildOf(parent)))
             .id();
 
-        // A 1000-damage hit on the 100 hp child.
         app.world_mut().trigger(HealthApplyDamage {
             entity: child,
             source: None,
@@ -182,11 +179,9 @@ mod tests {
         });
         app.world_mut().flush();
 
-        // The child is destroyed...
         assert_eq!(app.world().get::<Health>(child).unwrap().current, 0.0);
         assert!(app.world().get::<HealthZeroMarker>(child).is_some());
 
-        // ...but the parent loses only the child's 100 and survives.
         assert_eq!(app.world().get::<Health>(parent).unwrap().current, 100.0);
         assert!(app.world().get::<HealthZeroMarker>(parent).is_none());
     }
@@ -225,7 +220,6 @@ mod tests {
             .spawn((Health::new(100.0), ChildOf(parent)))
             .id();
 
-        // Kill the child exactly; parent drops by the child's 100.
         app.world_mut().trigger(HealthApplyDamage {
             entity: child,
             source: None,
@@ -234,7 +228,6 @@ mod tests {
         app.world_mut().flush();
         assert_eq!(app.world().get::<Health>(parent).unwrap().current, 100.0);
 
-        // A second hit on the now-dead child leaves the parent untouched.
         app.world_mut().trigger(HealthApplyDamage {
             entity: child,
             source: None,

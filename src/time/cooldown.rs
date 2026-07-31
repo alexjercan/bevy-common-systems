@@ -141,6 +141,8 @@ mod tests {
         assert!((cd.fraction() - 1.0).abs() < 1e-6);
     }
 
+    /// A tick that overshoots clamps at zero rather than going negative, and
+    /// ticking an already-ready cooldown is a no-op.
     #[test]
     fn tick_counts_down_and_becomes_ready() {
         let mut cd = Cooldown::new(1.0);
@@ -148,11 +150,9 @@ mod tests {
         cd.tick(0.4);
         assert!(!cd.ready());
         assert!((cd.remaining() - 0.6).abs() < 1e-6);
-        // Overshoot clamps at zero and becomes ready.
         cd.tick(1.0);
         assert!(cd.ready());
         assert_eq!(cd.remaining(), 0.0);
-        // Ticking a ready cooldown is a no-op.
         cd.tick(1.0);
         assert_eq!(cd.remaining(), 0.0);
     }
@@ -165,12 +165,12 @@ mod tests {
         assert!((cd.fraction() - 1.0).abs() < 1e-6);
     }
 
+    /// A negative window clamps to zero, leaving the cooldown immediately ready.
     #[test]
     fn trigger_for_sets_a_custom_window() {
         let mut cd = Cooldown::new(1.0);
         cd.trigger_for(2.5);
         assert_eq!(cd.remaining(), 2.5);
-        // Negative windows clamp to zero (immediately ready).
         cd.trigger_for(-1.0);
         assert!(cd.ready());
     }

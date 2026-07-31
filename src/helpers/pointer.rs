@@ -12,9 +12,9 @@
 //! [`EnhancedInputPointerPlugin`] owns the whole resource -- both the press
 //! (`pressed`/`just_pressed`, from a `PointerPress` action bound to the left
 //! mouse button and a touch `Binding::Custom`) and the position (`screen_pos`,
-//! an active touch winning over the cursor via
-//! [`active_pointer_pos`](crate::input::pointer::active_pointer_pos)). Use it
-//! *instead of*, not alongside, [`UnifiedPointerPlugin`]: both write
+//! an active touch winning over the cursor via [`active_pointer_pos`]). Use it
+//! *instead of*, not alongside,
+//! [`UnifiedPointerPlugin`](crate::input::pointer::UnifiedPointerPlugin): both write
 //! [`UnifiedPointer`] every frame, so adding both would have them fight.
 //!
 //! Unlike the core module, this pulls in `bevy_enhanced_input` -- which is why it
@@ -73,8 +73,8 @@ impl Plugin for EnhancedInputPointerPlugin {
     fn build(&self, app: &mut App) {
         debug!("EnhancedInputPointerPlugin: build");
 
-        // The enhanced-input runtime may already be present (another controller,
-        // e.g. helpers/wasd, could have added it); only add it once.
+        // NOTE: another controller (e.g. helpers/wasd) may already have added the
+        // enhanced-input runtime; adding it twice panics.
         if !app.is_plugin_added::<EnhancedInputPlugin>() {
             app.add_plugins(EnhancedInputPlugin);
         }
@@ -86,16 +86,15 @@ impl Plugin for EnhancedInputPointerPlugin {
         app.add_observer(on_pointer_press_complete);
 
         app.add_systems(Startup, setup_pointer_action);
-        // Stage the touch value and the pointer position after Bevy reads raw
-        // input and before enhanced-input evaluates the action this frame.
+        // NOTE: staging must land after Bevy reads raw input and before enhanced-input
+        // evaluates the action, or the action sees last frame's touch.
         app.add_systems(
             PreUpdate,
             stage_pointer_input
                 .after(InputSystems)
                 .before(EnhancedInputSystems::Prepare),
         );
-        // `just_pressed` is set by the press observer and holds for exactly one
-        // frame; clearing it at frame end keeps it edge-triggered.
+        // NOTE: clearing in `Last` is what keeps `just_pressed` edge-triggered (one frame).
         app.add_systems(Last, clear_pointer_just_pressed);
     }
 }

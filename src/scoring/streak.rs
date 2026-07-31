@@ -186,20 +186,23 @@ mod tests {
         assert!((s.remaining() - 0.6).abs() < 1e-6);
     }
 
+    /// The streak ends on the tick that crosses the window, reporting its final
+    /// count once; ticking it afterwards is a no-op.
     #[test]
     fn tick_past_window_ends_with_final_count() {
         let mut s = Streak::new(1.0);
         s.hit();
         s.hit();
-        // Two ticks that together exceed the window end the streak on the second.
+        // NOTE: 0.6 + 0.6 straddles the 1.0 window, so only the second tick ends it.
         assert_eq!(s.tick(0.6), None);
         assert_eq!(s.tick(0.6), Some(2));
         assert!(!s.is_active());
         assert_eq!(s.count(), 0);
-        // A tick on an inactive streak is a no-op.
         assert_eq!(s.tick(1.0), None);
     }
 
+    /// A shorter extend is ignored, and extending an inactive streak does not
+    /// revive it.
     #[test]
     fn extend_to_lengthens_but_never_shortens() {
         let mut s = Streak::new(1.0);
@@ -207,10 +210,8 @@ mod tests {
         s.tick(0.5); // 0.5 left
         s.extend_to(2.0);
         assert!((s.remaining() - 2.0).abs() < 1e-6);
-        // A shorter extend does nothing.
         s.extend_to(0.1);
         assert!((s.remaining() - 2.0).abs() < 1e-6);
-        // Extending an inactive streak does nothing.
         let mut idle = Streak::new(1.0);
         idle.extend_to(5.0);
         assert_eq!(idle.remaining(), 0.0);

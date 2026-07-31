@@ -1,7 +1,7 @@
 //! Player input helpers.
 //!
 //! This module collects small, game-agnostic input building blocks:
-//! - [`pointer`] - a unified [`pointer::UnifiedPointer`] resource that collapses
+//! - [`pointer`](mod@pointer) - a unified [`pointer::UnifiedPointer`] resource that collapses
 //!   mouse, touch and cursor into one per-frame abstraction.
 //! - [`cursor`] - lock / release the mouse cursor for mouse-look.
 //!
