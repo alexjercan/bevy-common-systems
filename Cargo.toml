@@ -58,14 +58,31 @@ too_many_arguments = "allow"
 # rust-lld held many multi-GB binaries at once: peak ~38 GB on a 32 GB machine,
 # which thrashed swap ("uses the entire RAM").
 #
-# Two knobs, both measured on this repo (see tasks/20260703-000003/NOTES.md):
+# NOTE: the peak figures below were measured on this repo AT 6 EXAMPLES AND 12
+# DOCTESTS (2026-07-03, tasks/20260703-000003/NOTES.md). They are historical --
+# do not read them as current. The workload grew to 15 examples and 60 doctests
+# and outgrew them; see tasks/20260731-210044/NOTES.md for the current numbers
+# and ./scripts/sample-peak-rss.sh to re-measure after adding targets. Sizing
+# now has two halves that must hold together: this profile caps the size of one
+# linked binary, and flake.nix's shellHook caps how many link at once
+# (CARGO_BUILD_JOBS for lib/examples, RUST_TEST_THREADS for doctests).
+#
 #   split-debuginfo = "unpacked"  -> DWARF stays in the .o files instead of being
 #     copied through the linker into the executable. Full debug info is retained;
-#     linked binary drops to ~350 MB; peak ~19.7 GB.
+#     linked binary drops to ~350 MB; peak was ~19.7 GB at 6 examples.
 #   debug = "line-tables-only"    -> keep file/line for backtraces but drop local
-#     variables; binary ~300 MB; peak ~16.5 GB. This crate debugs at runtime via
-#     bevy-inspector-egui rather than gdb, so losing locals costs nothing here.
-# To restore full local-variable debugging, set `debug = true` (peak ~19.7 GB).
+#     variables; binary ~300 MB; peak was ~16.5 GB at 6 examples. This crate
+#     debugs at runtime via bevy-inspector-egui rather than gdb, so losing
+#     locals costs nothing here.
+# To restore full local-variable debugging, set `debug = true`.
 [profile.dev]
 split-debuginfo = "unpacked"
 debug = "line-tables-only"
+
+# Dependency line tables are the bulk of what survives `line-tables-only` above
+# -- Bevy and avian dwarf this crate's own code -- and a backtrace into engine
+# internals is never what gets read here. Dropping them shrinks every linked
+# binary again while first-party `src/` frames keep their file and line, because
+# the `[profile.dev]` setting still applies to this package.
+[profile.dev.package."*"]
+debug = false
