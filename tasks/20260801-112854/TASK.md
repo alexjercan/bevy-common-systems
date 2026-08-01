@@ -1,10 +1,10 @@
 # Release 0.19.6: changelog, version bump, tag, push
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: chore, release
 - KIND: TASK
-- FLOW STEP: WORKING
+- FLOW STEP: DONE
 - PLAN STATUS: APPROVED
 
 ## Context
@@ -76,10 +76,13 @@ points at it. Resolve as part of the pre-release `lessons` fold.
 - [x] ASCII rule holds for the edited docs
       (cmd: `grep -nP '[^\x00-\x7F]' CHANGELOG.md tasks/20260801-112854/TASK.md`
       finds nothing)
-- [ ] Tag `v0.19.6` exists on the release commit and both are pushed. Ticked at
+- [x] Tag `v0.19.6` exists on the release commit and both are pushed. Ticked at
       LAND time, not on the branch -- the branch cannot satisfy it, and
       `[0.19.6]: ...compare/v0.19.5...v0.19.6` in CHANGELOG.md is a dead link
-      until it is (cmd: `git ls-remote --tags origin v0.19.6`)
+      until it is (cmd: `git ls-remote --tags origin v0.19.6` ->
+      `d40a47be56fee587446019339bccbf8f60470139 refs/tags/v0.19.6`; annotated
+      tag on the merge commit dea012d; `git push origin master` ->
+      `f1be898..dea012d`, `git push origin v0.19.6` -> `* [new tag]`)
 
 ## Notes
 
