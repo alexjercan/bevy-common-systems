@@ -159,7 +159,7 @@ fn main() {
     // Headless verification harness (dev tooling, `debug` feature). Inert unless
     // BCS_AUTOPILOT / BCS_SHOT is set. Replaces the temporary `OVERLOAD_SMOKE`
     // autopilot the earlier cycles hand-rolled and deleted; see
-    // `docs/dev-harness.md`.
+    // `examples/README.md`.
     #[cfg(feature = "debug")]
     {
         app.add_plugins(

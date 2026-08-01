@@ -1,8 +1,10 @@
-# dev harness: autopilot + screenshot state-driver plugins
+# NOTES: dev harness -- autopilot + screenshot state-driver plugins
 
 - DATE: 2026-07-04
 - TASK: `tasks/20260704-175421`
 - SPIKE: `tasks/20260704-175058/SPIKE.md` (Wave 1)
+- Relocated here from `docs/dev-harness.md` (task 20260801-094300); the
+  user-facing half now lives in `examples/README.md`.
 
 ## What this is
 
@@ -70,38 +72,6 @@ transition is physics- or health-driven.
   to wait after a transition" as undecided; the plugin makes it a builder knob
   so a game with slow intro animation can raise it. The reference examples use
   30 to be safe.
-
-## How to use it
-
-```
-# Drive a full menu -> playing -> end cycle headlessly and check for panics:
-BCS_AUTOPILOT=1 cargo run --example 08_dropzone --features debug
-# look for: `autopilot: -> Playing`, `autopilot: -> Result`,
-#           `autopilot: cycle complete, no panic`
-
-# Capture the Playing screen at phone width:
-BCS_SHOT=390x844 cargo run --example 11_overload --features debug
-# writes screenshot.png and exits
-```
-
-In the game's `main()`, behind the same `#[cfg(feature = "debug")]` guard as the
-inspector:
-
-```rust
-#[cfg(feature = "debug")]
-{
-    app.add_plugins(
-        AutopilotPlugin::new()
-            .hold(GameState::Menu, 0.6)
-            .hold(GameState::Playing, 3.0)
-            .hold(GameState::Result, 0.8)
-            .input(|world, _elapsed| {
-                world.resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Space);
-            }),
-    );
-    app.add_plugins(ScreenshotPlugin::new(GameState::Playing).settle_frames(30));
-}
-```
 
 ## Proof
 

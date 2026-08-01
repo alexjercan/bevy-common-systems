@@ -12,7 +12,7 @@ runtime behaviour through a single `*Plugin`; pure-utility modules export plain
 types and functions. Modules are self-contained enough to lift into a game on
 their own, and the crate as a whole works as a normal dependency.
 
-This repo also ships fourteen runnable example games (`examples/NN_name.rs`)
+This repo also ships fifteen runnable example games (`examples/NN_name.rs`)
 that double as the integration tests and the quickstart documentation, plus a
 [web showcase](web/) that serves them as WebAssembly builds.
 
@@ -132,47 +132,24 @@ cargo run --example 01_sphere
 cargo run --example 01_sphere --features debug
 ```
 
-- `01_sphere` - an octahedron sphere from `TriangleMeshBuilder` with a WASD
-  camera.
-- `02_planet` - the same mesh displaced with Fbm/Perlin noise: a planet.
-- `03_modding` - the modding event bus end to end, including
-  `#[derive(EventKind)]` and JSON-authored handlers.
-- `04_status_item` - the status-bar HUD with FPS and custom items.
-- `05_explode` - the mesh slicer: press Left Mouse Button to blow a mesh into
-  fragments.
-- `06_fruitninja` - a fruit-ninja slicer built from procedural shapes: swipe
-  to slice arcing fruit into exploding fragments, dodge bombs.
-- `07_orbit` - "Orbit Runner": a surface-dodge game steering a marker around
-  a planet, exercising the whole `transform` orbit family.
-- `08_dropzone` - a lunar-lander game and the headline demo of the PD
-  controller: fly a ship down onto a noise planet with radial gravity.
-- `09_reactor` - "Reactor": a rules-as-machine incremental where the whole
-  simulation runs on the modding event bus and you build the machine at
-  runtime.
-- `10_asteroids` - a top-down shooter where shot rocks slice into real avian
-  physics bodies that keep drifting as new hazards.
-- `11_overload` - "Overload": a dashboard-survival game rendered entirely on
-  the status bar; juggle four coupled gauges before the reactor melts down.
-- `12_bastion` - "Bastion": a defend-the-core tower defense demoing
-  `camera/project` and the aim/track halves of `transform`.
-- `13_glide` - "Glide": a slide-merge (2048-style) puzzle rendered entirely in
-  Bevy UI, demoing `tween` and `persist` + high scores.
-- `14_breach` - "Breach": a grounded, Doom-like first-person arena shooter
-  with a hitscan gun (avian `SpatialQuery` raycast).
+[`examples/README.md`](examples/README.md) lists all fifteen with the modules
+each one headlines, and documents the headless dev harness used to drive and
+screenshot them.
 
 ## More
 
 - [`AGENTS.md`](AGENTS.md) - the deep orientation doc: full module map,
   conventions, the build/verify/run command suite, and hard-won gotchas. Read
   this before contributing.
-- [`web/`](web/) - the TypeScript + webpack showcase site that serves the
-  examples as WebAssembly builds; see `web/README.md` and
-  `docs/wasm-web-builds.md`.
+- [`examples/README.md`](examples/README.md) - every example game and how to
+  run one, plus the headless autopilot/screenshot harness.
+- [`web/README.md`](web/README.md) - the TypeScript + webpack showcase site
+  that serves the examples as WebAssembly builds, and the wasm build itself
+  (trunk, assets, the browser audio-unlock).
 - [`LESSONS.md`](LESSONS.md) - the lessons ledger; read it before starting
   any task.
-- [`docs/`](docs/) - reference docs and `docs/plans/`. Per-task records
-  (spikes, reviews, retros, design notes) live next to their task under
-  `tasks/<id>/`.
+- Per-task records (spikes, reviews, retros, design notes) live next to their
+  task under `tasks/<id>/`.
 
 ## License
 

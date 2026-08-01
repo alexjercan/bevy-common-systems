@@ -121,7 +121,7 @@ fn main() {
     app.add_plugins(InspectorDebugPlugin);
 
     // Headless verification harness (dev tooling, `debug` feature). Inert unless
-    // BCS_AUTOPILOT / BCS_SHOT is set; see `docs/dev-harness.md`.
+    // BCS_AUTOPILOT / BCS_SHOT is set; see `examples/README.md`.
     #[cfg(feature = "debug")]
     {
         app.add_plugins(
