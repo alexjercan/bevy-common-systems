@@ -14,9 +14,9 @@ No framework machinery.
 
 ## Agent workflow
 
-- Tracker/epics: tatr tasks in `tasks/<id>/TASK.md`; multi-task plans in `docs/plans/`. See "Development flow".
+- Tracker/epics: tatr tasks in `tasks/<id>/TASK.md`; a multi-task plan is an EPIC task with STORY children. See "Development flow".
 - Examples/retention: runnable examples in `examples/NN_name.rs` are the integration tests; keep them all. See "Examples".
-- Domain docs: `docs/dev-harness.md`, `docs/wasm-web-builds.md`, `web/README.md`. Reference only.
+- Domain docs: `examples/README.md` (games + headless harness), `web/README.md` (showcase site + wasm builds). Reference only.
 - Research/network: `/spike` -> `tasks/<id>/SPIKE.md`. No network needed for build/test.
 - Checks/records: `tatr check` (+ `--ledger LESSONS.md`); records per task (see "Where records go"). See "Build, Verify, Run".
 
@@ -26,16 +26,15 @@ No framework machinery.
 | --- | --- |
 | `src/` | library crate, one dir (or file) per concern |
 | `bevy_common_systems_macros/` | proc-macro subcrate; `#[derive(EventKind)]` |
-| `examples/` | runnable `NN_name.rs`; integration tests + quickstart |
+| `examples/` | runnable `NN_name.rs`; integration tests + quickstart. `README.md`: game list + headless harness |
 | `tasks/` | tatr tracker, versioned with the code |
 | `LESSONS.md` | lessons ledger; read before any task |
-| `docs/` | reference docs + `docs/plans/` only. No per-task records |
-| `web/` | TypeScript + webpack showcase serving examples as wasm (trunk) |
+| `web/` | TypeScript + webpack showcase serving examples as wasm (trunk). `README.md`: site + wasm build |
 | `flake.nix`, `rust-toolchain.toml`, `rustfmt.toml`, `.cargo/config.toml` | toolchain |
 
 ## Where records go (/plan, /spike, /work, /review, /compound, /flow)
 
-Everything for one task in that task's folder; never loose per-task `.md` in `docs/`.
+Everything for one task in that task's folder; never a loose per-task `.md` elsewhere in the repo.
 
 | File | Content |
 | --- | --- |
@@ -210,7 +209,7 @@ states, `SfxPlugin` one-shots, wasm/trunk showcase build.
 | `02_planet` | `01` displaced with Fbm/Perlin noise | noise displacement |
 | `03_modding` | event bus end to end, `#[derive(EventKind)]`, JSON handlers via `EventHandlerRegistry` | `modding` |
 | `04_status_item` | status bar with FPS + shell-command items | `ui/status` |
-| `05_explode` | Space slices a mesh into flying `ExplodeFragments` | `mesh/explode` |
+| `05_explode` | Left Mouse Button slices a mesh into flying `ExplodeFragments` | `mesh/explode` |
 | `06_fruitninja` | swipe-slice fruit for score; combos, "+N" popups, blade trail, lethal bombs | `SfxPlugin`, states shape. `tasks/20260703-152544/NOTES.md` |
 | `07_orbit` | "Orbit Runner": ride a planet surface, sweep orbs, dodge hazards, difficulty ramps | whole `transform/*` orbit family, `camera/chase`, `meth`. `tasks/20260703-165427/NOTES.md` |
 | `08_dropzone` | lunar lander onto a noise planet with radial gravity; thrust + lean, hazards (monoliths, asteroids, wind) drain hull, crash explodes | `PDControllerPlugin`, `camera/skybox`+`post`+`chase`, `ui/status`. `tasks/20260703-165432`, `20260704-103544`, `20260704-103553` NOTES; tuned in `20260703-213510` |
@@ -239,7 +238,7 @@ states, `SfxPlugin` one-shots, wasm/trunk showcase build.
 - Bevy 0.19 UI/light API: copy idioms from an existing example, never from memory. `TextFont.font_size` is `FontSize::Px(..)`; `TextLayout` is a struct literal (no `new_with_justify`); `AmbientLight` is per-camera, not a resource; rounded corners are `Node { border_radius: BorderRadius::MAX, .. }` (a field -- spawning `BorderRadius` fails the `Bundle` bound) while `BorderColor` IS a component. Grep `06`/`08` for `font_size:`, `TextLayout`, `AmbientLight`, `border_radius:` first. Bit three cycles (`tasks/20260703-150200`, `20260703-165432`, `20260704-103517` RETROs).
 - Same "copy, do not improvise the visual layer" rule for things that render wrong *silently* (no panic, and a background run cannot see the screen): an HDR `emissive` material must NOT be `unlit` (skips the lighting pass where emissive applies); an entity with mesh children but no mesh of its own needs explicit `Visibility` (else `B0004`); camera shake is `translation = BASE + offset`, never `+=`. All three shipped and were caught in `10_asteroids` review (`tasks/20260703-170744/RETRO.md`).
 - Running examples: a new/changed example is not done until it has been RUN once -- `cargo build` proves compile, not boot. Check `echo $DISPLAY`; run under `timeout` and confirm a `bevy_render::view::window` swap-chain line. Skipping this shipped a startup hang in `08_dropzone` (`tasks/20260703-165432/RETRO.md`).
-- Booting only reaches the menu. For gameplay headlessly, do NOT hand-roll an autopilot (re-invented and deleted 7 times). Use `AutopilotPlugin` behind `#[cfg(feature = "debug")]`: `.hold(state, seconds)` + optional `.input(|world, elapsed| ...)`, then `BCS_AUTOPILOT=1 cargo run --example NN --features debug` under `timeout`; confirm each `autopilot: -> State` line and `autopilot: cycle complete, no panic`. Exits via `AppExit::Success` (a raw `std::process::exit` segfaults on wgpu teardown -- harmless, not a crash). See `docs/dev-harness.md`; `08_dropzone`/`11_overload` are the reference.
+- Booting only reaches the menu. For gameplay headlessly, do NOT hand-roll an autopilot (re-invented and deleted 7 times). Use `AutopilotPlugin` behind `#[cfg(feature = "debug")]`: `.hold(state, seconds)` + optional `.input(|world, elapsed| ...)`, then `BCS_AUTOPILOT=1 cargo run --example NN --features debug` under `timeout`; confirm each `autopilot: -> State` line and `autopilot: cycle complete, no panic`. Exits via `AppExit::Success` (a raw `std::process::exit` segfaults on wgpu teardown -- harmless, not a crash). See `examples/README.md`; `08_dropzone`/`11_overload` are the reference.
 - Seeing the screen is possible: with `$DISPLAY` set, `scrot` / ImageMagick `import` grab the root window, `xdotool` (`nix run nixpkgs#xdotool`) finds/moves the window for a precise crop (`magick IN -crop WxH+X+Y +repage OUT`), then Read the PNG. For a specific state/viewport use `ScreenshotPlugin::new(TargetState).settle_frames(n).path("shot.png")` with `BCS_SHOT=390x844` -- do not hand-roll it (re-invented twice). Caught a real `09_reactor` phone-width regression: four of six shop buttons below the fold, invisible to build/clippy/boot check (`tasks/20260704-143000/RETRO.md`).
 - Responsive Bevy 0.19 grid holding N columns at any width: percentage item widths, not fixed px + `flex_wrap` (flexbox wraps before it shrinks).
 - `AutopilotPlugin` and `ScreenshotPlugin` are mutually exclusive in one run -- both drive `NextState`, so the screenshot never settles. For a mid-gameplay frame use `ScreenshotPlugin` alone, or autopilot + external `scrot` (`tasks/20260704-220736/RETRO.md`).
@@ -252,6 +251,6 @@ states, `SfxPlugin` one-shots, wasm/trunk showcase build.
 - `include_str!`ed data goes stale when the same task edits the file. Assert the *final shipped* state and re-run `cargo test --examples` AFTER the data edit. Bit `12_bastion`'s catalog: passed at 2+2, failed once it became 3+3 (`tasks/20260704-220719/RETRO.md`).
 - Prelude names must not collide with `bevy::prelude`. A game-local `struct Foo` silently shadows in an example, then makes every reference ambiguous (E0659) once harvested. Cost the unified pointer its natural name (`Pointer` -> `UnifiedPointer`) (`tasks/20260704-161508/RETRO.md`).
 - Doctests that configure an `App` actually RUN (`cargo test --doc`). `init_state`/`NextState` panic on `MinimalPlugins` alone ("The `StateTransition` schedule is missing"). Use `(MinimalPlugins, bevy::state::app::StatesPlugin)` or `DefaultPlugins` (`tasks/20260704-175425/RETRO.md`).
-- Web/wasm: `trunk` must run from the repo root (fails with `Unable to find any Trunk configuration` from `web/`), and `rand` needs the getrandom `wasm_js` backend. Both handled in `web/scripts/build-games.sh` + `.cargo/config.toml`; see `docs/wasm-web-builds.md`. Verify through `npm run build`, not a hand-run of the underlying tool.
+- Web/wasm: `trunk` must run from the repo root (fails with `Unable to find any Trunk configuration` from `web/`), and `rand` needs the getrandom `wasm_js` backend. Both handled in `web/scripts/build-games.sh` + `.cargo/config.toml`; see `web/README.md`. Verify through `npm run build`, not a hand-run of the underlying tool.
 - Fresh worktrees have no `web/node_modules` (git-ignored, not copied), so the first `npm run build` fails its webpack half with exit 127 while trunk succeeds. Run `npm ci` in the worktree's `web/` first.
 - Validate workflow changes with `nix run nixpkgs#actionlint -- .github/workflows/<file>.yml` (exit 0, no output = clean) instead of pushing. The devshell has no `actionlint` on PATH; the `nix run` form works. `pages.yml` retries `actions/deploy-pages` once on a transient "Deployment failed, try again later." -- do not remove it as redundant (`tasks/20260704-101608/NOTES.md`).

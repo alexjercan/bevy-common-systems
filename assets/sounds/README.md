@@ -70,7 +70,7 @@ These files are shipped into each web build by a `data-trunk rel="copy-dir"`
 directive in `web/games/06_fruitninja/index.html` and
 `web/games/07_orbit/index.html`; without it trunk copies no assets and the
 browser fetch of `sounds/*.wav` 404s (silent game). See
-`docs/wasm-web-builds.md` ("Assets") for the copy directive and the exact
+`web/README.md` ("Assets") for the copy directive and the exact
 fetched URL. Browser audio also needs a user gesture before it will play; the
 game satisfies this with the in-canvas click that starts a run, so the first
 sound (`menu_select`) fires on that click.

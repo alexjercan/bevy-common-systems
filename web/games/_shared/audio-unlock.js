@@ -23,7 +23,7 @@
 // trunk's injected `<script type="module">` wasm loader, so the constructor
 // wrap is installed before Bevy builds its context) and stages it into the
 // dist with `<link data-trunk rel="copy-file" href="../_shared/audio-unlock.js" />`.
-// See docs/wasm-web-builds.md. Do NOT re-inline this per game: the copies
+// See web/README.md. Do NOT re-inline this per game: the copies
 // drifted once (07_orbit/08_dropzone kept an older version without the iOS
 // media-channel fix and went silent on iPhone), which is what this shared file
 // prevents.

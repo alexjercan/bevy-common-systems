@@ -14,7 +14,7 @@
       plain, non-module, non-defer <script src>: that runs synchronously before
       trunk's injected `<script type="module">` wasm loader, so it wraps the
       AudioContext constructor before Bevy/cpal builds its context. See
-      docs/wasm-web-builds.md.
+      web/README.md.
     -->
     <script src="audio-unlock.js"></script>
     <link data-trunk rel="copy-file" href="../_shared/audio-unlock.js" />
@@ -30,7 +30,7 @@
       copies nothing by default, so stage the crate's `assets/sounds/` into the
       dist under `assets/sounds/`. Without this the fetches 404 and every sound
       is silent. The whole game is UI, so no image asset is needed. See
-      docs/wasm-web-builds.md.
+      web/README.md.
     -->
     <link
       data-trunk

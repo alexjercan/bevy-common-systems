@@ -581,7 +581,7 @@ fn main() {
     // Headless verification harness (dev tooling, `debug` feature). Inert unless
     // BCS_AUTOPILOT / BCS_SHOT is set, so a normal run pays nothing. This
     // replaces the temporary hand-rolled autopilot the earlier tune cycles
-    // added and deleted around this example; see `docs/dev-harness.md`.
+    // added and deleted around this example; see `examples/README.md`.
     #[cfg(feature = "debug")]
     {
         app.add_plugins(

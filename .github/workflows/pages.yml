@@ -1,13 +1,12 @@
 name: Deploy web showcase to GitHub Pages
 
-# Deploys on push to master (skipping pure docs/tasks changes, which do not
+# Deploys on push to master (skipping pure markdown/tasks changes, which do not
 # affect the built site), and can also be run manually from the Actions tab.
 # Note: requires Pages to be enabled in repo Settings (Source: GitHub Actions).
 on:
   push:
     branches: [master]
     paths-ignore:
-      - 'docs/**'
       - 'tasks/**'
       - '**/*.md'
   workflow_dispatch:
