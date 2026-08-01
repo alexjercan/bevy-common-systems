@@ -1,7 +1,7 @@
 # PROPOSAL (needs user): ui/menu button builder + game-flow state scaffolding (Wave 3)
 
 - STATUS: OPEN
-- PRIORITY: 15
+- PRIORITY: 0
 - TAGS: spike,suggestion,ui
 - KIND: TASK
 - FLOW STEP: BACKLOG

@@ -1,7 +1,7 @@
 # PROPOSAL (needs user): real audio assets + optional background music/ambience for example games
 
 - STATUS: OPEN
-- PRIORITY: 30
+- PRIORITY: 0
 - TAGS: suggestion
 - KIND: TASK
 - FLOW STEP: BACKLOG

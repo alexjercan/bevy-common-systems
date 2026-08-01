@@ -1,7 +1,7 @@
 # PROPOSAL (needs user): 07_orbit particle bursts for pickups/hits - requires a particle crate
 
 - STATUS: OPEN
-- PRIORITY: 30
+- PRIORITY: 0
 - TAGS: suggestion,example
 - KIND: TASK
 - FLOW STEP: BACKLOG
