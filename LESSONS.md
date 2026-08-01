@@ -69,7 +69,7 @@ documented in the AGENTS.md section named.
 
 ## Pending promotions (3+ occurrences, user decides)
 
-- `probe-a-new-checker-both-ways` (x3): probe a checker or record-bound grep on
+- `probe-a-new-checker-both-ways` (x3, PROMOTE 2026-08-01 -> 20260801-100108): probe a checker or record-bound grep on
   a case it must match and one it must not, before trusting it. Options, cheapest
   first: tool (a `scripts/check-stale-refs.sh` taking the deleted path, built on
   `git grep` with `--exclude-dir` rather than `--include`) > template (the
