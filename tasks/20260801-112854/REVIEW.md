@@ -1,8 +1,18 @@
 # Review: Release 0.19.6
 
-## Round 1 -- REQUEST_CHANGES, fixes applied
+- TASK: 20260801-112854
+- BRANCH: chore/release-0.19.6
+- WORKTREE: /home/alex/.cache/sprouts/bevy-common-systems/chore/release-0.19.6
+- BASE: master
 
-Out-of-context reviewer, read-only, against `git diff master...HEAD` at 084062a.
+## Round 1
+
+- REVIEWER: out-of-context
+- VERDICT: REQUEST_CHANGES
+
+Out-of-context general-purpose subagent (`a1fb1094a71e456d5`), read-only,
+against `git diff master...HEAD` at 084062a. Fixes applied below; re-verdict
+APPROVE.
 
 Independently re-derived and CONFIRMED the load-bearing claim: no public item
 added, removed or re-signed since `v0.19.5`. The `pub` grep returns 7 lines,
@@ -25,4 +35,12 @@ R1.2 is an instance of the ledger's own `record-numbers-from-a-rerun`: the
 enumeration was written from the reading pass rather than re-derived from the
 46 lines it claims to describe.
 
-Verdict after fixes: APPROVE.
+## Round 2
+
+- REVIEWER: primary
+- VERDICT: APPROVE
+
+All three round-1 findings fixed in 21ad5c9. No new finding: the fixes touch
+`CHANGELOG.md` prose and the task record only, and the round-1 verification of
+the no-API-change claim, the link refs and version consistency still stands
+(nothing under `src/` or in either manifest changed between rounds).
