@@ -1,11 +1,11 @@
 # check-stale-refs.sh: a fail-loud staleness gate for file moves and deletions
 
-- STATUS: OPEN
+- STATUS: IN_PROGRESS
 - PRIORITY: 45
-- TAGS: chore,tooling,lessons
+- TAGS: chore, tooling, lessons
 - KIND: TASK
-- FLOW STEP: BACKLOG
-- PLAN STATUS: DRAFT
+- FLOW STEP: REVIEWING
+- PLAN STATUS: APPROVED
 
 ## Context
 
