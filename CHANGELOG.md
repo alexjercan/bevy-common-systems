@@ -24,7 +24,7 @@ below is comments, documentation, internal structure and repository tooling.
 
 - Library-wide comment and structure pass over every module (the `v0.19.x` KISS epic). Explanatory prose moved out of the sources into task records, own-line comments now earn their keep under the tag convention, and rustdoc was tightened - so the rendered docs read differently even though no item changed.
 - Two large modules split along their internal seam, both into PRIVATE submodules with an identical public surface: the triangle-vs-plane geometry kernel behind `mesh::builder`'s `slice()` moved to `mesh::slice`, and the `integrity` collision half (impact and blast overlap -> `HealthApplyDamage`, with its three damage constants and the avian dependency) moved out of `integrity::plugin` into `integrity::damage`.
-- `nix develop` now derives `CARGO_BUILD_JOBS` and `RUST_TEST_THREADS` from the machine's RAM rather than leaving `cargo test` to link one full Bevy+avian binary per core. Sized against `cargo test --features debug`, the heaviest configuration.
+- `cargo test` no longer outgrows RAM at 15 examples and 60 doctests, sized in two halves that hold together: `[profile.dev.package."*"] debug = false` drops dependency line tables so every linked binary is smaller (first-party `src/` frames keep file and line), and `nix develop` derives `CARGO_BUILD_JOBS` / `RUST_TEST_THREADS` from the machine's RAM so fewer link at once, rather than leaving cargo to link one full Bevy+avian binary per core. Measured against `cargo test --features debug`, the heaviest configuration; re-measure with `scripts/sample-peak-rss.sh` after adding targets.
 
 ### Removed
 

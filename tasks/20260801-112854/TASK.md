@@ -76,8 +76,10 @@ points at it. Resolve as part of the pre-release `lessons` fold.
 - [x] ASCII rule holds for the edited docs
       (cmd: `grep -nP '[^\x00-\x7F]' CHANGELOG.md tasks/20260801-112854/TASK.md`
       finds nothing)
-- [x] Tag `v0.19.6` exists on the release commit and both are pushed
-      (cmd: `git ls-remote --tags origin v0.19.6`)
+- [ ] Tag `v0.19.6` exists on the release commit and both are pushed. Ticked at
+      LAND time, not on the branch -- the branch cannot satisfy it, and
+      `[0.19.6]: ...compare/v0.19.5...v0.19.6` in CHANGELOG.md is a dead link
+      until it is (cmd: `git ls-remote --tags origin v0.19.6`)
 
 ## Notes
 
@@ -100,10 +102,12 @@ removed or re-signed: `git diff v0.19.5..HEAD -- src/
 bevy_common_systems_macros/ | grep '^[-+].*\bpub\b'` returns 7 lines, 5 of them
 `pub(super)` declarations inside the two NEW private modules and 2 comment text.
 Excluding the four files of the two splits, the non-comment src diff is 46
-lines: a `manual_contains` clippy fix, a `let mut axis` -> shadowed `let axis`,
-a `simulate_seconds` test helper replacing five `for _ in 0..N` loops, one new
-test (`attribute_less_derive_defaults_to_no_payload`), and two assertion
-messages. So the entry leads with "the public API is unchanged from 0.19.5"
+lines: the two `mod damage;` / `mod slice;` declarations, a `manual_contains`
+clippy fix, a `let mut axis` -> shadowed `let axis` plus its end-of-line
+comment, a `simulate_seconds` test helper replacing five `for _ in 0..N` loops,
+one new test (`attribute_less_derive_defaults_to_no_payload`), one added
+assertion message (`screenshot.rs`, "a plain toggle value") and one more
+end-of-line comment. So the entry leads with "the public API is unchanged from 0.19.5"
 rather than implying features.
 
 **Alternatives.** Considered skipping the release as content-free. Rejected:
