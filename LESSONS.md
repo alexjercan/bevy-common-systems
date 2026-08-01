@@ -71,14 +71,11 @@ documented in the AGENTS.md section named.
 
 ## Pending promotions (3+ occurrences, user decides)
 
-- `record-numbers-from-a-rerun` (x3): every count landing in a record comes
-  from re-running its command at write time, with the unit named. Options,
-  cheapest first: tool (a `scripts/` helper, or a `cmd:` proof convention that
-  emits the number so the record pastes real output) > template (the Close-out
-  "Evidence" section gains a rule: a bare integer must be adjacent to the
-  command that printed it) > skill prose (`compound`/`work`: no number enters
-  a record without a re-run at write time).
-
-Earlier: the 24 x3+ lessons were resolved and promoted on 2026-07-20
-(task 20260720-220050): process lessons into the global `~/AGENTS.md` and the
-flow skills, domain lessons into this repo's AGENTS.md (see the annotations above).
+- `record-numbers-from-a-rerun` (x3, PROMOTE 2026-08-01 -> 20260801-102152):
+  every count landing in a record comes from re-running its command at write
+  time, with the unit named. Chosen option: TEMPLATE -- the Close-out
+  "Evidence" section gains a rule that a bare integer must sit adjacent to the
+  command that printed it. Skill prose was rejected as already-the-lesson
+  (read and violated three times); a tool was rejected because the numbers
+  that go wrong are ad-hoc, not from a fixed command set. Clears to `None`
+  when 20260801-102152 lands.
