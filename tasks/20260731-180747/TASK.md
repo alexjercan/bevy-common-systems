@@ -1,11 +1,11 @@
 # Fix clippy manual_contains in completion.rs
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 30
-- TAGS: chore,lint
+- TAGS: chore, lint
 - KIND: TASK
-- FLOW STEP: BACKLOG
-- PLAN STATUS: DRAFT
+- FLOW STEP: DONE
+- PLAN STATUS: APPROVED
 
 `cargo clippy --all-targets` emits `clippy::manual_contains` at
 `src/completion.rs:88`:
@@ -30,10 +30,12 @@ before assuming it is a one-word change.
 
 ## Steps
 
-- [ ] Apply the clippy suggestion at `src/completion.rs:88`, adjusting for the
+- [x] Apply the clippy suggestion at `src/completion.rs:88`, adjusting for the
       `&str` / `&'static str` mismatch if it does not compile as suggested.
-- [ ] Check `others_pending` (same file) for the same pattern.
-- [ ] Re-run the suite.
+      Already applied by `c0f67c5` (task 20260731-172208); no mismatch.
+- [x] Check `others_pending` (same file) for the same pattern. It is an
+      inequality scan, not a `contains` -- nothing to change.
+- [x] Re-run the suite. All four proofs pass on `4d44397`; see NOTES.md.
 
 ## Definition of Done
 
