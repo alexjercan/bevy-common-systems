@@ -146,8 +146,6 @@ screenshot them.
 - [`web/README.md`](web/README.md) - the TypeScript + webpack showcase site
   that serves the examples as WebAssembly builds, and the wasm build itself
   (trunk, assets, the browser audio-unlock).
-- [`LESSONS.md`](LESSONS.md) - the lessons ledger; read it before starting
-  any task.
 - Per-task records (spikes, reviews, retros, design notes) live next to their
   task under `tasks/<id>/`.
 

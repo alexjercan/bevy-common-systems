@@ -18,7 +18,8 @@ No framework machinery.
 - Examples/retention: runnable examples in `examples/NN_name.rs` are the integration tests; keep them all. See "Examples".
 - Domain docs: `examples/README.md` (games + headless harness), `web/README.md` (showcase site + wasm builds). Reference only.
 - Research/network: `/spike` -> `tasks/<id>/SPIKE.md`. No network needed for build/test.
-- Checks/records: `tatr check` (+ `--ledger LESSONS.md`); records per task (see "Where records go"). See "Build, Verify, Run".
+- Checks/records: `tatr check`; records per task (see "Where records go"). See "Build, Verify, Run".
+- Knowledge: central repo `/home/alex/personal/agent-knowledge`; project=bevy-common-systems; tags=bevy,rust,games,ecs. Advisory only; failed writes stay in RETRO.
 
 ## Repository Layout
 
@@ -28,7 +29,6 @@ No framework machinery.
 | `bevy_common_systems_macros/` | proc-macro subcrate; `#[derive(EventKind)]` |
 | `examples/` | runnable `NN_name.rs`; integration tests + quickstart. `README.md`: game list + headless harness |
 | `tasks/` | tatr tracker, versioned with the code |
-| `LESSONS.md` | lessons ledger; read before any task |
 | `web/` | TypeScript + webpack showcase serving examples as wasm (trunk). `README.md`: site + wasm build |
 | `flake.nix`, `rust-toolchain.toml`, `rustfmt.toml`, `.cargo/config.toml` | toolchain |
 
@@ -233,8 +233,7 @@ states, `SfxPlugin` one-shots, wasm/trunk showcase build.
 
 - /flow drives it: /plan -> tatr tasks, /work implements each in a sprout worktree, /review runs out-of-context round-1 reviews until APPROVE, /compound writes the retro. Repeat until done.
 - Done criteria carry machine-checkable proofs in `test:` / `cmd:` / `manual:` notation; a task closes only when its proofs pass.
-- `LESSONS.md` is the ledger: read before any task. /compound appends; /lessons folds loose scratch in.
-- `tatr check` (+ `--ledger LESSONS.md`) gates task artifacts and the ledger. Keep clean.
+- `tatr check` gates task artifacts. Keep it clean.
 - Feature branch per task, merged into `master` after review. Do not push unless asked.
 
 ## Gotchas
