@@ -4,7 +4,7 @@
 - PRIORITY: 45
 - TAGS: chore, tooling, lessons
 - KIND: TASK
-- FLOW STEP: WORKING
+- FLOW STEP: COMPOUNDING
 - PLAN STATUS: APPROVED
 
 ## Context
