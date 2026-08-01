@@ -118,7 +118,10 @@ turned the checker off and printed the all-clear (now exit 2); and `cd
 DoD's own `! script <needle>` idiom (now `root=$(...) || exit 2`). Also:
 options are no longer silently reinterpreted as needles after the first
 operand (`--` escapes a real dash-prefixed needle), and the untracked-files
-blind spot is now a stated caveat rather than a design note.
+blind spot is now a stated caveat rather than a design note. Round 2 added
+one more: an `-x` value of `--` sat in the same argument slot the
+end-of-options detector reads, silently re-enabling the mis-ordered-option
+hole; `-x` now rejects it.
 
 **Evidence.** All re-run at the final tree state. Positive control:
 `AGENTS.md` -> exit 1, 42 hit lines across 13 files, none under `tasks/`.

@@ -69,8 +69,12 @@ while getopts ":x:h" opt; do
             # NOTE: a bare `:(exclude)` with no path excludes the entire tree,
             # so an empty -x (e.g. an unset variable) would turn the checker
             # off and still report clean. Refuse it.
-            if [ -z "$OPTARG" ]; then
-                echo "error: -x needs a non-empty pathspec" >&2
+            # NOTE: `--` is rejected too, not because a pathspec named `--` is
+            # plausible, but because the end-of-options detection below looks
+            # at the last token getopts consumed -- which is this OPTARG. No
+            # path is named `--`, so refusing it keeps that check exact.
+            if [ -z "$OPTARG" ] || [ "$OPTARG" = "--" ]; then
+                echo "error: -x needs a non-empty pathspec (and not '--')" >&2
                 usage
                 exit 2
             fi

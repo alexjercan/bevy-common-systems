@@ -90,3 +90,38 @@ and the direct non-ASCII grep clean.
 
 Pending `manual:` items: none. The task's only `manual:` proof proved fully
 machine-checkable during work and was rewritten as a `cmd:`.
+
+## Round 2
+
+- REVIEWER: out-of-context
+- VERDICT: APPROVE
+
+Same out-of-context subagent (`a075fbec63b57cef9`), re-invoked on `a2fab11`
+with the round-1 findings and asked to verify each by probe and hunt for
+regressions in the new argument-validation code. The primary independently
+re-derived N2.1.
+
+All eight round-1 findings VERIFIED FIXED by probe (R1.8 waived, accepted).
+Highlights re-derived: `-x ''` exits 2 before `git grep` runs at all (proved
+with a shim `git` that never printed); the Close-out's 42 hit lines / 13 files
+/ 0 under `tasks/` matches exactly; outside a repo exits 2 and the `>=2`
+branch reaches 128 through a failing-grep shim; `-x ':(bogus)web'` is indeed
+inert rather than an error. A 13-row option-arrangement matrix behaves. All
+eight DoD `cmd:` proofs re-run green at `a2fab11`.
+
+### Findings
+
+- [x] N2.1 (NIT) `scripts/check-stale-refs.sh:86` -- the end-of-options
+  detector inspects the last token `getopts` consumed, which is also the
+  position of an option ARGUMENT, so `-x --` set `explicit_end=true` and
+  disabled R1.4's dash-operand guard for the rest of the line
+  (`-x -- AGENTS.md -y` searched `-y`, exit 1). Reviewer rated it not worth a
+  round, since it needs a pathspec literally named `--`.
+  **Change:** document it, or make the check exact.
+  **Response:** fixed rather than documented -- one clause. `-x` now rejects
+  an OPTARG of `--` alongside the empty one, which no real pathspec loses.
+  Re-run: `-x -- AGENTS.md -y` -> exit 2; `-- -x` and `-x web -- -y` still
+  search their literal dash needles -> exit 1; positive control unchanged at
+  42 hit lines across 13 files.
+
+Pending `manual:` items: none.
