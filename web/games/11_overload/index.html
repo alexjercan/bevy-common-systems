@@ -16,7 +16,7 @@
       AudioContext constructor before Bevy/cpal builds its context. Previously
       this shim was inline-copied per game and drifted (07_orbit / 08_dropzone
       lost the iOS media-channel fix and went silent on iPhone); the shared file
-      is what prevents that. See docs/wasm-web-builds.md.
+      is what prevents that. See web/README.md.
     -->
     <script src="audio-unlock.js"></script>
     <link data-trunk rel="copy-file" href="../_shared/audio-unlock.js" />
@@ -33,7 +33,7 @@
       dist under `assets/sounds/` (data-target-path is relative to the dist
       dir; href is relative to this index.html -- `../../../` is the repo root).
       Without this the fetches 404 and every sound is silent. The whole game is
-      the status-bar UI, so no image asset is needed. See docs/wasm-web-builds.md.
+      the status-bar UI, so no image asset is needed. See web/README.md.
     -->
     <link
       data-trunk

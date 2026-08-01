@@ -209,7 +209,7 @@ states, `SfxPlugin` one-shots, wasm/trunk showcase build.
 | `02_planet` | `01` displaced with Fbm/Perlin noise | noise displacement |
 | `03_modding` | event bus end to end, `#[derive(EventKind)]`, JSON handlers via `EventHandlerRegistry` | `modding` |
 | `04_status_item` | status bar with FPS + shell-command items | `ui/status` |
-| `05_explode` | Space slices a mesh into flying `ExplodeFragments` | `mesh/explode` |
+| `05_explode` | Left Mouse Button slices a mesh into flying `ExplodeFragments` | `mesh/explode` |
 | `06_fruitninja` | swipe-slice fruit for score; combos, "+N" popups, blade trail, lethal bombs | `SfxPlugin`, states shape. `tasks/20260703-152544/NOTES.md` |
 | `07_orbit` | "Orbit Runner": ride a planet surface, sweep orbs, dodge hazards, difficulty ramps | whole `transform/*` orbit family, `camera/chase`, `meth`. `tasks/20260703-165427/NOTES.md` |
 | `08_dropzone` | lunar lander onto a noise planet with radial gravity; thrust + lean, hazards (monoliths, asteroids, wind) drain hull, crash explodes | `PDControllerPlugin`, `camera/skybox`+`post`+`chase`, `ui/status`. `tasks/20260703-165432`, `20260704-103544`, `20260704-103553` NOTES; tuned in `20260703-213510` |

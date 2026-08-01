@@ -13,9 +13,10 @@ cargo run --example 01_sphere
 cargo run --example 01_sphere --features debug
 ```
 
-Every example is a small clap CLI, so `--help` lists its knobs. Most of them
-follow the `06_fruitninja` shape: menu / playing / game-over states, `SfxPlugin`
-one-shots, and a wasm build in the [web showcase](../web/README.md).
+Every example is a small clap CLI, so `--help` lists its knobs. The games from
+`06_fruitninja` on follow one shape: menu / playing / game-over states,
+`SfxPlugin` one-shots, and (for most of them) a wasm build in the
+[web showcase](../web/README.md).
 
 ## The games
 
@@ -37,8 +38,8 @@ one-shots, and a wasm build in the [web showcase](../web/README.md).
 | `14_breach` | a Doom-like FPS arena with a hitscan `SpatialQuery` gun | `physics/doom_controller`, `ui/touchpad`, `feedback` |
 | `15_integrity` | a grid of connected blocks in zero-g; a blast cascades the structure apart | `integrity`, `ui/health_display`, `ui/objectives` |
 
-Per-game design records live in the task that built each one; see the example
-table in [`AGENTS.md`](../AGENTS.md) for the task IDs.
+Per-game design records live in the task that built each one; the example table
+in [`AGENTS.md`](../AGENTS.md) carries the task IDs for the larger games.
 
 ## Running an example headlessly
 

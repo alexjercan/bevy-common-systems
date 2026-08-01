@@ -70,7 +70,7 @@ so the list has one home; the root keeps the pitch and links out.
 
 - [x] `docs/` gone (cmd: `test ! -e docs`)
 - [x] No live `docs/` reference outside `tasks/`
-      (cmd: `! grep -rn "docs/" --include='*.md' --include='*.sh' --include='*.js' --include='*.yml' --include='*.rs' --include='*.ts' --include='*.toml' . | grep -v '^tasks/' | grep -v node_modules | grep -v '^web/dist'`)
+      (cmd: `! grep -rn "docs/" --include='*.md' --include='*.sh' --include='*.js' --include='*.yml' --include='*.rs' --include='*.ts' --include='*.toml' --include='*.html' --include='*.json' . | grep -v '^tasks/' | grep -v node_modules | grep -v '^web/dist'`)
 - [x] `web/README.md` covers every heading of the old wasm doc
       (cmd: `for h in getrandom trunk copy-dir autoplay ringer 04_status_item; do grep -q "$h" web/README.md || exit 1; done`)
 - [x] `examples/README.md` exists and documents both harness env vars
