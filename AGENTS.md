@@ -136,7 +136,7 @@ Modules are deliberately uniform; consistency is the main defense against bloat.
 - rustfmt owns imports (`imports_granularity = "Crate"`, `group_imports = "StdExternalCrate"`). Clippy allows `type_complexity` and `too_many_arguments` crate-wide.
 - Plain ASCII everywhere (code, comments, docs, commits): `-`, `--`, `...`, `->`.
 - Own-line (non-doc) comments only guard a value, explain a non-obvious setting, or record a hazard, and open with `NOTE:` / `FIXME:` / `BUG:` / `TODO:` on the block's first line. Restatement and task narration go to `tasks/<id>/NOTES.md`. Enforced by `./scripts/check-comment-tags.sh <path>...`. Exempt: rustdoc, and end-of-line comments (`let x = 1; // 1 neighbor`), which label a value in place and read worse tagged -- they still must earn their keep.
-  - In a `#[cfg(test)]` module the same split applies: what the TEST proves, or why it exists, is a `///` doc comment on the test fn (it outlives any line in the body, and `cargo test -- --list` shows it); what guards a VALUE inside the body stays a tagged `NOTE:` block. The `///` form is exempt from the checker, so use it for test intent only -- never to move an untagged body comment out of its reach (`tasks/20260731-172224/NOTES.md`).
+  - In a `#[cfg(test)]` module the same split applies: what the TEST proves, or why it exists, is a `///` doc comment on the test fn (it outlives any line in the body, and `cargo test -- --list` shows it); what guards a VALUE inside the body stays a tagged `NOTE:` block. The `///` form is exempt from the tag rule, so use it for test intent only -- never to move an untagged body comment out of its reach (`tasks/20260731-172224/NOTES.md`). That hole is now closed by the checker's second rule: a numeric literal written in BOTH a test fn's `///` and its body is reported, because a doc spelling out a number the body uses is guarding a value. Any tagged block in the body exempts the fn, as does an end-of-line comment on the literal's line (`tasks/20260801-093730/NOTES.md`).
 
 ### Promoted ledger lessons (folded 2026-07-20, task 20260720-220050)
 
@@ -197,7 +197,8 @@ deletion, run `./scripts/check-stale-refs.sh <old-path>...` (repeat `-x
 <pathspec>` to skip a subtree). It `git grep`s the tracked tree for each
 literal needle, excluding `tasks/`, and exits 1 listing every survivor. Run it
 after `git add`: only tracked files are scanned. Alongside
-`./scripts/check-comment-tags.sh <path>...`, also arg-taking.
+`./scripts/check-comment-tags.sh <path>...`, also arg-taking; its own probes
+run argument-free as `./scripts/test-check-comment-tags.sh`.
 
 Testing convention:
 

@@ -67,6 +67,12 @@ jobs:
       - name: Plain-ASCII check
         run: ./scripts/check-ascii.sh
 
+      # check-comment-tags.sh itself takes paths and so cannot be a CI step,
+      # but its probes take none. Without this the fixtures decay silently and
+      # the rule stops being evidence of anything.
+      - name: Comment-tag checker probes
+        run: ./scripts/test-check-comment-tags.sh
+
   # The dependency-license gate. The shipped manifest
   # (credits/THIRD-PARTY-LICENSES.md) is GENERATED at release time, not committed
   # (cargo-about's output is not byte-stable, so a committed copy could not be

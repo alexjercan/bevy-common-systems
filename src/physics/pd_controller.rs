@@ -433,9 +433,12 @@ mod tests {
     }
 
     /// Pure damper: the command tracks the attitude every tick, so the PD is
-    /// damping-only. A 1.5 rad/s roll about the long axis must despin.
+    /// damping-only. A fast roll about the long axis must despin.
     #[test]
     fn fast_roll_despins_when_command_tracks_attitude() {
+        // NOTE: 1.5 rad/s is the "fast" roll for this rig -- past the rate where
+        // one tick's torque budget can cancel the spin, so the damper has to
+        // converge over many ticks rather than in one.
         let mut app = physics_app();
         let (body, controller) = spawn_spinning_ship(&mut app, Vec3::new(0.0, 0.0, 1.5));
         app.world_mut().entity_mut(controller).insert(TrackAttitude);
@@ -450,10 +453,13 @@ mod tests {
     }
 
     /// The release scenario: the command freezes at the release attitude while
-    /// the body still rolls at 1.5 rad/s. The PD must bring it back to rest
-    /// instead of corkscrewing forever.
+    /// the body still rolls fast. The PD must bring it back to rest instead of
+    /// corkscrewing forever.
     #[test]
     fn fast_roll_despins_with_frozen_command() {
+        // NOTE: same 1.5 rad/s "fast" roll as
+        // `fast_roll_despins_when_command_tracks_attitude`; the two differ only
+        // in whether the command tracks, so the rate must stay in step.
         let mut app = physics_app();
         let (body, _) = spawn_spinning_ship(&mut app, Vec3::new(0.0, 0.0, 1.5));
 
@@ -525,15 +531,17 @@ mod tests {
         );
     }
 
-    /// The release scenario at nova's test-rig torque budget (100): one
-    /// tick's saturated impulse (100 * dt / I_roll = 3.1 rad/s) exceeds
-    /// twice the 1.5 rad/s spin - the regime where nova task
-    /// 20260709-125640's corkscrew locked into a per-tick flip-flop.
-    /// Saturation coverage only: this configuration stays in the
-    /// z-commuting subspace, so it passes under either composition order;
-    /// the discriminating test remains the both-frames closed form.
+    /// The release scenario at a torque budget high enough to saturate: the
+    /// regime where nova task 20260709-125640's corkscrew locked into a
+    /// per-tick flip-flop. Saturation coverage only: this configuration stays
+    /// in the z-commuting subspace, so it passes under either composition
+    /// order; the discriminating test remains the both-frames closed form.
     #[test]
     fn fast_roll_despins_under_a_saturating_torque_budget() {
+        // NOTE: 100 is nova's test-rig torque budget, and it is what makes this
+        // case saturating: one tick's impulse (100 * dt / I_roll = 3.1 rad/s)
+        // exceeds twice the 1.5 rad/s spin, so a naive controller overshoots
+        // past rest every tick instead of converging.
         let mut app = physics_app();
         let (body, _) = spawn_spinning_ship_with_torque(&mut app, Vec3::new(0.0, 0.0, 1.5), 100.0);
 
@@ -546,10 +554,13 @@ mod tests {
         );
     }
 
-    /// Control case documenting the known-good regime: a moderate 0.7 rad/s
-    /// spin damps under a frozen command today.
+    /// Control case documenting the known-good regime: a moderate spin damps
+    /// under a frozen command today.
     #[test]
     fn moderate_spin_despins_with_frozen_command() {
+        // NOTE: 0.7 rad/s is "moderate" because one tick's torque budget can
+        // cancel it outright -- below the saturating regime the fast-roll tests
+        // cover, which is the whole point of keeping this control case.
         let mut app = physics_app();
         let (body, _) = spawn_spinning_ship(&mut app, Vec3::new(0.0, 0.0, 0.7));
 

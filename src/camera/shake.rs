@@ -339,10 +339,13 @@ mod tests {
         );
     }
 
-    /// Full sample at half amount against a peak of 0.6 gives 0.3 per set axis,
+    /// The offset scales linearly with both the amount and the per-axis peak,
     /// while a zeroed axis stays zero regardless of the sample.
     #[test]
     fn offset_scales_with_amount_and_max_offset() {
+        // NOTE: 0.6 is the peak `shake_app` configures below, so the pure-math
+        // and through-the-plugin tests state the same bound; 0.5 amount halves
+        // it to 0.3, which is what makes the scaling readable off the numbers.
         let offset = shake_offset(0.5, Vec3::new(0.6, 0.6, 0.0), Vec3::splat(1.0));
         assert!((offset.x - 0.3).abs() < 1e-6);
         assert!((offset.y - 0.3).abs() < 1e-6);
@@ -382,8 +385,8 @@ mod tests {
         app.update();
     }
 
-    /// Peak offset per axis is 0.6, so the camera can never sit further from base
-    /// than that diagonal, whatever the random sample was.
+    /// The camera can never sit further from base than the diagonal of its
+    /// configured per-axis peak, whatever the random sample was.
     #[test]
     fn shake_offset_stays_within_the_configured_bound() {
         let base = Vec3::new(0.0, 0.0, 22.0);
@@ -393,6 +396,9 @@ mod tests {
             .unwrap()
             .add_trauma = 1.0;
 
+        // NOTE: 0.6 must stay in step with `shake_app`'s `max_offset`, or this
+        // bound stops describing the camera under test; 1e-4 only absorbs the
+        // f32 error in the diagonal.
         let bound = Vec3::splat(0.6).length() + 1e-4;
         for _ in 0..10 {
             step(&mut app, 16);
