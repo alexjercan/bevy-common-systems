@@ -192,6 +192,12 @@ cargo run --example 01_sphere --features debug
 
 Only expected warning: a future-incompat note from transitive `proc-macro-error2`.
 
+Not in the suite because it takes arguments: after any file move, rename or
+deletion, run `./scripts/check-stale-refs.sh <old-path>...` (repeat `-x
+<pathspec>` to skip a subtree). It `git grep`s the tracked tree for each
+literal needle, excluding `tasks/`, and exits 1 listing every survivor.
+Alongside `./scripts/check-comment-tags.sh <path>...`, also arg-taking.
+
 Testing convention:
 
 - Pure math/geometry gets `#[cfg(test)]` next to the code (`meth/sphere`, `mesh/builder`, `physics/pd_controller`, `transform/point_rotation`).

@@ -53,23 +53,25 @@ type) instead of an `--include` allowlist (fails silent).
 
 ## Definition of Done
 
-- [ ] Script exists and is executable
+- [x] Script exists and is executable
       (cmd: `test -x scripts/check-stale-refs.sh`)
-- [ ] Positive control: a needle that exists in the tree is reported
+- [x] Positive control: a needle that exists in the tree is reported
       (cmd: `! ./scripts/check-stale-refs.sh AGENTS.md`)
-- [ ] Negative control: an absent needle exits clean
+- [x] Negative control: an absent needle exits clean
       (cmd: `./scripts/check-stale-refs.sh zzz-no-such-reference-zzz`)
-- [ ] The 20260801-094300 case would have been caught: with the script in
+- [x] The 20260801-094300 case would have been caught: with the script in
       place, `git stash`-free check against that commit's parent state
-      (cmd: `git show 809057c^:web/games/06_fruitninja/index.html | grep -c 'docs/wasm-web-builds.md'` returns 1, confirming the reference the old proof missed)
-      (manual: in a `git worktree` at 809057c with the script copied in, run
-      `./scripts/check-stale-refs.sh docs/wasm-web-builds.md` and confirm it
-      exits 1 listing all 18 `web/games/*/index.html` hits)
-- [ ] Documented in AGENTS.md
+      (cmd: `git show 809057c^:web/games/06_fruitninja/index.html | grep -c 'docs/wasm-web-builds.md'` returns 2, confirming the references the old proof missed)
+      (cmd: in a `git worktree` at `809057c^` with the script copied in,
+      `./scripts/check-stale-refs.sh docs/wasm-web-builds.md` exits 1 listing
+      18 `web/games/*/index.html` hits -- 9 files x 2 -- plus 7 in
+      `AGENTS.md`, `README.md`, `web/README.md`, `assets/sounds/README.md` and
+      `web/games/_shared/audio-unlock.js`)
+- [x] Documented in AGENTS.md
       (cmd: `grep -q check-stale-refs AGENTS.md`)
-- [ ] Ledger entry marked PROMOTED, Pending promotions back to `None`
+- [x] Ledger entry marked PROMOTED, Pending promotions back to `None`
       (cmd: `grep -q 'probe-a-new-checker-both-ways.*PROMOTED' LESSONS.md`)
-- [ ] Tracker clean (cmd: `tatr check --ledger LESSONS.md`)
+- [x] Tracker clean (cmd: `tatr check --ledger LESSONS.md`)
 
 ## Notes
 
@@ -79,3 +81,39 @@ type) instead of an `--include` allowlist (fails silent).
   generality.
 - `scripts/check-ascii.sh` is the shape to copy, including its exit-code
   `case` and the comment explaining why `>=2` must fail loudly.
+
+## Close-out
+
+**What / why.** `scripts/check-stale-refs.sh <needle>...` turns the
+`probe-a-new-checker-both-ways` lesson into a tool. Two fail-loud choices:
+`git grep` from the repo toplevel (repo-root-relative output, so a path
+prefix filter actually matches), and exclusions (`:(exclude)tasks/` by
+convention, repeatable `-x <pathspec>`) instead of an `--include` allowlist
+that goes silent on a new file type. Needles are literal (`--fixed-strings`);
+no config, no regex.
+
+**Alternatives.** Ledger listed tool > proofs-template field > skill prose;
+the user picked the tool. Within the tool: an `--include` allowlist was the
+failure mode, not an option. A CI-wired invocation was rejected -- the script
+takes arguments, so it belongs beside `check-comment-tags.sh` as an
+on-demand check, documented as such in AGENTS.md.
+
+**Difficulties.** The negative control could not be spelled literally in the
+script header: `git grep` scans the script itself, so a documented nonsense
+needle would have made the negative-control proof fail. Header describes it
+instead. Also corrected one DoD proof: the 06_fruitninja file holds 2 stale
+lines, not 1 (18 total = 9 files x 2), and the `manual:` probe turned out to
+be fully machine-checkable, so it was rewritten as a `cmd:`.
+
+**Evidence.** Positive control: `AGENTS.md` -> exit 1, 38 hits, none under
+`tasks/`. Negative: nonsense needle -> exit 0. No args -> usage, exit 2.
+`-x` verified by excluding six paths and watching the hit list collapse to
+one line. Historical case: worktree at `809057c^`, script copied in,
+`docs/wasm-web-builds.md` -> exit 1 with all 18 `web/games/*/index.html`
+references the original one-liner proof missed. `shellcheck` clean,
+`bash -n` clean, `check-ascii.sh` clean, `tatr check --ledger` exit 0.
+
+**Reflection.** The exit-code `case` copied from `check-ascii.sh` is the
+load-bearing part: `git grep` exits 1 for clean and >=2 for its own failure,
+so the naive `if git grep ...` reports a broken pathspec as clean. Probing a
+checker "both ways" is really three ways -- match, no-match, and tool error.
