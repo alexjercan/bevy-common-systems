@@ -9,6 +9,27 @@ straight off the crate version.
 
 ## [Unreleased]
 
+## [0.19.6] - 2026-08-01
+
+A maintenance release: the public API is unchanged from `0.19.5`. Everything
+below is comments, documentation, internal structure and repository tooling.
+
+### Added
+
+- `scripts/check-comment-tags.sh`: enforces the own-line comment convention (a non-doc comment opens with `NOTE:` / `FIXME:` / `BUG:` / `TODO:`), plus a second rule for `#[cfg(test)]` modules - a numeric literal written in BOTH a test fn's `///` and its body is reported, since a doc spelling out a number the body uses is guarding a value. Probed by `scripts/test-check-comment-tags.sh` against `scripts/fixtures/comment_tags/`.
+- `scripts/check-stale-refs.sh <needle>...`: a fail-loud staleness gate to run after any file move, rename or deletion. `git grep`s the tracked tree for each literal needle (excluding `tasks/`, plus any `-x <pathspec>`) and exits 1 listing every survivor.
+- `scripts/sample-peak-rss.sh`: samples peak resident memory of a build or test command, used to size the link-concurrency caps below.
+
+### Changed
+
+- Library-wide comment and structure pass over every module (the `v0.19.x` KISS epic). Explanatory prose moved out of the sources into task records, own-line comments now earn their keep under the tag convention, and rustdoc was tightened - so the rendered docs read differently even though no item changed.
+- Two large modules split along their internal seam, both into PRIVATE submodules with an identical public surface: the triangle-vs-plane geometry kernel behind `mesh::builder`'s `slice()` moved to `mesh::slice`, and the `integrity` collision half (impact and blast overlap -> `HealthApplyDamage`, with its three damage constants and the avian dependency) moved out of `integrity::plugin` into `integrity::damage`.
+- `cargo test` no longer outgrows RAM at 15 examples and 60 doctests, sized in two halves that hold together: `[profile.dev.package."*"] debug = false` drops dependency line tables so every linked binary is smaller (first-party `src/` frames keep file and line), and `nix develop` derives `CARGO_BUILD_JOBS` / `RUST_TEST_THREADS` from the machine's RAM so fewer link at once, rather than leaving cargo to link one full Bevy+avian binary per core. Measured against `cargo test --features debug`, the heaviest configuration; re-measure with `scripts/sample-peak-rss.sh` after adding targets.
+
+### Removed
+
+- The `docs/` directory. Its content was folded into `examples/README.md` (headless harness), `web/README.md` (wasm/trunk showcase builds) and the per-task `NOTES.md` records, so there is one home per topic instead of two.
+
 ## [0.19.5] - 2026-07-20
 
 ### Fixed
@@ -53,6 +74,11 @@ First tagged release. The version scheme starts at `0.19.0` to match Bevy 0.19.
 - The `#[derive(EventKind)]` procedural macro (in the re-exported `bevy_common_systems_macros` subcrate) backing the modding event bus
 - Release tooling mirroring nova-protocol: a cargo-about third-party license gate (`about.toml`, `about.hbs`, `scripts/gen-licenses.sh`, and a `licenses` CI job that fails on any non-permissive dependency license), and a tag-triggered `release-flow` workflow that builds the web showcase, bundles the generated third-party license manifest, and attaches the zip to the matching GitHub Release
 
-[unreleased]: https://github.com/alexjercan/bevy-common-systems/compare/v0.19.1...HEAD
+[unreleased]: https://github.com/alexjercan/bevy-common-systems/compare/v0.19.6...HEAD
+[0.19.6]: https://github.com/alexjercan/bevy-common-systems/compare/v0.19.5...v0.19.6
+[0.19.5]: https://github.com/alexjercan/bevy-common-systems/compare/v0.19.4...v0.19.5
+[0.19.4]: https://github.com/alexjercan/bevy-common-systems/compare/v0.19.3...v0.19.4
+[0.19.3]: https://github.com/alexjercan/bevy-common-systems/compare/v0.19.2...v0.19.3
+[0.19.2]: https://github.com/alexjercan/bevy-common-systems/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/alexjercan/bevy-common-systems/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/alexjercan/bevy-common-systems/releases/tag/v0.19.0
