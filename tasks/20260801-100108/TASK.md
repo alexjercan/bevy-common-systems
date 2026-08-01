@@ -4,7 +4,7 @@
 - PRIORITY: 45
 - TAGS: chore, tooling, lessons
 - KIND: TASK
-- FLOW STEP: REVIEWING
+- FLOW STEP: WORKING
 - PLAN STATUS: APPROVED
 
 ## Context
@@ -101,19 +101,44 @@ on-demand check, documented as such in AGENTS.md.
 **Difficulties.** The negative control could not be spelled literally in the
 script header: `git grep` scans the script itself, so a documented nonsense
 needle would have made the negative-control proof fail. Header describes it
-instead. Also corrected one DoD proof: the 06_fruitninja file holds 2 stale
-lines, not 1 (18 total = 9 files x 2), and the `manual:` probe turned out to
-be fully machine-checkable, so it was rewritten as a `cmd:`.
+instead. The same self-scan trap bit the positive direction and was only
+caught in review -- the usage examples originally named the real deleted
+`docs/wasm-web-builds.md`, which made the file a permanent hit for that very
+check; they are fictional paths now. Also corrected one DoD proof: the
+06_fruitninja file holds 2 stale lines, not 1 (18 total = 9 files x 2), and
+the `manual:` probe turned out to be fully machine-checkable, so it was
+rewritten as a `cmd:`.
 
-**Evidence.** Positive control: `AGENTS.md` -> exit 1, 38 hits, none under
-`tasks/`. Negative: nonsense needle -> exit 0. No args -> usage, exit 2.
-`-x` verified by excluding six paths and watching the hit list collapse to
-one line. Historical case: worktree at `809057c^`, script copied in,
+**Review fixes (round 1).** Two silent-clean paths that the first cut shipped,
+both the exact failure class this task exists to close: `-x ''` built the bare
+pathspec `:(exclude)`, which excludes the WHOLE tree, so `-x "$UNSET_VAR"`
+turned the checker off and printed the all-clear (now exit 2); and `cd
+"$(git rev-parse --show-toplevel)"` outside a repo degraded to `cd ""`, whose
+`set -e` exit of 1 is indistinguishable from "hits found" -- fatal under the
+DoD's own `! script <needle>` idiom (now `root=$(...) || exit 2`). Also:
+options are no longer silently reinterpreted as needles after the first
+operand (`--` escapes a real dash-prefixed needle), and the untracked-files
+blind spot is now a stated caveat rather than a design note.
+
+**Evidence.** All re-run at the final tree state. Positive control:
+`AGENTS.md` -> exit 1, 42 hit lines across 13 files, none under `tasks/`.
+Negative: nonsense needle -> exit 0. Tool failure: outside a repo -> exit 2;
+a `git` shim exiting 128 on `grep` -> the `>=2` branch prints "cannot verify"
+and exits 128. Rejections: no args, `-x ''`, `AGENTS.md -x web`, bare `--` ->
+exit 2; `-- -x` searches the literal needle `-x` -> exit 1. `-x` verified by
+excluding seven paths and watching the hit list collapse to one line.
+Historical case: worktree at `809057c^`, script copied in,
 `docs/wasm-web-builds.md` -> exit 1 with all 18 `web/games/*/index.html`
-references the original one-liner proof missed. `shellcheck` clean,
-`bash -n` clean, `check-ascii.sh` clean, `tatr check --ledger` exit 0.
+references the original one-liner proof missed. `shellcheck` clean, `bash -n`
+clean, `grep -nP '[^\x00-\x7F]'` over the script and AGENTS.md clean
+(`check-ascii.sh` does NOT cover `scripts/`, so it is not evidence here),
+`tatr check --ledger` exit 0.
 
 **Reflection.** The exit-code `case` copied from `check-ascii.sh` is the
 load-bearing part: `git grep` exits 1 for clean and >=2 for its own failure,
 so the naive `if git grep ...` reports a broken pathspec as clean. Probing a
-checker "both ways" is really three ways -- match, no-match, and tool error.
+checker "both ways" is really three -- match, no-match, and tool error -- and
+review showed a fourth axis the lesson does not name: probe the checker's own
+ARGUMENT handling, because every silent-clean bug found here entered through
+an argument (`-x ''`, a mis-ordered `-x`, a missing repo) rather than through
+the matcher.
