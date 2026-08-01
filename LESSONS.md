@@ -65,19 +65,11 @@ documented in the AGENTS.md section named.
 - `harvest-by-reading-evidence` (x5, PROMOTED 2026-07-20 -> AGENTS.md Conventions/Promoted-lessons): survey precedent/homes, reproduce bodies byte-for-byte, refactor call sites as the test, delete dead markers. 20260705-090557, 20260704-161513.
 - `split-verifiable-from-manual` (x3, PROMOTED 2026-07-20 -> AGENTS.md Conventions/Promoted-lessons): split headless-verifiable from manual-play-test, and name which real paths a shortcut harness does NOT exercise. 20260703-163328, 20260705-103238.
 
+- `state-what-the-checker-cannot-see` (x3, PROMOTED 2026-08-01 -> task 20260801-093730): a `///` on a test fn inside `#[cfg(test)]` is the right home for what the test PROVES, but rustdoc never renders it and the tag checker exempts it -- so it gets misused to move a VALUE guard out of the body. Promoted to the checker, not prose: teach `check-comment-tags.sh` to flag a `///` test fn whose body holds an unexplained numeric literal. 20260731-172224, 20260731-172232, 20260731-172233.
+
 ## Pending promotions (3+ occurrences, user decides)
 
-- `state-what-the-checker-cannot-see` (x3): reached three occurrences on
-  20260731-172233. Every occurrence is the same shape - a route the project's
-  own checker cannot see (test intent promoted to `///` inside `#[cfg(test)]`,
-  which rustdoc never renders and the tag checker exempts) used correctly in
-  the main, then misused once per outing to move a VALUE guard out of the
-  body. Suggested target: the checker, not prose. `check-comment-tags.sh`
-  already parses `#[cfg(test)]` regions; a rule that flags a `///` on a test fn
-  whose body contains an unexplained numeric literal would catch mechanically
-  what three consecutive authors missed by eye. Prose alternative if that is
-  too noisy: one AGENTS.md line stating that a `///` may carry what a test
-  PROVES and never why a literal has its value.
+None.
 
 Earlier: the 24 x3+ lessons were resolved and promoted on 2026-07-20
 (task 20260720-220050): process lessons into the global `~/AGENTS.md` and the

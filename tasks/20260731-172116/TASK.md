@@ -1,11 +1,11 @@
 # Epic: v0.19.x KISS pass over bcs library sources
 
-- STATUS: OPEN
+- STATUS: CLOSED
 - PRIORITY: 0
-- TAGS: goal,chore,kiss
+- TAGS: goal, chore, kiss
 - KIND: EPIC
-- FLOW STEP: BACKLOG
-- PLAN STATUS: DRAFT
+- FLOW STEP: DONE
+- PLAN STATUS: APPROVED
 
 # Epic
 
@@ -95,10 +95,24 @@ Derive the working order with `tatr frontier <epic-id>`.
   `./scripts/check-comment-tags.sh src bevy_common_systems_macros/src` now
   exits 0, after that child picked up `src/material.rs`, which its review found
   no child had claimed.
-- Still open for the epic close: the whole-epic public-API spot-check above,
-  and the user's disposition on `state-what-the-checker-cannot-see`, which hit
-  x3 in the last child and is parked in `LESSONS.md` under Pending promotions
-  for `/lessons`.
+- Epic-close proof run, 2026-08-01, all green on `master` at `9bb9d0f`:
+  `cargo fmt --check`, `cargo clippy --all-targets` (+`--features debug`),
+  `cargo test` (148 unit + 59 doc), `cargo test --features debug` (155 + 66),
+  `cargo test --examples` (117 across 11 example binaries),
+  `./scripts/check-ascii.sh`, `./scripts/check-comment-tags.sh src
+  bevy_common_systems_macros/src`, the bare-HUID grep (no hits),
+  `cargo doc --no-deps` (only the known `proc-macro-error2` future-incompat
+  note), `tatr check --ledger LESSONS.md`.
+- Whole-epic public-API spot-check DISCHARGED mechanically: every line matching
+  `pub` under `src/` and `bevy_common_systems_macros/src/`, minus
+  `pub(super|crate|self)` and comments, is byte-identical between the epic base
+  `8500161` and `9bb9d0f` -- 633 items, zero diff. The only additions anywhere
+  are `pub(super)` items exposed by the two evidence-backed file splits
+  (`src/integrity/damage.rs`, `src/mesh/slice.rs`).
+- `state-what-the-checker-cannot-see` (x3) dispositioned 2026-08-01: promoted to
+  the checker rather than prose. Filed as task 20260801-093730 (teach
+  `check-comment-tags.sh` to flag a `///` on a test fn whose body holds an
+  unexplained numeric literal). `LESSONS.md` Pending promotions is now empty.
 
 ## Notes for the remaining children
 
