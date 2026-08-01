@@ -1,10 +1,10 @@
 # check-stale-refs.sh: a fail-loud staleness gate for file moves and deletions
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 45
 - TAGS: chore, tooling, lessons
 - KIND: TASK
-- FLOW STEP: COMPOUNDING
+- FLOW STEP: DONE
 - PLAN STATUS: APPROVED
 
 ## Context
