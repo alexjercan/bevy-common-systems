@@ -1,10 +1,10 @@
 # Retire docs/: fold reference docs into web/README, examples/README and task NOTES
 
-- STATUS: IN_PROGRESS
+- STATUS: CLOSED
 - PRIORITY: 60
 - TAGS: chore, docs
 - KIND: TASK
-- FLOW STEP: COMPOUNDING
+- FLOW STEP: DONE
 - PLAN STATUS: APPROVED
 
 ## Context
