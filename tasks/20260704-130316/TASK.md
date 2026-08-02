@@ -1,11 +1,11 @@
 # 10_asteroids: verify touch journey + web canvas touch-action
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: example,mobile,historical
+- TAGS: example, mobile, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Goal
 

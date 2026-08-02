@@ -1,11 +1,11 @@
 # Fix doctests and clippy warning so cargo test passes clean
 
-- STATUS: CLOSED
 - PRIORITY: 50
 - TAGS: bug
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

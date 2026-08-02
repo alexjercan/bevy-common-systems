@@ -1,11 +1,11 @@
 # Promote nova integrity + destructible systems into bevy_common_systems
 
-- STATUS: CLOSED
 - PRIORITY: 70
-- TAGS: crates,feature,integrity,historical
+- TAGS: crates, feature, integrity, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 Promote the Tier A + Tier B promotion candidates from the nova-protocol spike
 (`nova-protocol/docs/spikes/20260708-110317-promotion-eligible-systems.md`) into this

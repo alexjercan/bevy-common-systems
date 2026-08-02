@@ -1,11 +1,11 @@
 # 07_orbit: hazard-hit impact feedback (camera shake + damage flash)
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: feature,example
+- TAGS: feature, example
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 Second polish pass on `examples/07_orbit.rs`: make taking a hit *feel* like a
 hit. Right now a hazard touch plays `hurt.wav` and blinks the marker, but the

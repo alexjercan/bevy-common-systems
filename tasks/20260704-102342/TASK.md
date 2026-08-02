@@ -1,11 +1,11 @@
 # 08_dropzone: landing target + fuel pickups + touch controls
 
-- STATUS: CLOSED
 - PRIORITY: 3
-- TAGS: feature,dropzone,historical
+- TAGS: feature, dropzone, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 > SUPERSEDED: this combined follow-up was split, per user direction, into three
 > focused tasks. Do not implement this one; use these instead:

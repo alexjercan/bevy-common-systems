@@ -1,11 +1,11 @@
 # Follow-up: evaluate promoting 13_glide UI-juice patterns into the crate
 
-- STATUS: CLOSED
 - PRIORITY: 40
-- TAGS: spike,feature,ui,harvest
+- TAGS: spike, feature, ui, harvest
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

@@ -1,11 +1,11 @@
 # data-driven towers/enemies for 12_bastion + evaluate a SpecCatalog module (modding hook)
 
-- STATUS: CLOSED
 - PRIORITY: 1
-- TAGS: spike,examples,modding
+- TAGS: spike, examples, modding
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-220530/SPIKE.md (read first).
 > Follow-up to the tower-defense game; DEPENDS ON 12_bastion shipping first

@@ -1,11 +1,11 @@
 # Fruit ninja: time-window combos
 
-- STATUS: CLOSED
 - PRIORITY: 78
-- TAGS: feature,example
+- TAGS: feature, example
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

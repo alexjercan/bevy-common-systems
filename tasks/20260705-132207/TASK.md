@@ -1,11 +1,11 @@
 # breach -- main-menu and mobile usability polish
 
-- STATUS: CLOSED
 - PRIORITY: 40
-- TAGS: spike,breach,example,mobile,historical
+- TAGS: spike, breach, example, mobile, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

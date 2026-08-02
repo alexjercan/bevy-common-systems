@@ -1,11 +1,11 @@
 # Bug discovered in breach game
 
-- STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: bug,14_breach,crash,historical
+- TAGS: bug, 14_breach, crash, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 Description: I was on wave 3 I was shooting enemies and all of a sudden the
 game crashed without any notice or anything.

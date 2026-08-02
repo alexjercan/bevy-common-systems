@@ -1,11 +1,11 @@
 # breach -- juice pass (hit markers, kill/combo popups, muzzle flash, low-HP pulse)
 
-- STATUS: CLOSED
 - PRIORITY: 50
-- TAGS: spike,breach,example,juice,historical
+- TAGS: spike, breach, example, juice, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

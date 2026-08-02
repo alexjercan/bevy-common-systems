@@ -1,11 +1,11 @@
 # Retro: dev harness (task 20260704-190405)
 
-- STATUS: CLOSED
 - PRIORITY: 0
-- TAGS: archive,historical
+- TAGS: archive, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: RETRO
+- RESOLUTION: DONE
 
 Archive stub: the original task folder was pruned before the 2026-07-16
 docs restructure moved research/retro records next to their tasks. The

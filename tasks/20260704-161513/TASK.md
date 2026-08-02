@@ -1,11 +1,11 @@
 # ui/touchpad: reveal-on-first-touch + hit-test primitives (Wave A)
 
-- STATUS: CLOSED
 - PRIORITY: 28
-- TAGS: spike,feature,ui,input
+- TAGS: spike, feature, ui, input
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-161210/SPIKE.md (read first). Wave A -- the most-documented duplication in the
 > repo (4 touch docs, 3 touch retros). Ship PRIMITIVES, not a fixed pad.

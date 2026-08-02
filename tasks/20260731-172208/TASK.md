@@ -1,11 +1,11 @@
 # KISS pass: debug/ + lib.rs + completion.rs (sets the comment convention)
 
-- STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: chore, kiss, debug
 - KIND: STORY
-- FLOW STEP: DONE
-- PLAN STATUS: APPROVED
+- ACTIVITY: COMPOUNDING
+- GATES: PLAN REVIEW RETRO
+- RESOLUTION: DONE
 - PARENT: 20260731-172116
 
 Scope: `src/debug/` (`inspector.rs`, `wireframe.rs`, `mod.rs`,

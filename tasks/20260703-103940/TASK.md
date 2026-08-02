@@ -1,11 +1,11 @@
 # Add non-ASCII guard (pre-commit or CI) enforcing plain-ASCII rule
 
-- STATUS: CLOSED
 - PRIORITY: 10
 - TAGS: chore
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

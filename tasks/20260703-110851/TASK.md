@@ -1,11 +1,11 @@
 # Add runnable mesh slicer / explode example
 
-- STATUS: CLOSED
 - PRIORITY: 90
 - TAGS: feature
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

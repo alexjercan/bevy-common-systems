@@ -1,11 +1,11 @@
 # tween: easing engine generalizing LerpSnap (Wave 2)
 
-- STATUS: CLOSED
 - PRIORITY: 30
-- TAGS: spike,feature,meth
+- TAGS: spike, feature, meth
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 2 -- foundation that also backs popup and flash.

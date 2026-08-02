@@ -1,11 +1,11 @@
 # scoring: Score + Combo/Streak decay resource (Wave B)
 
-- STATUS: CLOSED
 - PRIORITY: 22
-- TAGS: spike,feature,scoring
+- TAGS: spike, feature, scoring
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-161210/SPIKE.md (read first). Wave B -- sketch-then-commit; a thin-wrapper
 > negative result is acceptable.

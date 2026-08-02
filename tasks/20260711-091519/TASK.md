@@ -1,11 +1,11 @@
 # PD controller cannot damp a fast off-principal spin
 
-- STATUS: CLOSED
 - PRIORITY: 95
-- TAGS: bug,physics,pd
+- TAGS: bug, physics, pd
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

@@ -1,11 +1,11 @@
 # Harden mesh slicer against crash-inducing edge cases
 
-- STATUS: CLOSED
 - PRIORITY: 100
 - TAGS: bug
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

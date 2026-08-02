@@ -1,11 +1,11 @@
 # assets + scoring + ui/input: migrate the games onto the Wave 2 harvests
 
-- STATUS: CLOSED
 - PRIORITY: 18
-- TAGS: feature,audio,scoring,ui,input,cleanup
+- TAGS: feature, audio, scoring, ui, input, cleanup
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Follow-up from the dev-harness Wave 2 tasks: 20260704-175422 (SoundBank, NIT
 > R1.1), 20260704-175423 (HighScore<T>, NIT R1.2), 20260704-175424 (ui/menu

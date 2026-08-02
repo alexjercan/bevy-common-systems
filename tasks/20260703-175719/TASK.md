@@ -1,11 +1,11 @@
 # docs: bump bevy_enhanced_input 0.25 -> 0.26 in AGENTS.md
 
-- STATUS: CLOSED
 - PRIORITY: 30
-- TAGS: docs,historical
+- TAGS: docs, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Goal
 

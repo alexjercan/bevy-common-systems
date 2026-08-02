@@ -1,11 +1,11 @@
 # progress: difficulty-ramp helper, sketch-then-decide (Wave B)
 
-- STATUS: CLOSED
 - PRIORITY: 18
-- TAGS: spike,feature,meth
+- TAGS: spike, feature, meth
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-161210/SPIKE.md (read first). Wave B, LOWEST priority -- do AFTER the juice-kit
 > Wave 2 `tween` task (tasks/20260704-134630); may downgrade to a doc.

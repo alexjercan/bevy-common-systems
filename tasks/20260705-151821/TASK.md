@@ -1,11 +1,11 @@
 # breach -- navigable main menu + options (persisted look sensitivity)
 
-- STATUS: CLOSED
 - PRIORITY: 60
-- TAGS: feature,breach,example,ui,historical
+- TAGS: feature, breach, example, ui, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

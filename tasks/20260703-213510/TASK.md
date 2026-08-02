@@ -1,11 +1,11 @@
 # play-test and tune 08_dropzone flight feel
 
-- STATUS: CLOSED
 - PRIORITY: 40
-- TAGS: example,polish
+- TAGS: example, polish
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 Follow-up from `tasks/20260703-165432` (08_dropzone). The example compiles and
 passes the full check suite, but the flight constants were tuned by reasoning,

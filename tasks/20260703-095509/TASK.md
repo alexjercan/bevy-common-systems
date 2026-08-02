@@ -1,11 +1,11 @@
 # Fix stale default event_info path in EventKind derive macro
 
-- STATUS: CLOSED
 - PRIORITY: 10
 - TAGS: bug
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

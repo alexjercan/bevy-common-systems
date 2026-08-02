@@ -1,11 +1,11 @@
 # Expand README.md from a three-line stub into a proper crate README
 
-- STATUS: CLOSED
 - PRIORITY: 60
 - TAGS: docs
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

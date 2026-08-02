@@ -1,11 +1,11 @@
 # Re-size the cargo test peak-RAM fix for 15 examples / 60 doctests
 
-- STATUS: CLOSED
 - PRIORITY: 2
 - TAGS: build, memory, toolchain
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: APPROVED
+- ACTIVITY: COMPOUNDING
+- GATES: PLAN REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Problem
 

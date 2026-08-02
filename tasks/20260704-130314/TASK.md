@@ -1,11 +1,11 @@
 # 11_overload: on-screen touch vent buttons + touch menu/result nav
 
-- STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: feature,example,mobile,historical
+- TAGS: feature, example, mobile, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Goal
 

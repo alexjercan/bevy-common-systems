@@ -1,11 +1,11 @@
 # Make GitHub Pages deploy resilient to transient 'try again later' failures
 
-- STATUS: CLOSED
 - PRIORITY: 90
-- TAGS: bug,ci,web
+- TAGS: bug, ci, web
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Problem
 

@@ -1,11 +1,11 @@
 # lessons: promote or retire 14 pending x3+ lessons
 
-- STATUS: CLOSED
 - PRIORITY: 70
 - TAGS: chore
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Story
 

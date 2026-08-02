@@ -1,11 +1,11 @@
 # Enlarge game embed + center game page title
 
-- STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: web,polish
+- TAGS: web, polish
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

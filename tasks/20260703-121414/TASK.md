@@ -1,11 +1,11 @@
 # Fruit ninja: on-screen score UI
 
-- STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: feature,example
+- TAGS: feature, example
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

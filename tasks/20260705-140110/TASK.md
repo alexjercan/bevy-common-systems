@@ -1,11 +1,11 @@
 # 13_glide: auto-solver that plays toward 2048 at a human-visible pace
 
-- STATUS: CLOSED
 - PRIORITY: 70
-- TAGS: feature,example,glide,solver,historical
+- TAGS: feature, example, glide, solver, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

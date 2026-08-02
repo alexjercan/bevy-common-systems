@@ -1,11 +1,11 @@
 # tick 094942's dropped steps so tatr check is clean
 
-- STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: chore
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Story
 

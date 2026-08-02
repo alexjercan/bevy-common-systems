@@ -1,11 +1,11 @@
 # ui/popup: port 06 and 08 onto the module, delete local copies
 
-- STATUS: CLOSED
 - PRIORITY: 34
-- TAGS: feature,ui,cleanup
+- TAGS: feature, ui, cleanup
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Follow-up from tasks/20260704-134530 (ui/popup module). See
 > tasks/20260704-134530/NOTES.md and

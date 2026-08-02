@@ -1,11 +1,11 @@
 # Build examples/14_breach -- grounded first-person arena shooter
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: spike,feature,example,fps,historical
+- TAGS: spike, feature, example, fps, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

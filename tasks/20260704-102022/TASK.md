@@ -1,11 +1,11 @@
 # Spike: make 08_dropzone more fun + mobile-playable
 
-- STATUS: CLOSED
 - PRIORITY: 5
-- TAGS: spike,dropzone,research,historical
+- TAGS: spike, dropzone, research, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Goal
 

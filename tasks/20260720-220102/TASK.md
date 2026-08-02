@@ -1,11 +1,11 @@
 # retro-completeness: audit CLOSED tasks lacking RETRO
 
-- STATUS: CLOSED
 - PRIORITY: 30
 - TAGS: chore
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Story
 

@@ -1,11 +1,11 @@
 # ui/menu screen builders: centered_screen/screen_text/menu_screen/game_over_screen/TitlePulse (Wave 2)
 
-- STATUS: CLOSED
 - PRIORITY: 45
-- TAGS: spike,ui,feature
+- TAGS: spike, ui, feature
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-175058/SPIKE.md (read
 > first). Wave 2 -- the low-risk half of the deferred ui/menu proposal

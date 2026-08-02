@@ -1,11 +1,11 @@
 # Fruit ninja: touchscreen support via bevy_enhanced_input
 
-- STATUS: CLOSED
 - PRIORITY: 95
-- TAGS: feature,example,input,touch
+- TAGS: feature, example, input, touch
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

@@ -1,11 +1,11 @@
 # Ship game audio assets into the wasm web build so sounds load
 
-- STATUS: CLOSED
 - PRIORITY: 90
-- TAGS: feature,web,wasm,audio
+- TAGS: feature, web, wasm, audio
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

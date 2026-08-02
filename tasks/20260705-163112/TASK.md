@@ -1,11 +1,11 @@
 # Dropzone: keep camera on crash site so the explosion is visible on game over
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: feature,example
+- TAGS: feature, example
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

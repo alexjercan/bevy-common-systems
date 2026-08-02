@@ -1,11 +1,11 @@
 # ui/popup + feedback: consume tween::Tween for fade/decay (realize foundation)
 
-- STATUS: CLOSED
 - PRIORITY: 20
-- TAGS: feature,tween,ui,feedback
+- TAGS: feature, tween, ui, feedback
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Follow-up from tatr 20260704-134630 (tween), review MINOR R1.1.
 > Spike: tasks/20260704-134035/SPIKE.md.

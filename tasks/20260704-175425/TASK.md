@@ -1,11 +1,11 @@
 # input AnyStartPress + adopt UnifiedPointer; leaf helpers giveup_on_escape/status_bar_with_fps/glowing_material (Wave 2)
 
-- STATUS: CLOSED
 - PRIORITY: 40
-- TAGS: spike,feature
+- TAGS: spike, feature
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-175058/SPIKE.md (read
 > first). Wave 2 -- tiny extensions to already-shipped modules + leaf one-liners.

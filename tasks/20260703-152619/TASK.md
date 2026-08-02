@@ -1,11 +1,11 @@
 # Fruit ninja: wire sound effects with mock assets
 
-- STATUS: CLOSED
 - PRIORITY: 90
-- TAGS: feature,example,audio
+- TAGS: feature, example, audio
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

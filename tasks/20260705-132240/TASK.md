@@ -1,11 +1,11 @@
 # breach -- multiple enemy archetypes with distinct stats
 
-- STATUS: CLOSED
 - PRIORITY: 60
-- TAGS: spike,breach,example,historical
+- TAGS: spike, breach, example, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

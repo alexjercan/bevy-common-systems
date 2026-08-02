@@ -1,11 +1,11 @@
 # build examples/12_bastion -- defend-the-core tower defense (camera/project + rotation modules)
 
-- STATUS: CLOSED
 - PRIORITY: 2
-- TAGS: spike,examples,game
+- TAGS: spike, examples, game
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-220530/SPIKE.md (read first,
 > the revised Recommendation). This merges the original 12_warden + 13_turret

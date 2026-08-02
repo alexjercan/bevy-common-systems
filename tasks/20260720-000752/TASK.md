@@ -1,11 +1,11 @@
 # Harness completion protocol: collectors register/done, deadline names laggards; autopilot/screenshot converted (no unilateral AppExit)
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: harness,testing,historical
+- TAGS: harness, testing, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Close-out (2026-07-20)
 

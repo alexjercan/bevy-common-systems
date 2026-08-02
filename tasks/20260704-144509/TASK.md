@@ -1,11 +1,11 @@
 # camera/shake: port 07/08/10 onto the module, delete local copies
 
-- STATUS: CLOSED
 - PRIORITY: 38
-- TAGS: feature,camera,cleanup
+- TAGS: feature, camera, cleanup
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Follow-up from tasks/20260704-134500 (camera/shake module). See
 > tasks/20260704-134500/NOTES.md and

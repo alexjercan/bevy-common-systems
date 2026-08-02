@@ -1,11 +1,11 @@
 # breach -- dedicated placeholder sound pass
 
-- STATUS: CLOSED
 - PRIORITY: 45
-- TAGS: spike,breach,example,audio,historical
+- TAGS: spike, breach, example, audio, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

@@ -1,11 +1,11 @@
 # Stabilize PD for large gain*dt: backward-Euler gain conditioning
 
-- STATUS: CLOSED
 - PRIORITY: 95
-- TAGS: bug,physics,pd
+- TAGS: bug, physics, pd
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

@@ -1,11 +1,11 @@
 # PROPOSAL (needs user): 07_orbit particle bursts for pickups/hits - requires a particle crate
 
-- STATUS: OPEN
 - PRIORITY: 0
-- TAGS: suggestion,example
+- TAGS: suggestion, example
 - KIND: TASK
-- FLOW STEP: BACKLOG
-- PLAN STATUS: DRAFT
+- ACTIVITY: -
+- GATES: -
+- RESOLUTION: -
 
 PROPOSAL for the user -- NOT to be implemented autonomously; it needs a
 dependency decision.

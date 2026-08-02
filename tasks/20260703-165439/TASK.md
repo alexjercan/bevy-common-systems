@@ -1,11 +1,11 @@
 # modding: JSON-authored EventHandler registry for the event bus
 
-- STATUS: CLOSED
 - PRIORITY: 50
-- TAGS: feature,modding
+- TAGS: feature, modding
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 Surfaced by the 01-05 games spike (see
 `tasks/20260703-165138/NOTES.md`). The `modding/events` module can

@@ -1,11 +1,11 @@
 # Build examples/13_glide -- UI-forward slide-merge (2048-style) puzzle
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: spike,feature,example,ui,historical
+- TAGS: spike, feature, example, ui, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

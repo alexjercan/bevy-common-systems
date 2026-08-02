@@ -1,11 +1,11 @@
 # Fix bevy 0.19 build: FontSize enum in examples/06_fruitninja.rs
 
-- STATUS: CLOSED
 - PRIORITY: 85
-- TAGS: bug,bevy-migration,example,historical
+- TAGS: bug, bevy-migration, example, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Goal
 

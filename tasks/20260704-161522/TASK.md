@@ -1,11 +1,11 @@
 # radial gravity: RadialGravity component or documented recipe (Wave B)
 
-- STATUS: CLOSED
 - PRIORITY: 20
-- TAGS: spike,feature,physics
+- TAGS: spike, feature, physics
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-161210/SPIKE.md (read first). Wave B -- only 2 games; a documented recipe is an
 > acceptable outcome.

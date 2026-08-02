@@ -1,11 +1,11 @@
 # 07_orbit: surface-dodge game on a sphere (Orbit Runner)
 
-- STATUS: CLOSED
 - PRIORITY: 55
-- TAGS: feature,example
+- TAGS: feature, example
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 Top pick from the 01-05 games spike (see
 `tasks/20260703-165138/NOTES.md`). Ride a marker on a sphere's

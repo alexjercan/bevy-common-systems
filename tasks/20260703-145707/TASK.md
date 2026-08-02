@@ -1,11 +1,11 @@
 # Fix bevy 0.19 build: ResMut mutability + chain/deref/or_else in modding/events.rs
 
-- STATUS: CLOSED
 - PRIORITY: 90
-- TAGS: bug,bevy-migration,historical
+- TAGS: bug, bevy-migration, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Goal
 

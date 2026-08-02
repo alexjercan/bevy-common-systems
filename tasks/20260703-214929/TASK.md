@@ -1,11 +1,11 @@
 # PROPOSAL (needs user): real audio assets + optional background music/ambience for example games
 
-- STATUS: OPEN
 - PRIORITY: 0
 - TAGS: suggestion
 - KIND: TASK
-- FLOW STEP: BACKLOG
-- PLAN STATUS: DRAFT
+- ACTIVITY: -
+- GATES: -
+- RESOLUTION: -
 
 PROPOSAL for the user -- NOT to be implemented autonomously; it needs assets
 and/or a scope decision.

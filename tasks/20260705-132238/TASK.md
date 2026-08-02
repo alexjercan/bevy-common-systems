@@ -1,11 +1,11 @@
 # breach -- ground pickups (HP / speed / fire-rate buffs)
 
-- STATUS: CLOSED
 - PRIORITY: 65
-- TAGS: spike,breach,example,historical
+- TAGS: spike, breach, example, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

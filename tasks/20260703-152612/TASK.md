@@ -1,11 +1,11 @@
 # Add reusable audio SFX module to the crate
 
-- STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: feature,audio,historical
+- TAGS: feature, audio, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

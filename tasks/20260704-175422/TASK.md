@@ -1,11 +1,11 @@
 # assets: sound/handle registry + opt-in ready-gate (Wave 2)
 
-- STATUS: CLOSED
 - PRIORITY: 55
-- TAGS: spike,feature
+- TAGS: spike, feature
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-175058/SPIKE.md (read
 > first). Wave 2 -- clean leaf harvest, fits beside `audio`.

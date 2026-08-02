@@ -1,11 +1,11 @@
 # 08_dropzone: mobile virtual-pad touch controls
 
-- STATUS: CLOSED
 - PRIORITY: 3
-- TAGS: feature,dropzone,mobile
+- TAGS: feature, dropzone, mobile
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

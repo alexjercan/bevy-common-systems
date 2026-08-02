@@ -1,11 +1,11 @@
 # Document audio decision and required sound assets
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: docs,audio,historical
+- TAGS: docs, audio, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

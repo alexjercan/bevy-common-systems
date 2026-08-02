@@ -1,11 +1,11 @@
 # Verify web audio playback and handle the browser autoplay policy
 
-- STATUS: CLOSED
 - PRIORITY: 70
-- TAGS: web,wasm,audio,verify
+- TAGS: web, wasm, audio, verify
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

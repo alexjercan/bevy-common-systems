@@ -1,11 +1,11 @@
 # iOS Safari: route WebAudio to media channel so mute switch does not silence SFX
 
-- STATUS: CLOSED
 - PRIORITY: 85
-- TAGS: web,audio,wasm,safari,ios
+- TAGS: web, audio, wasm, safari, ios
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 - Depends on: 20260703-200005 (the AudioContext unlock shim this extends)
 

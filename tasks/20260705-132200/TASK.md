@@ -1,11 +1,11 @@
 # breach -- points + combos via scoring/streak + ui/popup
 
-- STATUS: CLOSED
 - PRIORITY: 70
-- TAGS: spike,breach,example,juice,historical
+- TAGS: spike, breach, example, juice, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

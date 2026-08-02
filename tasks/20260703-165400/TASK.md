@@ -1,11 +1,11 @@
 # 11_overload: dashboard-survival game on the status bar
 
-- STATUS: CLOSED
 - PRIORITY: 20
-- TAGS: feature,example,historical
+- TAGS: feature, example, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 Low-priority pick from the 01-05 games spike (see
 `tasks/20260703-165138/NOTES.md`). A reaction game whose entire

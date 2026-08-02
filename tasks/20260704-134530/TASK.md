@@ -1,11 +1,11 @@
 # ui/popup: floating +N text module (Wave 1)
 
-- STATUS: CLOSED
 - PRIORITY: 38
-- TAGS: spike,feature,ui
+- TAGS: spike, feature, ui
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 1 -- promote recurring example juice into the library.

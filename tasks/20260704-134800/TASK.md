@@ -1,11 +1,11 @@
 # PROPOSAL (needs user): ui/menu button builder + game-flow state scaffolding (Wave 3)
 
-- STATUS: OPEN
 - PRIORITY: 0
-- TAGS: spike,suggestion,ui
+- TAGS: spike, suggestion, ui
 - KIND: TASK
-- FLOW STEP: BACKLOG
-- PLAN STATUS: DRAFT
+- ACTIVITY: -
+- GATES: -
+- RESOLUTION: -
 
 > Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 3 -- DEFERRED, needs a user decision before any code.

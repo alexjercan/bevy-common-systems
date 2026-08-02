@@ -1,11 +1,11 @@
 # 09_reactor: mobile touch controls (menu/game-over tap nav + web canvas touch-action)
 
-- STATUS: CLOSED
 - PRIORITY: 40
-- TAGS: feature,reactor,mobile,historical
+- TAGS: feature, reactor, mobile, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Goal
 

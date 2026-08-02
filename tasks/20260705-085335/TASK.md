@@ -1,11 +1,11 @@
 # Bastion: enemies spawn in packs + steeper difficulty ramp
 
-- STATUS: CLOSED
 - PRIORITY: 85
-- TAGS: feature,example,bastion,historical
+- TAGS: feature, example, bastion, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 > Part of the 12_bastion polish goal. Today enemies trickle out one at a time
 > every `SPAWN_INTERVAL` seconds within a wave, and difficulty scales only gently

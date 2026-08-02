@@ -1,11 +1,11 @@
 # breach -- game-over screen has no camera (UI invisible), add one
 
-- STATUS: CLOSED
 - PRIORITY: 55
-- TAGS: bug,breach,example,ui
+- TAGS: bug, breach, example, ui
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Resolution
 

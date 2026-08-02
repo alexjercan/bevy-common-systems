@@ -1,11 +1,11 @@
 # spawn + time/cooldown: timed spawner and cooldown/i-frames (Wave 2)
 
-- STATUS: CLOSED
 - PRIORITY: 24
-- TAGS: spike,feature
+- TAGS: spike, feature
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 2 -- only if each earns its keep over a raw Timer.

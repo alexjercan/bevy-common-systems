@@ -1,11 +1,11 @@
 # docs: records live next to their task (RETRO/SPIKE/NOTES), archive stubs, convention in AGENTS.md
 
-- STATUS: CLOSED
 - PRIORITY: 0
-- TAGS: docs,historical
+- TAGS: docs, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

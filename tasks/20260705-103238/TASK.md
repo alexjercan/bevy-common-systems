@@ -1,11 +1,11 @@
 # Follow-up: harvest FP character controller / camera-wasd upgrades from 14_breach
 
-- STATUS: CLOSED
 - PRIORITY: 40
-- TAGS: spike,feature,harvest,fps,historical
+- TAGS: spike, feature, harvest, fps, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 ## Goal
 

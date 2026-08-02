@@ -1,11 +1,11 @@
 # CI: run example unit tests (cargo test --examples)
 
-- STATUS: CLOSED
 - PRIORITY: 60
-- TAGS: ci,tests
+- TAGS: ci, tests
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

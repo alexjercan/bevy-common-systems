@@ -1,11 +1,11 @@
 # 07_orbit: orb-pickup streak juice (combo scoring, rising pitch + combo sound, floating +N popups)
 
-- STATUS: CLOSED
 - PRIORITY: 90
-- TAGS: feature,example,historical
+- TAGS: feature, example, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 Polish pass on `examples/07_orbit.rs`. The base SFX are already wired
 (menu/pickup/hurt/level_up/game_over); this task adds the "juice" layer that

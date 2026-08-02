@@ -1,11 +1,11 @@
 # Migrate to edition 2024 so rustdoc merges the 60 doctests into one binary
 
-- STATUS: OPEN
 - PRIORITY: 1
-- TAGS: build,memory,toolchain
+- TAGS: build, memory, toolchain
 - KIND: TASK
-- FLOW STEP: BACKLOG
-- PLAN STATUS: DRAFT
+- ACTIVITY: -
+- GATES: -
+- RESOLUTION: -
 - DEPENDS ON: 20260731-210044
 
 ## Problem

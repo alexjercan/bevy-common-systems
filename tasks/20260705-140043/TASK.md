@@ -1,11 +1,11 @@
 # Refresh AGENTS.md: stale dependency versions and incomplete Module Map
 
-- STATUS: CLOSED
 - PRIORITY: 40
-- TAGS: docs,historical
+- TAGS: docs, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: -
+- RESOLUTION: DONE
 
 ## Goal
 

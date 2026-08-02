@@ -1,11 +1,11 @@
 # helpers: bevy_enhanced_input bridge to UnifiedPointer (retire 06 local Pointer)
 
-- STATUS: CLOSED
 - PRIORITY: 25
-- TAGS: feature,input,helpers
+- TAGS: feature, input, helpers
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Follow-up from tatr 20260704-161508 (input/pointer), review NIT R1.2.
 > Spike: tasks/20260704-161210/SPIKE.md.

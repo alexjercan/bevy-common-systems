@@ -1,11 +1,11 @@
 # 08_dropzone: hazards pass (obstacles, asteroids, wind, rough terrain, ship integrity)
 
-- STATUS: CLOSED
 - PRIORITY: 3
-- TAGS: feature,dropzone
+- TAGS: feature, dropzone
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

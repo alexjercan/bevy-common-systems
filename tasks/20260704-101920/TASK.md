@@ -1,11 +1,11 @@
 # Share Web Audio unlock shim across all web games (fix mobile/iOS sound)
 
-- STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: bug,web,audio
+- TAGS: bug, web, audio
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

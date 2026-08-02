@@ -1,11 +1,11 @@
 # feedback: promote the full-screen damage overlay (06/07/10) into a screen-flash
 
-- STATUS: CLOSED
 - PRIORITY: 34
-- TAGS: feature,feedback,cleanup
+- TAGS: feature, feedback, cleanup
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Split out of tasks/20260704-134600 (feedback material Flash). While building
 > the material Flash it turned out the spike's "material flash | 06,07,10"

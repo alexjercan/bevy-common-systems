@@ -1,11 +1,11 @@
 # Enable wasm example builds + trunk build of fruit ninja
 
-- STATUS: CLOSED
 - PRIORITY: 100
-- TAGS: feature,web
+- TAGS: feature, web
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

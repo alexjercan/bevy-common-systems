@@ -1,11 +1,11 @@
 # 08_dropzone: Tier-A fun pass (landing pad, fuel pickups, landing/crash visuals)
 
-- STATUS: CLOSED
 - PRIORITY: 5
-- TAGS: feature,dropzone
+- TAGS: feature, dropzone
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 

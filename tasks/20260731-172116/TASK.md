@@ -1,11 +1,11 @@
 # Epic: v0.19.x KISS pass over bcs library sources
 
-- STATUS: CLOSED
 - PRIORITY: 0
 - TAGS: goal, chore, kiss
 - KIND: EPIC
-- FLOW STEP: DONE
-- PLAN STATUS: APPROVED
+- ACTIVITY: COMPOUNDING
+- GATES: PLAN
+- RESOLUTION: DONE
 
 # Epic
 

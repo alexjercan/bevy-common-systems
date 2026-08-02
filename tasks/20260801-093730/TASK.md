@@ -1,11 +1,11 @@
 # check-comment-tags: flag a /// on a test fn guarding an unexplained literal
 
-- STATUS: CLOSED
 - PRIORITY: 40
 - TAGS: chore, tooling, lessons
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: APPROVED
+- ACTIVITY: COMPOUNDING
+- GATES: PLAN REVIEW RETRO
+- RESOLUTION: DONE
 
 Promotion of the ledger lesson `state-what-the-checker-cannot-see` (x3,
 disposition taken 2026-08-01 during the close of epic 20260731-172116).

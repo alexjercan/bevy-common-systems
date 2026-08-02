@@ -1,11 +1,11 @@
 # persist: cross-platform save/load resource (Wave 2)
 
-- STATUS: CLOSED
 - PRIORITY: 28
-- TAGS: spike,feature,persist
+- TAGS: spike, feature, persist
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 > Spike: tasks/20260704-134035/SPIKE.md (read
 > first). Wave 2 -- the one primitive every game lacks.

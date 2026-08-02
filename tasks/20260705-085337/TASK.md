@@ -1,11 +1,11 @@
 # Bastion: on-screen build + upgrade buttons with keybind labels
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: feature,example,bastion,historical
+- TAGS: feature, example, bastion, historical
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW
+- RESOLUTION: DONE
 
 > Part of the 12_bastion polish goal. Building a tower is currently keyboard-only
 > (number keys arm a tower, U upgrades), which is unusable on a touchscreen and

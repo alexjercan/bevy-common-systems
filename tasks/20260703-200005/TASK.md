@@ -1,11 +1,11 @@
 # Fix mobile Safari silent audio in 06_fruitninja web build
 
-- STATUS: CLOSED
 - PRIORITY: 80
-- TAGS: web,audio,wasm,safari
+- TAGS: web, audio, wasm, safari
 - KIND: TASK
-- FLOW STEP: DONE
-- PLAN STATUS: NOT_REQUIRED
+- ACTIVITY: COMPOUNDING
+- GATES: REVIEW RETRO
+- RESOLUTION: DONE
 
 ## Goal
 
