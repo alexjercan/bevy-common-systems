@@ -2,7 +2,6 @@
 
 - PRIORITY: 3
 - TAGS: feature, dropzone, mobile
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

@@ -2,7 +2,6 @@
 
 - PRIORITY: 80
 - TAGS: docs, audio, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

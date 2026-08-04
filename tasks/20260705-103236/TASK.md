@@ -2,7 +2,6 @@
 
 - PRIORITY: 80
 - TAGS: spike, feature, example, fps, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

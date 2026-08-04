@@ -2,7 +2,6 @@
 
 - PRIORITY: 70
 - TAGS: feature, example, glide, solver, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

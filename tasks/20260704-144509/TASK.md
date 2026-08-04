@@ -2,7 +2,6 @@
 
 - PRIORITY: 38
 - TAGS: feature, camera, cleanup
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

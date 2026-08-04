@@ -2,7 +2,6 @@
 
 - PRIORITY: 40
 - TAGS: spike, feature, harvest, fps, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

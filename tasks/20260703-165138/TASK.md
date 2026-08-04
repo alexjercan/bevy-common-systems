@@ -2,7 +2,6 @@
 
 - PRIORITY: 60
 - TAGS: spike, docs, example, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

@@ -2,7 +2,6 @@
 
 - PRIORITY: 100
 - TAGS: bug, 14_breach, crash, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

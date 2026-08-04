@@ -2,7 +2,6 @@
 
 - PRIORITY: 0
 - TAGS: suggestion, example
-- KIND: TASK
 - ACTIVITY: -
 - GATES: -
 - RESOLUTION: -

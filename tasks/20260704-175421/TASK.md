@@ -2,7 +2,6 @@
 
 - PRIORITY: 80
 - TAGS: spike, devtools, feature, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

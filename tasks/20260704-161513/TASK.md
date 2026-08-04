@@ -2,7 +2,6 @@
 
 - PRIORITY: 28
 - TAGS: spike, feature, ui, input
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

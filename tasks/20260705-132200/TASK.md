@@ -2,7 +2,6 @@
 
 - PRIORITY: 70
 - TAGS: spike, breach, example, juice, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

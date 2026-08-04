@@ -2,7 +2,6 @@
 
 - PRIORITY: 90
 - TAGS: bug, bevy-migration, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

@@ -2,7 +2,6 @@
 
 - PRIORITY: 55
 - TAGS: bug, breach, example, ui
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

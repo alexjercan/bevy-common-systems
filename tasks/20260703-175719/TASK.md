@@ -2,7 +2,6 @@
 
 - PRIORITY: 30
 - TAGS: docs, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

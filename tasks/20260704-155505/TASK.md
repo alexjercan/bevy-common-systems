@@ -2,7 +2,6 @@
 
 - PRIORITY: 34
 - TAGS: feature, feedback, cleanup
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

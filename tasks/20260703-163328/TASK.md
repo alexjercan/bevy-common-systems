@@ -2,7 +2,6 @@
 
 - PRIORITY: 90
 - TAGS: feature, web, wasm, audio
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

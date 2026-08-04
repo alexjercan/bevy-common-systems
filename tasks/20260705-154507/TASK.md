@@ -2,7 +2,6 @@
 
 - PRIORITY: 100
 - TAGS: bug, 08_dropzone, crash, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

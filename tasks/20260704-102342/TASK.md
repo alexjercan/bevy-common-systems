@@ -2,7 +2,6 @@
 
 - PRIORITY: 3
 - TAGS: feature, dropzone, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

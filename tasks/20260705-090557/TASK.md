@@ -2,7 +2,6 @@
 
 - PRIORITY: 40
 - TAGS: spike, feature, ui, harvest
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

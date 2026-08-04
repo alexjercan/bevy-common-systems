@@ -2,7 +2,6 @@
 
 - PRIORITY: 20
 - TAGS: feature, tween, ui, feedback
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

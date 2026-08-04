@@ -2,7 +2,6 @@
 
 - PRIORITY: 68
 - TAGS: bug, mesh
-- KIND: TASK
 - ACTIVITY: -
 - GATES: -
 - RESOLUTION: -

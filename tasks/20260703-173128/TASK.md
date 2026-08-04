@@ -2,7 +2,6 @@
 
 - PRIORITY: 95
 - TAGS: feature, example, input, touch
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

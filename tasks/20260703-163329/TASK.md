@@ -2,7 +2,6 @@
 
 - PRIORITY: 70
 - TAGS: web, wasm, audio, verify
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

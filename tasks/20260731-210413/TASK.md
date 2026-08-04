@@ -2,7 +2,6 @@
 
 - PRIORITY: 1
 - TAGS: build, memory, toolchain
-- KIND: TASK
 - ACTIVITY: -
 - GATES: -
 - RESOLUTION: -

@@ -2,7 +2,6 @@
 
 - PRIORITY: 0
 - TAGS: goal, chore, kiss
-- KIND: EPIC
 - ACTIVITY: COMPOUNDING
 - GATES: PLAN
 - RESOLUTION: DONE

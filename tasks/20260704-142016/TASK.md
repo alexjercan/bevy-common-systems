@@ -2,7 +2,6 @@
 
 - PRIORITY: 40
 - TAGS: feature, reactor, mobile, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

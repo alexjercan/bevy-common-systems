@@ -2,7 +2,6 @@
 
 - PRIORITY: 1
 - TAGS: spike, examples, modding
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

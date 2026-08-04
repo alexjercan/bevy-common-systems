@@ -2,7 +2,6 @@
 
 - PRIORITY: 60
 - TAGS: chore, kiss, modding, persist
-- KIND: STORY
 - ACTIVITY: COMPOUNDING
 - GATES: PLAN REVIEW RETRO
 - RESOLUTION: DONE

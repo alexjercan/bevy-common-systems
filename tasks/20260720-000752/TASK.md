@@ -2,7 +2,6 @@
 
 - PRIORITY: 80
 - TAGS: harness, testing, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

@@ -2,7 +2,6 @@
 
 - PRIORITY: 80
 - TAGS: chore, kiss, integrity, physics
-- KIND: STORY
 - ACTIVITY: COMPOUNDING
 - GATES: PLAN REVIEW RETRO
 - RESOLUTION: DONE

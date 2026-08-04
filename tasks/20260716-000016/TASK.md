@@ -2,7 +2,6 @@
 
 - PRIORITY: 0
 - TAGS: archive, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

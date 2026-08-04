@@ -2,7 +2,6 @@
 
 - PRIORITY: 45
 - TAGS: spike, breach, example, audio, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

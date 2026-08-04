@@ -2,7 +2,6 @@
 
 - PRIORITY: 20
 - TAGS: feature, example, modding, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

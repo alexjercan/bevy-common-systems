@@ -2,7 +2,6 @@
 
 - PRIORITY: 5
 - TAGS: spike, dropzone, research, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

@@ -2,7 +2,6 @@
 
 - PRIORITY: 85
 - TAGS: web, audio, wasm, safari, ios
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

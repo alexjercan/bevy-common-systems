@@ -2,7 +2,6 @@
 
 - PRIORITY: 65
 - TAGS: spike, breach, example, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

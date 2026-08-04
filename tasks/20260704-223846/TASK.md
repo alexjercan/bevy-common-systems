@@ -2,7 +2,6 @@
 
 - PRIORITY: 18
 - TAGS: feature, audio, scoring, ui, input, cleanup
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

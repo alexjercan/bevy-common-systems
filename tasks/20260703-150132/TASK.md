@@ -2,7 +2,6 @@
 
 - PRIORITY: 85
 - TAGS: bug, bevy-migration, example, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

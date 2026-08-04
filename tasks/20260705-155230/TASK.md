@@ -2,7 +2,6 @@
 
 - PRIORITY: 100
 - TAGS: bug, crash, tween, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

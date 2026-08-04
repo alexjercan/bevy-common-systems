@@ -2,7 +2,6 @@
 
 - PRIORITY: 50
 - TAGS: modding, api, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

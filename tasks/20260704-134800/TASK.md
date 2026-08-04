@@ -2,7 +2,6 @@
 
 - PRIORITY: 0
 - TAGS: spike, suggestion, ui
-- KIND: TASK
 - ACTIVITY: -
 - GATES: -
 - RESOLUTION: -

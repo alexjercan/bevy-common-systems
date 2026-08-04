@@ -2,7 +2,6 @@
 
 - PRIORITY: 70
 - TAGS: crates, feature, integrity, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

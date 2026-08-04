@@ -2,7 +2,6 @@
 
 - PRIORITY: 80
 - TAGS: example, mobile, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: -
 - RESOLUTION: DONE

@@ -2,7 +2,6 @@
 
 - PRIORITY: 36
 - TAGS: spike, feature, feedback
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW RETRO
 - RESOLUTION: DONE

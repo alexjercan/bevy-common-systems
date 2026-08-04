@@ -2,7 +2,6 @@
 
 - PRIORITY: 100
 - TAGS: feature, audio, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE

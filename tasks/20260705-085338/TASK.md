@@ -2,7 +2,6 @@
 
 - PRIORITY: 75
 - TAGS: feature, example, bastion, historical
-- KIND: TASK
 - ACTIVITY: COMPOUNDING
 - GATES: REVIEW
 - RESOLUTION: DONE
